@@ -19,11 +19,17 @@
         switch (route.path) {
           case '/': return 'Dashboard';
           case '/products': return 'Products';
+          case '/customers': return 'Customers';
           case '/sales': return 'Sales';
           case '/supplier': return 'Supplier';
           case '/purchases': return 'Purchases';
           case '/payments': return 'Payments';
           case '/expenses': return 'Expenses';
+          case '/users': return 'Users';
+          case '/purchaselist': return 'PurchaseList';
+          case '/saleslist': return 'SalesList';
+
+
           default: return '';
         }
       });

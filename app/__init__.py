@@ -24,6 +24,7 @@ def create_app():
     from app.routes.accounts import accounts_bp
     from app.routes.ledger import ledger_bp
     from app.routes.users import users_bp
+    from app.routes.customer import customer_bp
 
 
     app.register_blueprint(inventory_bp, url_prefix='/api/inventory')
@@ -34,6 +35,7 @@ def create_app():
     app.register_blueprint(accounts_bp, url_prefix='/api/accounts')
     app.register_blueprint(ledger_bp, url_prefix='/api/ledgers')
     app.register_blueprint(users_bp, url_prefix='/api/users')
+    app.register_blueprint(customer_bp, url_prefix='/api/customer')
 
 
     return app

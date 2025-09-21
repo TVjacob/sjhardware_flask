@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify
 from app import db
-from app.models import Product, Sale, SaleItem, Invoice, GeneralLedger
+from app.models import Product, Sale, SaleItem, GeneralLedger
 from app.utils.gl_utils import post_to_ledger, generate_transaction_number
 from datetime import datetime
 
@@ -12,57 +12,143 @@ def update_timestamps(obj):
     if not obj.created_at:
         obj.created_at = datetime.utcnow()
 
-# ------------------ Create a Sale & Invoice with GL ------------------ #
+# # ------------------ Create a Sale & Invoice with GL ------------------ #
+# @sales_bp.route('/', methods=['POST'])
+# def create_sale():
+#     data = request.json
+#     items = data['items']  # [{"product_id":1,"quantity":2}, ...]
+#     total_amount = 0
+#     cogs_total = 0  # Cost of goods sold total
+
+#     # Create new Sale with StatusMixin defaults
+#     sale = Sale(
+#         sale_number=data['sale_number'],
+#         total_amount=0,
+#         payment_status='Pending',
+#         status=1
+#     )
+#     update_timestamps(sale)
+#     db.session.add(sale)
+#     db.session.flush()  # Get sale.id before committing
+
+#     for item in items:
+#         product = Product.query.get(item['product_id'])
+#         if not product:
+#             return jsonify({"error": f"Product {item['product_id']} not found"}), 404
+#         if product.quantity < item['quantity']:
+#             return jsonify({"error": f"Insufficient stock for {product.name}"}), 400
+        
+#         product.quantity -= item['quantity']
+#         db.session.add(product)
+
+#         sale_item = SaleItem(
+#             sale_id=sale.id,
+#             product_id=product.id,
+#             product_name=product.name,
+#             quantity=item['quantity'],
+#             unit_price=product.price,
+#             total_price=product.price * item['quantity'],
+#             status=1
+#         )
+#         update_timestamps(sale_item)
+#         total_amount += sale_item.total_price
+#         cogs_total += product.price * item['quantity']
+#         db.session.add(sale_item)
+
+#     sale.total_amount = total_amount
+#     update_timestamps(sale)
+#     db.session.flush()
+
+#     # Generate transaction number for GL
+#     txn_id, txn_str = generate_transaction_number('INV')
+
+#     # Double-entry: Revenue & COGS
+#     entries = [
+#         {"account_id": 1100, "transaction_type": "Debit", "amount": total_amount},  # Accounts Receivable
+#         {"account_id": 4000, "transaction_type": "Credit", "amount": total_amount}, # Sales Revenue
+#         {"account_id": 5000, "transaction_type": "Debit", "amount": cogs_total},    # COGS
+#         {"account_id": 1200, "transaction_type": "Credit", "amount": cogs_total},   # Inventory
+#     ]
+#     gl_entries = post_to_ledger(entries, transaction_no_id=txn_id, description=f"Sale #{sale.id}")
+#     sale.transaction_no = gl_entries[0].id
+
+#     # # Create invoice linked to sale
+#     # invoice = Invoice(
+#     #     sale_id=sale.id,
+#     #     invoice_number=txn_str,
+#     #     total_amount=total_amount,
+#     #     transaction_no=gl_entries[0].id,
+#     #     status=1
+#     # )
+#     # update_timestamps(invoice)
+#     # db.session.add(invoice)
+#     # db.session.commit()
+
+#     return jsonify({
+#         "message": "Sale and invoice created with GL entries",
+#         "sale_id": sale.id,
+#         # "invoice_id": invoice.id,
+#         "transaction_no": txn_str
+#     }), 201
+
 @sales_bp.route('/', methods=['POST'])
 def create_sale():
     data = request.json
-    items = data['items']  # [{"product_id":1,"quantity":2}, ...]
-    total_amount = 0
-    cogs_total = 0  # Cost of goods sold total
+    items = data['items']  # [{"product_id":1,"quantity":2,"unit_price":50,"purchase_price":40}, ...]
+    amount_paid = data.get('amount_paid', 0)  # frontend can send how much was paid upfront
 
-    # Create new Sale with StatusMixin defaults
+    if not items or len(items) == 0:
+        return jsonify({"error": "At least one item is required"}), 400
+
+
+    # Create Sale
     sale = Sale(
         sale_number=data['sale_number'],
-        total_amount=0,
-        payment_status='Pending',
+        customer_id=data.get('customer_id', 1),  # default Walk-in
+        total_paid=amount_paid,
         status=1
     )
-    update_timestamps(sale)
     db.session.add(sale)
-    db.session.flush()  # Get sale.id before committing
+    db.session.flush()  # get sale.id
 
-    for item in items:
-        product = Product.query.get(item['product_id'])
+    total_amount = 0
+    cogs_total = 0
+
+    for item_data in items:
+        product = Product.query.get(item_data['product_id'])
         if not product:
-            return jsonify({"error": f"Product {item['product_id']} not found"}), 404
-        if product.quantity < item['quantity']:
+            return jsonify({"error": f"Product {item_data['product_id']} not found"}), 404
+        if product.quantity < item_data['quantity']:
             return jsonify({"error": f"Insufficient stock for {product.name}"}), 400
-        
-        product.quantity -= item['quantity']
+
+        # Reduce stock
+        product.quantity -= item_data['quantity']
         db.session.add(product)
 
+        # Use frontend price for total, purchase_price for COGS
         sale_item = SaleItem(
             sale_id=sale.id,
             product_id=product.id,
             product_name=product.name,
-            quantity=item['quantity'],
-            unit_price=product.price,
-            total_price=product.price * item['quantity'],
+            quantity=item_data['quantity'],
+            unit_price=item_data['unit_price'],
+            total_price=item_data['unit_price'] * item_data['quantity'],
             status=1
         )
-        update_timestamps(sale_item)
-        total_amount += sale_item.total_price
-        cogs_total += product.price * item['quantity']
         db.session.add(sale_item)
 
+        total_amount += sale_item.total_price
+        cogs_total += item_data.get('purchase_price', 0) * item_data['quantity']
+
     sale.total_amount = total_amount
-    update_timestamps(sale)
+
+    # Calculate balance & update payment_status automatically
+    sale.update_totals()
+
     db.session.flush()
 
-    # Generate transaction number for GL
+    # Generate GL transaction
     txn_id, txn_str = generate_transaction_number('INV')
-
-    # Double-entry: Revenue & COGS
     entries = [
         {"account_id": 1100, "transaction_type": "Debit", "amount": total_amount},  # Accounts Receivable
         {"account_id": 4000, "transaction_type": "Credit", "amount": total_amount}, # Sales Revenue
@@ -72,22 +158,15 @@ def create_sale():
     gl_entries = post_to_ledger(entries, transaction_no_id=txn_id, description=f"Sale #{sale.id}")
     sale.transaction_no = gl_entries[0].id
 
-    # Create invoice linked to sale
-    invoice = Invoice(
-        sale_id=sale.id,
-        invoice_number=txn_str,
-        total_amount=total_amount,
-        transaction_no=gl_entries[0].id,
-        status=1
-    )
-    update_timestamps(invoice)
-    db.session.add(invoice)
     db.session.commit()
 
     return jsonify({
-        "message": "Sale and invoice created with GL entries",
+        "message": "Sale created successfully",
         "sale_id": sale.id,
-        "invoice_id": invoice.id,
+        "total_amount": sale.total_amount,
+        "total_paid": sale.total_paid,
+        "balance": sale.balance,
+        "payment_status": sale.payment_status,
         "transaction_no": txn_str
     }), 201
 

@@ -49,12 +49,17 @@
       const menuItems = [
         { name: 'Dashboard', path: '/', icon: '🏠' },
         { name: 'Products', path: '/products', icon: '📦' },
-        { name: 'Sales', path: '/sales', icon: '💰' },
-        { name: 'Purchases', path: '/purchases', icon: '🛒' },
+        { name: 'Customers', path: '/customers', icon: '🍮' },
+        { name: 'Add Sales', path: '/sales', icon: '💰' },
+        { name: 'Sales List', path: '/saleslist', icon: '🍮' },
+        { name: 'Supplier', path: '/supplier', icon: '📉' },
+        { name: 'Add Purchase', path: '/purchases', icon: '🛒' },
+        { name: 'Purchase List', path: '/purchaselist', icon: '🍮' },
         { name: 'Payments', path: '/payments', icon: '💳' },
         { name: 'Expenses', path: '/expenses', icon: '📉' },
-        { name: 'Supplier', path: '/supplier', icon: '📉' },
+        { name: 'Users', path: '/users', icon: '🍮' },
 
+        
       ];
   
       const isActive = (path) => route.path === path;

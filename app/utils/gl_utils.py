@@ -45,14 +45,27 @@ def post_to_ledger(entries, transaction_no_id, description=None, transaction_dat
     return gl_entries
 
 
-def generate_transaction_number(prefix, transaction_date=datetime.utcnow,status=1):
+
+def generate_transaction_number(prefix, transaction_date=None, status=1):
+    # ✅ Generate a fresh timestamp each time
+    if transaction_date is None:
+        transaction_date = datetime.utcnow()
+
     tn = TransactionNumber.query.filter_by(prefix=prefix).first()
+
     if not tn:
-        tn = TransactionNumber(prefix=prefix, last_number=1,status=status,transaction_date=transaction_date)
+        tn = TransactionNumber(
+            prefix=prefix,
+            last_number=1,
+            status=status,
+            transaction_date=transaction_date
+        )
         db.session.add(tn)
         db.session.commit()
     else:
         tn.last_number += 1
         db.session.commit()
+
     txn_str = f"{prefix}-{str(tn.last_number).zfill(5)}"
     return tn.id, txn_str
+
