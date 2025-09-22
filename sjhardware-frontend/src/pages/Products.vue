@@ -43,6 +43,7 @@
             <th class="p-2 border">SKU</th>
             <th class="p-2 border">Price</th>
             <th class="p-2 border">Category</th>
+            <th class="p-2 border">Stock Qty</th>
             <th class="p-2 border">Actions</th>
           </tr>
         </thead>
@@ -52,7 +53,10 @@
             <td class="p-2 border">{{ product.name }}</td>
             <td class="p-2 border">{{ product.sku }}</td>
             <td class="p-2 border">{{ product.price }}</td>
+            
             <td class="p-2 border">{{ getCategoryName(product.category_id) }}</td>
+            <td class="p-2 border">{{ product.quantity }}</td>
+
             <td class="p-2 border flex gap-2">
               <button @click="editProduct(product)" class="bg-blue-400 text-white px-2 py-1 rounded">Edit</button>
               <button @click="deleteProduct(product.id)" class="bg-red-500 text-white px-2 py-1 rounded">Delete</button>
@@ -198,8 +202,8 @@ export default {
     exportPDF() {
       const doc = new jsPDF();
       doc.autoTable({
-        head: [['ID', 'Name', 'SKU', 'Price', 'Category']],
-        body: this.products.map(p => [p.id, p.name, p.sku, p.price, this.getCategoryName(p.category_id)]),
+        head: [['ID', 'Name', 'SKU', 'Price', 'Category' ,'Stock qty']],
+        body: this.products.map(p => [p.id, p.name, p.sku, p.price, this.getCategoryName(p.category_id),p.quantity]),
       });
       doc.save('products.pdf');
     },

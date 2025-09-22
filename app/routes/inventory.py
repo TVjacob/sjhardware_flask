@@ -29,11 +29,13 @@ def list_products():
     products = Product.query.all()
     result = []
     for p in products:
+        category =db.session.query(Category).filter_by(id = p.category_id,status=1).first()
         result.append({
             "id": p.id,
             "name": p.name,
             "sku": p.sku,
             "category_id": p.category_id,
+            "category_name": category.name if category else None,
             "quantity": p.quantity,
             "price": p.price,
             "status": p.status,
@@ -47,11 +49,14 @@ def list_products():
 @inventory_bp.route('/products/<int:id>', methods=['GET'])
 def get_product(id):
     p = Product.query.get_or_404(id)
+    category =db.session.query(Category).filter_by(id = p.category_id,status=1).first()
+
     return jsonify({
         "id": p.id,
         "name": p.name,
         "sku": p.sku,
         "category_id": p.category_id,
+        "category_name": category.name if category else None,
         "quantity": p.quantity,
         "price": p.price,
         "status": p.status,
@@ -72,11 +77,15 @@ def search_product():
     products = query.all()
     result = []
     for p in products:
+        category =db.session.query(Category).filter_by(id = p.category_id,status=1).first()
+
         result.append({
             "id": p.id,
             "name": p.name,
             "sku": p.sku,
             "category_id": p.category_id,
+            "category_name": category.name if category else None,
+
             "quantity": p.quantity,
             "price": p.price,
             "status": p.status,

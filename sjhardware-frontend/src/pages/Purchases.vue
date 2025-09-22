@@ -33,7 +33,8 @@
         <tr class="bg-gray-100">
           <th class="p-2 border">Product</th>
           <th class="p-2 border">Stock Qty</th>
-          <th class="p-2 border">Unit Price</th>
+          <th class="p-2 border">Unit</th>
+          <th class="p-2 border">Cost Price</th>
           <th class="p-2 border">Quantity</th>
           <th class="p-2 border">Total Price</th>
           <th class="p-2 border">Actions</th>
@@ -45,7 +46,7 @@
             <input
               type="text"
               v-model="item.product_name"
-              @input="searchProduct(item, idx)"
+              @input="searchProduct(item)"
               placeholder="Search product..."
               class="border p-1 rounded w-full"
             />
@@ -61,11 +62,27 @@
             </ul>
           </td>
           <td class="p-2 border">{{ item.stock_qty || 0 }}</td>
+          <td class="p-2 border">{{ item.unit || '' }}</td>
           <td class="p-2 border">
-            <input type="number" v-model.number="item.unit_price" class="border p-1 rounded w-full" @input="calculateTotal(item)" />
+            <input
+              type="number"
+              v-model.number="item.cost_price"
+              class="border p-1 rounded w-full"
+              @input="calculateTotal(item)"
+              min="0"
+              step="0.01"
+            />
           </td>
           <td class="p-2 border">
-            <input type="number" v-model.number="item.quantity" class="border p-1 rounded w-full" @input="calculateTotal(item)" />
+            <input
+              type="number"
+              v-model.number="item.quantity"
+              min="0"
+              class="border p-1 rounded w-full"
+              @input="validateQuantity(item)"
+              :disabled="!item.product_id"
+            />
+            <p v-if="item.error" class="text-red-500 text-xs">{{ item.error }}</p>
           </td>
           <td class="p-2 border">{{ item.total_price.toFixed(2) }}</td>
           <td class="p-2 border">
@@ -83,15 +100,16 @@
     </div>
 
     <!-- --------- Save Button --------- -->
-    <button @click="savePurchaseOrder" class="bg-indigo-600 text-white px-6 py-3 rounded w-full md:w-auto">Save Purchase Order</button>
+    <button @click="savePurchaseOrder" class="bg-indigo-600 text-white px-6 py-3 rounded w-full md:w-auto">
+      Save Purchase Order
+    </button>
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted } from 'vue';
-import api from '../api'; // Axios instance
+import api from '../api';
 
-// --------- Purchase Order Header ---------
 const poHeader = ref({
   supplier_id: '',
   invoice_number: '',
@@ -99,29 +117,23 @@ const poHeader = ref({
   purchase_date: new Date().toISOString().substr(0, 10)
 });
 
-// --------- Purchase Order Items ---------
 const poItems = ref([]);
-
-// --------- Suppliers ---------
 const suppliers = ref([]);
-
-// --------- Products for search ---------
 const products = ref([]);
 
-// --------- Computed grand total ---------
-const grandTotal = computed(() => {
-  return poItems.value.reduce((sum, item) => sum + item.total_price, 0);
-});
+const grandTotal = computed(() => poItems.value.reduce((sum, item) => sum + item.total_price, 0));
 
-// --------- Methods ---------
 const fetchSuppliers = async () => {
   const res = await api.get('/suppliers/');
   suppliers.value = res.data;
 };
 
 const fetchProducts = async () => {
-  const res = await api.get('/products/');
-  products.value = res.data;
+  const res = await api.get('/inventory/products/');
+  products.value = res.data.map(p => ({
+    ...p,
+    unit: p.category_name || '' // add unit from category
+  }));
 };
 
 const addRow = () => {
@@ -129,38 +141,54 @@ const addRow = () => {
     product_id: null,
     product_name: '',
     stock_qty: 0,
-    unit_price: 0,
-    quantity: 1,
+    unit: '',
+    cost_price: 0,
+    quantity: 0,
     total_price: 0,
-    searchResults: []
+    searchResults: [],
+    error: ''
   });
 };
 
-const removeRow = (idx) => {
-  poItems.value.splice(idx, 1);
-};
+const removeRow = (idx) => poItems.value.splice(idx, 1);
 
-const searchProduct = (item, idx) => {
-  if (!item.product_name) {
+const searchProduct = async (item) => {
+  if (!item.product_name || item.product_name.length < 2) {
     item.searchResults = [];
     return;
   }
-  const query = item.product_name.toLowerCase();
-  item.searchResults = products.value.filter(p => p.name.toLowerCase().includes(query));
+  try {
+    const res = await api.get(`/inventory/products/search?name=${item.product_name}`);
+    item.searchResults = res.data.map(p => ({ ...p, unit: p.category_name || '' }));
+  } catch (err) {
+    console.error('Product search error:', err);
+  }
 };
 
 const selectProduct = (item, product) => {
   item.product_id = product.id;
   item.product_name = product.name;
   item.stock_qty = product.quantity;
-  item.unit_price = product.price || 0;
-  item.quantity = 1;
-  calculateTotal(item);
+  item.unit = product.unit;
+  item.cost_price = 0;
+  item.quantity = 0;
+  item.total_price = 0;
   item.searchResults = [];
+  item.error = '';
+};
+
+const validateQuantity = (item) => {
+  if (item.quantity < 0) {
+    item.error = 'Quantity cannot be negative';
+    item.quantity = 0;
+  } else {
+    item.error = '';
+  }
+  calculateTotal(item);
 };
 
 const calculateTotal = (item) => {
-  item.total_price = (item.quantity || 0) * (item.unit_price || 0);
+  item.total_price = (item.quantity || 0) * (item.cost_price || 0);
 };
 
 const savePurchaseOrder = async () => {
@@ -168,9 +196,15 @@ const savePurchaseOrder = async () => {
     alert('Please select a supplier');
     return;
   }
-  if (poItems.value.length === 0) {
-    alert('Add at least one item');
-    return;
+  for (const item of poItems.value) {
+    if (!item.product_id) {
+      alert('Please select a product for all rows');
+      return;
+    }
+    if (item.quantity <= 0) {
+      alert(`Quantity must be greater than 0 for ${item.product_name}`);
+      return;
+    }
   }
 
   const payload = {
@@ -181,32 +215,33 @@ const savePurchaseOrder = async () => {
     items: poItems.value.map(i => ({
       product_id: i.product_id,
       quantity: i.quantity,
-      unit_price: i.unit_price
+      cost_price: i.cost_price
     }))
   };
 
   try {
     const res = await api.post('/suppliers/orders', payload);
     alert(`Purchase Order saved successfully! PO ID: ${res.data.po_id}`);
-    // Reset form
     poHeader.value = { supplier_id: '', invoice_number: '', memo: '', purchase_date: new Date().toISOString().substr(0,10) };
     poItems.value = [];
     addRow();
   } catch (err) {
-    alert('Error saving purchase order: ' + err.response.data.error);
+    alert('Error saving purchase order: ' + (err.response?.data?.error || err.message));
   }
 };
 
-// --------- On mounted ---------
 onMounted(() => {
   fetchSuppliers();
   fetchProducts();
-  addRow(); // start with one row
+  addRow();
 });
 </script>
 
 <style scoped>
 ul {
   width: 100%;
+}
+.text-red-500 {
+  font-size: 0.75rem;
 }
 </style>

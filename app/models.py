@@ -96,14 +96,33 @@ class PurchaseOrderItem(db.Model, StatusMixin):
         """Update total_price based on quantity and unit_price."""
         self.total_price = self.quantity * self.unit_price
 
+# class SupplierPayment(db.Model, StatusMixin):
+#     id = db.Column(db.Integer, primary_key=True)
+#     purchase_order_id = db.Column(db.Integer, db.ForeignKey('purchase_order.id'))
+#     amount = db.Column(db.Float, nullable=False)
+#     payment_type = db.Column(db.String(20), default='Cash')  # Cash, Bank, Mobile Money
+#     payment_date = db.Column(db.DateTime, default=datetime.utcnow)
+#     reference = db.Column(db.String(100))
+#     transaction_no = db.Column(db.Integer, db.ForeignKey('transaction_number.id'))
+
+
+
 class SupplierPayment(db.Model, StatusMixin):
+    __tablename__ = 'supplier_payment'
+
     id = db.Column(db.Integer, primary_key=True)
     purchase_order_id = db.Column(db.Integer, db.ForeignKey('purchase_order.id'))
+    
+    # Link to payment account
+    payment_account_id = db.Column(db.Integer, db.ForeignKey('account.id'), nullable=False)
+    
     amount = db.Column(db.Float, nullable=False)
     payment_type = db.Column(db.String(20), default='Cash')  # Cash, Bank, Mobile Money
     payment_date = db.Column(db.DateTime, default=datetime.utcnow)
     reference = db.Column(db.String(100))
-    transaction_no = db.Column(db.Integer, db.ForeignKey('transaction_number.id'))
+    # transaction_no = db.Column(db.Integer, db.ForeignKey('transaction_number.id'))
+    transaction_no = db.Column(db.Integer, db.ForeignKey('transaction_number.id'), nullable=True)
+
 
 # ------------------ Sales & Invoices ------------------
 # ------------------ Sales ------------------
@@ -185,6 +204,9 @@ class Payment(db.Model, StatusMixin):
     payment_date = db.Column(db.DateTime, default=datetime.utcnow)
     reference = db.Column(db.String(100))
     transaction_no = db.Column(db.Integer, db.ForeignKey('transaction_number.id'))
+     
+    # Link to payment account
+    payment_account_id = db.Column(db.Integer, db.ForeignKey('account.id'), nullable=False)
 
 # ------------------ Transaction Log ------------------
 class InventoryTransaction(db.Model, StatusMixin):

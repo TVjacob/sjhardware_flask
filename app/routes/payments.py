@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify
 from datetime import datetime
 from app import db
-from app.models import Payment, Sale, GeneralLedger
+from app.models import Account, Payment, Sale, GeneralLedger
 from app.utils.gl_utils import post_to_ledger, generate_transaction_number
 
 payments_bp = Blueprint('payments', __name__, url_prefix='/payments')
@@ -35,6 +35,23 @@ def add_payment():
     amount = data['amount']
     payment_type = data.get('payment_type', 'Cash')
     reference = data.get('reference')
+    payment_account_id = data.get('payment_account_id')
+    transaction_date_str = data.get('transaction_date')  # <-- New field from frontend
+
+    # Validate transaction date or fallback to UTC now
+    try:
+        if transaction_date_str:
+            # Parse provided date
+            transaction_date = datetime.strptime(transaction_date_str, '%Y-%m-%d')
+        else:
+            transaction_date = datetime.utcnow()
+    except ValueError:
+        return jsonify({'error': 'Invalid transaction date format. Use YYYY-MM-DD'}), 400
+    
+        # Validate payment account exists
+    payment_account = Account.query.get(payment_account_id)
+    if not payment_account:
+        return jsonify({'error': 'Invalid payment account selected'}), 400
 
     # Create Payment
     payment = Payment(
@@ -42,20 +59,22 @@ def add_payment():
         amount=amount,
         payment_type=payment_type,
         reference=reference,
-        payment_date=datetime.utcnow()
+        payment_date=transaction_date,
+        payment_account_id=payment_account_id
     )
     db.session.add(payment)
     db.session.flush()  # Get payment.id before commit
 
     # Generate Transaction Number
-    txn_id, txn_no_str = generate_transaction_number('PAY')
+    txn_id, txn_no_str = generate_transaction_number('PAY',transaction_date=transaction_date)
+    
 
     # Post to General Ledger (Debit Cash, Credit Accounts Receivable)
     entries = [
-        {"account_id": 1, "transaction_type": "Debit", "amount": amount},   # Cash/Bank
-        {"account_id": 101, "transaction_type": "Credit", "amount": amount} # Accounts Receivable
+        {"account_id": payment_account.code, "transaction_type": "Debit", "amount": amount},   # Cash/Bank
+        {"account_id": 1100, "transaction_type": "Credit", "amount": amount} # Accounts Receivable
     ]
-    gl_entries = post_to_ledger(entries, transaction_no_id=txn_id, description=f"Payment for Sale #{sale.id}")
+    gl_entries = post_to_ledger(entries, transaction_no_id=txn_id, description=f"Payment for Sale #{sale.id}",transaction_date=transaction_date)
 
     # Link Payment to Transaction Number
     payment.transaction_no = txn_id
