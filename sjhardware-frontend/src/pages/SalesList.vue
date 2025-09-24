@@ -1,53 +1,52 @@
 <template>
-    <div class="p-6 max-w-7xl mx-auto">
-      <h1 class="text-2xl font-bold mb-4">Sales List</h1>
-  
-      <!-- Tabs -->
-      <div class="flex space-x-4 mb-6">
-        <button
-          :class="currentTab === 'paid' ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-700'"
-          class="px-4 py-2 rounded"
-          @click="currentTab = 'paid'"
-        >
-          Paid Sales
-        </button>
-        <button
-          :class="currentTab === 'unpaid' ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-700'"
-          class="px-4 py-2 rounded"
-          @click="currentTab = 'unpaid'"
-        >
-          Unpaid Sales
-        </button>
-      </div>
-  
-      <!-- Table -->
-      <table class="min-w-full border">
-        <thead>
-          <tr class="bg-gray-100">
-            <th class="p-2 border">Sale ID</th>
-            <th class="p-2 border">Sale Number</th>
-            <th class="p-2 border">Sale Date</th>
-            <th class="p-2 border">Total Amount</th>
-            <th class="p-2 border">Paid</th>
-            <th class="p-2 border">Balance</th>
-            <th class="p-2 border">Payment Status</th>
-            <th class="p-2 border text-center">Actions</th>
+  <div class="p-6 max-w-7xl mx-auto">
+    <h1 class="text-2xl font-bold mb-4">Sales List</h1>
 
-          </tr>
-        </thead>
-        <tbody>
-          <tr
-            v-for="sale in filteredSales"
-            :key="sale.sale_id"
-            class="hover:bg-gray-50 cursor-pointer"
-          >
-            <td class="p-2 border">{{ sale.sale_id }}</td>
-            <td class="p-2 border">{{ sale.sale_number }}</td>
-            <td class="p-2 border">{{ formatDate(sale.sale_date) }}</td>
-            <td class="p-2 border">{{ sale.total_amount.toFixed(2) }}</td>
-            <td class="p-2 border">{{ (sale.total_amount - sale.balance).toFixed(2) }}</td>
-            <td class="p-2 border">{{ sale.balance.toFixed(2) }}</td>
-            <td class="p-2 border">
+    <!-- Tabs -->
+    <div class="flex space-x-4 mb-6">
+      <button
+        :class="currentTab === 'paid' ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-700'"
+        class="px-4 py-2 rounded"
+        @click="currentTab = 'paid'"
+      >
+        Paid Sales
+      </button>
+      <button
+        :class="currentTab === 'unpaid' ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-700'"
+        class="px-4 py-2 rounded"
+        @click="currentTab = 'unpaid'"
+      >
+        Unpaid Sales
+      </button>
+    </div>
+
+    <!-- Table -->
+    <table class="min-w-full border">
+      <thead>
+        <tr class="bg-gray-100">
+          <th class="p-2 border">Sale ID</th>
+          <th class="p-2 border">Sale Number</th>
+          <th class="p-2 border">Sale Date</th>
+          <th class="p-2 border">Total Amount</th>
+          <th class="p-2 border">Paid</th>
+          <th class="p-2 border">Balance</th>
+          <th class="p-2 border">Payment Status</th>
+          <th class="p-2 border text-center">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr
+          v-for="sale in filteredSales"
+          :key="sale.id"
+          class="hover:bg-gray-50 cursor-pointer"
+        >
+          <td class="p-2 border">{{ sale.id }}</td>
+          <td class="p-2 border">{{ sale.sale_number }}</td>
+          <td class="p-2 border">{{ formatDate(sale.sale_date) }}</td>
+          <td class="p-2 border">{{ sale.total_amount.toFixed(2) }}</td>
+          <td class="p-2 border">{{ (sale.total_paid || 0).toFixed(2) }}</td>
+          <td class="p-2 border">{{ sale.balance.toFixed(2) }}</td>
+          <td class="p-2 border">
             <span
               :class="sale.balance === 0 ? 'text-green-600 font-bold' : 'text-red-600 font-bold'"
             >
@@ -63,26 +62,28 @@
               Receive Payment
             </button>
           </td>
-          </tr>
-        </tbody>
-      </table>
+        </tr>
+      </tbody>
+    </table>
 
-          <!-- Payment Modal -->
+    <!-- Payment Modal -->
     <div
       v-if="showPaymentModal"
       class="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50"
     >
       <div class="bg-white rounded-lg shadow-lg p-6 w-96">
-        <h2 class="text-lg font-bold mb-4">Receive Payment for Sale #{{ selectedsale?.sale_id }}</h2>
+        <h2 class="text-lg font-bold mb-4">
+          Receive Payment for Sale #{{ selectedSale?.sale_id }}
+        </h2>
 
         <div class="mb-4">
           <label class="block text-sm font-medium">Amount</label>
           <input
-            v-model="paymentForm.amount"
+            v-model.number="paymentForm.amount"
             type="number"
             step="0.01"
             class="w-full p-2 border rounded"
-            :max="selectedsale?.total_balance"
+            :max="selectedSale?.balance"
           />
         </div>
 
@@ -140,20 +141,21 @@
         </div>
       </div>
     </div>
-    </div>
-  </template>
-  
-  <script setup>
-  import { ref, computed, onMounted } from 'vue';
-  import api from '../api'; // Axios instance
-  
-  const currentTab = ref('unpaid'); // default tab
-  const sales = ref([]);
-  const accounts = ref([]);
+  </div>
+</template>
+
+<script setup>
+import { ref, computed, onMounted } from 'vue';
+import api from '../api'; // Your Axios instance
+
+// State
+const currentTab = ref('unpaid'); // default tab
+const sales = ref([]);
+const accounts = ref([]);
 
 // Modal state
 const showPaymentModal = ref(false);
-const selectedsale = ref(null);
+const selectedSale = ref(null);
 
 // Payment form
 const paymentForm = ref({
@@ -164,20 +166,21 @@ const paymentForm = ref({
   reference: ''
 });
 
-  // Fetch sales from API
-  const fetchSales = async () => {
-    try {
-      const res = await api.get('/sales/');
-      // Compute balance for each sale
-      sales.value = res.data.map(s => ({
-        ...s,
-        balance: s.total_amount - (s.total_paid || 0) // compute balance
-      }));
-    } catch (err) {
-      console.error('Error fetching sales', err);
-    }
-  };
-  
+// Fetch sales from API
+const fetchSales = async () => {
+  try {
+    const res = await api.get('/sales/');
+    console.log('Fetched sales:', res.data);
+
+    sales.value = res.data.map(s => ({
+      ...s,
+      balance: s.balance // calculate balance
+    }));
+  } catch (err) {
+    console.error('Error fetching sales', err);
+  }
+};
+
 // Fetch accounts
 const fetchAccounts = async () => {
   try {
@@ -188,24 +191,22 @@ const fetchAccounts = async () => {
   }
 };
 
-  // Filter sales based on tab
-  const filteredSales = computed(() => {
-    if (currentTab.value === 'paid') {
-      return sales.value.filter(s => s.balance <= 0);
-    } else {
-      return sales.value.filter(s => s.balance > 0);
-    }
-  });
-  
-  // Format date nicely
-  const formatDate = (dateStr) => {
-    const d = new Date(dateStr);
-    return d.toLocaleDateString();
-  };
-  
+// Filter sales based on tab
+const filteredSales = computed(() => {
+  return currentTab.value === 'paid'
+    ? sales.value.filter(s => s.balance <= 0)
+    : sales.value.filter(s => s.balance > 0);
+});
+
+// Format date nicely
+const formatDate = (dateStr) => {
+  const d = new Date(dateStr);
+  return d.toLocaleDateString();
+};
+
 // Open modal
 const openPaymentModal = (sale) => {
-  selectedsale.value = sale;
+  selectedSale.value = sale;
   paymentForm.value = {
     amount: sale.balance,
     payment_type: 'Cash',
@@ -213,48 +214,49 @@ const openPaymentModal = (sale) => {
     transaction_date: new Date().toISOString().split('T')[0],
     reference: ''
   };
+  console.log('Opening modal for sale:', sale); // Debugging
   showPaymentModal.value = true;
 };
 
 // Close modal
 const closePaymentModal = () => {
   showPaymentModal.value = false;
-  selectedsale.value = null;
+  selectedSale.value = null;
 };
 
 // Submit payment
 const submitPayment = async () => {
+  const balance = selectedSale.value.balance;
+  const amount = parseFloat(paymentForm.value.amount);
+
+  if (amount > balance) {
+    alert(`Amount cannot exceed balance. Max allowed: ${balance.toFixed(2)}`);
+    paymentForm.value.amount = balance;
+    return;
+  }
+
+  const payload = {
+    amount,
+    payment_type: paymentForm.value.payment_type,
+    payment_account_id: paymentForm.value.payment_account_id,
+    transaction_date: paymentForm.value.transaction_date,
+    reference: paymentForm.value.reference,
+    sale_id: selectedSale.value.sale_id // Use correct ID here
+  };
+
+  console.log('Submitting payload:', payload); // Debugging
+
   try {
-    const payload = {
-      amount: parseFloat(paymentForm.value.amount),
-      payment_type: paymentForm.value.payment_type,
-      payment_account_id: paymentForm.value.payment_account_id,
-      transaction_date: paymentForm.value.transaction_date,
-      reference: paymentForm.value.reference,
-      sale_id:selectedsale.value.sale_id,
-
-    };
-
-    await api.post(`/payments/`, payload);
-
+    await api.post('/payments/', payload);
     closePaymentModal();
-    fetchSales();
+    fetchSales(); // Refresh the table
   } catch (err) {
     console.error('Error saving payment', err.response?.data || err.message);
   }
 };
 
-  onMounted(() => {
-    fetchSales();
-    fetchAccounts();
-
-  });
-  </script>
-<!--   
-  <style scoped>
-  table th,
-  table td {
-    text-align: left;
-  }
-  </style>
-   -->
+onMounted(() => {
+  fetchSales();
+  fetchAccounts();
+});
+</script>

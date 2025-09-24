@@ -25,6 +25,11 @@ def create_app():
     from app.routes.ledger import ledger_bp
     from app.routes.users import users_bp
     from app.routes.customer import customer_bp
+    # from app.routes.customer import customer_bp
+    from app.routes.dashboard import dashboard_bp
+    from app.routes.reports import reports_bp
+
+# dashboard_bp = Blueprint('dashboard', __name__, url_prefix='/dashboard')
 
 
     app.register_blueprint(inventory_bp, url_prefix='/api/inventory')
@@ -36,6 +41,8 @@ def create_app():
     app.register_blueprint(ledger_bp, url_prefix='/api/ledgers')
     app.register_blueprint(users_bp, url_prefix='/api/users')
     app.register_blueprint(customer_bp, url_prefix='/api/customer')
+    app.register_blueprint(dashboard_bp, url_prefix='/api/dashboard')
+    app.register_blueprint(reports_bp, url_prefix='/api/reports')
 
 
     return app

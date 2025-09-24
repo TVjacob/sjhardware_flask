@@ -23,7 +23,7 @@
           case '/sales': return 'Sales';
           case '/supplier': return 'Supplier';
           case '/purchases': return 'Purchases';
-          case '/payments': return 'Payments';
+          case '/reports': return 'Reports';
           case '/expenses': return 'Expenses';
           case '/users': return 'Users';
           case '/purchaselist': return 'PurchaseList';

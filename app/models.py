@@ -254,7 +254,9 @@ class Permission(db.Model, StatusMixin):
 class User(db.Model, StatusMixin):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(50), unique=True, nullable=False)
-    password_hash = db.Column(db.String(128), nullable=False)
+    # password_hash = db.Column(db.String(128), nullable=False)
+    password_hash = db.Column(db.String(512), nullable=False)  # Increased size
+
     role = db.Column(db.String(20), default='Staff')
 
     # Permissions relationship
@@ -302,14 +304,54 @@ class StockAdjustment(db.Model, StatusMixin):
     transaction_no = db.Column(db.Integer, db.ForeignKey('transaction_number.id'))
 
 # ------------------ Expenses ------------------
+
+# -------------------- Expense Header --------------------
 class Expense(db.Model, StatusMixin):
+    __tablename__ = 'expense'
+
     id = db.Column(db.Integer, primary_key=True)
-    description = db.Column(db.String(200), nullable=False)
-    amount = db.Column(db.Float, nullable=False)
-    category = db.Column(db.String(50))
-    expense_date = db.Column(db.DateTime, default=datetime.utcnow)
-    # created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    description = db.Column(db.String(200), nullable=False)  # Overall memo/description
+    expense_date = db.Column(db.DateTime, default=datetime.utcnow)  # Date of expense
+
+    # The account from which payment was made (e.g., Cash, Bank)
+    payment_account_id = db.Column(db.Integer, db.ForeignKey('account.id'), nullable=False)
+
+    # Total paid for this expense transaction
+    total_amount = db.Column(db.Float, default=0, nullable=False)
+
+    # Reference or memo field
+    reference = db.Column(db.String(100))
+
+    # Link to a transaction number
     transaction_no = db.Column(db.Integer, db.ForeignKey('transaction_number.id'))
+
+    # Relationship to items
+    items = db.relationship('ExpenseItem', backref='expense', lazy=True, cascade="all, delete-orphan")
+
+    def update_total(self):
+        """Recalculate total_amount based on expense items."""
+        self.total_amount = sum(item.amount for item in self.items)
+
+    def __repr__(self):
+        return f"<Expense {self.id} - {self.description}>"
+
+
+# -------------------- Expense Items --------------------
+class ExpenseItem(db.Model, StatusMixin):
+    __tablename__ = 'expense_item'
+
+    id = db.Column(db.Integer, primary_key=True)
+    expense_id = db.Column(db.Integer, db.ForeignKey('expense.id'), nullable=False)  # Link to Expense header
+
+    # Link to Account to know which category this item belongs to (e.g., Utilities, Rent, etc.)
+    account_id = db.Column(db.Integer, db.ForeignKey('account.id'), nullable=False)
+
+    item_name = db.Column(db.String(100), nullable=False)  # Example: "Electricity Bill", "Printer Ink"
+    description = db.Column(db.String(200))                # Optional details
+    amount = db.Column(db.Float, nullable=False)
+
+    def __repr__(self):
+        return f"<ExpenseItem {self.item_name} - {self.amount}>"
 
 # ------------------ Accounts ------------------
 class Account(db.Model, StatusMixin):
@@ -319,6 +361,9 @@ class Account(db.Model, StatusMixin):
     account_type = db.Column(db.String(50), nullable=False)
     description = db.Column(db.String(200))
     # transaction_date = db.Column(db.DateTime, default=datetime.utcnow)
+        # Relationships
+    expenses_paid = db.relationship('Expense', backref='payment_account', lazy=True)
+    expense_items = db.relationship('ExpenseItem', backref='account', lazy=True)
 
 # ------------------ General Ledger ------------------
 class GeneralLedger(db.Model, StatusMixin):

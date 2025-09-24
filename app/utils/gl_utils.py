@@ -24,6 +24,7 @@ def post_to_ledger(entries, transaction_no_id, description=None, transaction_dat
         code = str(e['account_id'])
         if code not in account_lookup:
             raise ValueError(f"Account with code {code} not found.")
+        print(f"Posting to GL: Account Code={code}, Type={e['transaction_type']}, Amount={e['amount']}")
 
         # Create GL entry and populate StatusMixin fields
         gl_entry = GeneralLedger(
@@ -76,18 +77,18 @@ def generate_transaction_number(prefix, transaction_date=None, status=1):
 
     tn = TransactionNumber.query.filter_by(prefix=prefix).first()
 
-    if not tn:
-        tn = TransactionNumber(
-            prefix=prefix,
-            last_number=1,
-            status=status,
-            transaction_date=transaction_date
-        )
-        db.session.add(tn)
-        db.session.flush()  # <-- Ensure ID is available before commit
-    else:
-        tn.last_number += 1
-        db.session.flush()
+    # if not tn:
+    tn = TransactionNumber(
+        prefix=prefix,
+        last_number=1,
+        status=status,
+        transaction_date=transaction_date
+    )
+    db.session.add(tn)
+    db.session.flush()  # <-- Ensure ID is available before commit
+    # else:
+    #     tn.last_number += 1
+    #     db.session.flush()
 
     txn_str = f"{prefix}-{str(tn.last_number).zfill(5)}"
 

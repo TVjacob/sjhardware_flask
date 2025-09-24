@@ -113,6 +113,23 @@ def create_permission():
 
     return jsonify({"message": "Permission created", "permission_id": perm.id}), 201
 
+
+@users_bp.route('/permissions', methods=['GET'])
+def get_permissions():
+    permissions = Permission.query.all()
+
+    return jsonify([
+        {
+            "id": perm.id,
+            "name": perm.name,
+            "description": perm.description,
+            "status": perm.status,
+            "created_at": perm.created_at,
+            "updated_at": perm.updated_at
+        } for perm in permissions
+    ])
+
+
 # Assign permission to user
 @users_bp.route('/<int:user_id>/permissions/<int:perm_id>', methods=['POST'])
 def assign_permission(user_id, perm_id):

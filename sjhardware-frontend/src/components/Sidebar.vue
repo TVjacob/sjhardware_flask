@@ -55,9 +55,10 @@
         { name: 'Supplier', path: '/supplier', icon: '📉' },
         { name: 'Add Purchase', path: '/purchases', icon: '🛒' },
         { name: 'Purchase List', path: '/purchaselist', icon: '🍮' },
-        { name: 'Payments', path: '/payments', icon: '💳' },
         { name: 'Expenses', path: '/expenses', icon: '📉' },
+        { name: 'Reports', path: '/reports', icon: '💳' },
         { name: 'Users', path: '/users', icon: '🍮' },
+
 
         
       ];
