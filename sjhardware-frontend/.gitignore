@@ -29,3 +29,15 @@ coverage
 
 *.tsbuildinfo
 node_modules/*
+
+# Ignore all files in migrations directories
+migrations/*
+
+# Ignore all Python cache files
+__pycache__/
+*.pyc
+app/__pycache__/
+app/__pycache__/*
+app/migrations/*
+app/routes/__pycache__/*
+*.pyc
