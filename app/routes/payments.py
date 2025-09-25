@@ -3,6 +3,8 @@ from datetime import datetime
 from app import db
 from app.models import Account, Payment, Sale, GeneralLedger
 from app.utils.gl_utils import post_to_ledger, generate_transaction_number
+from sqlalchemy.orm import joinedload
+
 
 payments_bp = Blueprint('payments', __name__, url_prefix='/payments')
 
@@ -153,17 +155,7 @@ def add_payment():
     if not payment_account:
         return jsonify({'error': 'Invalid payment account selected'}), 400
 
-    # ----------------- Create Payment -----------------
-    payment = Payment(
-        sale_id=sale.id,
-        amount=amount,
-        payment_type=payment_type,
-        reference=reference,
-        payment_date=transaction_date,
-        payment_account_id=payment_account_id
-    )
-    db.session.add(payment)
-    db.session.flush()  # So we can access payment.id before commit
+
 
     # ----------------- Generate Transaction Number -----------------
     txn_id, txn_no_str = generate_transaction_number('PAY', transaction_date=transaction_date)
@@ -183,6 +175,20 @@ def add_payment():
     # Link payment to transaction
     payment.transaction_no = txn_id
     payment.updated_at = datetime.utcnow()
+    
+    # ----------------- Create Payment -----------------
+    payment = Payment(
+        sale_id=sale.id,
+        amount=amount,
+        payment_type=payment_type,
+        reference=reference,
+        payment_date=transaction_date,
+        payment_account_id=payment_account_id,
+        status =1 ,
+        transaction_no=txn_id
+    )
+    db.session.add(payment)
+    db.session.flush()  # So we can access payment.id before commit
 
     # ----------------- Update Sale Totals -----------------
     total_paid, payment_status = recalc_sale_payment_status(sale.id)
@@ -313,3 +319,102 @@ def delete_payment(payment_id):
         "payment_id": payment_id,
         "sale_status": sale.payment_status
     })
+
+
+
+def get_sale_details(sale_id, doc_type='invoice'):
+    """
+    Fetch and return complete sale details for Invoice or Receipt.
+    """
+    sale = (
+        Sale.query
+        .options(joinedload(Sale.items), joinedload(Sale.customer))
+        .filter_by(id=sale_id, status=1)
+        .first()
+    )
+
+    if not sale:
+        return {"error": "Sale not found"}
+
+    # Total amount for sale items
+    total_amount = sum(item.total_price for item in sale.items if item.status == 1)
+
+    # Total amount paid
+    total_paid = db.session.query(db.func.coalesce(db.func.sum(Payment.amount), 0)) \
+                            .filter(Payment.sale_id == sale.id).scalar()
+
+    balance = total_amount - total_paid
+    change = abs(balance) if balance < 0 else 0
+
+    # Item details
+    item_details = [
+        {
+            "product_name": item.product_name,
+            "quantity": item.quantity,
+            "unit_price": item.unit_price,
+            "total_price": item.total_price
+        }
+        for item in sale.items if item.status == 1
+    ]
+
+    # Payment history
+    payment_history = [
+        {
+            "date": payment.payment_date.strftime('%Y-%m-%d %H:%M:%S'),
+            "amount": payment.amount,
+            "type": payment.payment_type,
+            "account_id": payment.payment_account_id,
+            "reference": payment.reference
+        }
+        for payment in Payment.query.filter_by(sale_id=sale.id).order_by(Payment.payment_date).all()
+    ]
+
+    return {
+        "document_type": doc_type.capitalize(),
+        "sale_id": sale.id,
+        "sale_number": sale.sale_number,
+        "sale_date": sale.sale_date.strftime('%Y-%m-%d %H:%M:%S'),
+
+        # Customer info
+        "customer": {
+            "name": sale.customer.name if sale.customer else "Walk-in",
+            "phone": sale.customer.phone if sale.customer and sale.customer.phone else "",
+            "email": sale.customer.email if sale.customer and sale.customer.email else "",
+            "address": sale.customer.address if sale.customer and sale.customer.address else "",
+        },
+
+        # Items
+        "items": item_details,
+
+        # Payment history
+        "payments": payment_history,
+
+        # Totals
+        "totals": {
+            "grand_total": total_amount,
+            "amount_paid": total_paid,
+            "balance": balance if balance >= 0 else 0,
+            "change": change
+        },
+
+        "status": sale.payment_status
+    }
+
+# ------------------ API ROUTE ------------------
+@payments_bp.route('/details', methods=['GET'])
+def payment_details():
+    sale_id = request.args.get('sale_id', type=int)
+    doc_type = request.args.get('type', default='invoice')
+
+    if not sale_id:
+        return jsonify({"error": "sale_id is required"}), 400
+
+    if doc_type.lower() not in ['invoice', 'receipt']:
+        return jsonify({"error": "Invalid type. Use 'invoice' or 'receipt'"}), 400
+
+    result = get_sale_details(sale_id, doc_type)
+
+    if "error" in result:
+        return jsonify(result), 404
+
+    return jsonify(result), 200

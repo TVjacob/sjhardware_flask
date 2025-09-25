@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify
 from app import db
-from app.models import Account, Product, PurchaseOrderItem, Sale, SaleItem, GeneralLedger
+from app.models import Account, Payment, Product, PurchaseOrderItem, Sale, SaleItem, GeneralLedger
 from app.utils.gl_utils import post_to_ledger, generate_transaction_number_partone,generate_transaction_number
 from datetime import datetime
 
@@ -93,6 +93,10 @@ def create_sale():
         sale.status = 1  # Fully Paid
 
     db.session.flush()
+    payment_type=data.get('payment_type', 'Cash')
+
+
+
 
     # ---------- Determine GL accounts ----------
     if payment_account_id:
@@ -102,6 +106,8 @@ def create_sale():
         credit_account_code = payment_account.code
     else:
         credit_account_code = 1100  # Default: Accounts Receivable
+
+
 
     # ---------- Generate GL Transaction ----------
     txn_id, txn_str = generate_transaction_number_partone('INV', transaction_date=sale_date)
@@ -133,6 +139,9 @@ def create_sale():
         ]
     txn_id, txn_str = generate_transaction_number_partone('INV', transaction_date=sale_date)
 
+
+
+
     # Post ledger entries
     gl_entries = post_to_ledger(
         entries,
@@ -143,6 +152,20 @@ def create_sale():
 
     # Assign the correct transaction_number.id to sale
     sale.transaction_no = txn_id
+
+    if amount_paid>0:
+        payment = Payment(
+            sale_id=sale.id,
+            amount=amount_paid,
+            payment_type=payment_type,
+            reference=data['sale_number'],
+            payment_date=sale_date,
+            payment_account_id=payment_account_id,
+            status=1,
+            transaction_no=txn_id,
+        )
+        db.session.add(payment)
+        db.session.flush()  # So we can access payment.id before commit
 
     db.session.commit()
 

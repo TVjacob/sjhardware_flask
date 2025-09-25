@@ -150,6 +150,8 @@ class Sale(db.Model, StatusMixin):
     # Relationships
     customer = db.relationship('Customer', backref='sales', lazy=True)
     items = db.relationship('SaleItem', backref='sale', lazy=True, cascade="all, delete-orphan")
+    status = db.Column(db.Integer, default=1)
+
 
     def update_totals(self):
         """Recalculate total_amount, balance, and update payment_status automatically."""
@@ -181,6 +183,9 @@ class SaleItem(db.Model, StatusMixin):
 
     # Relationship
     product = db.relationship('Product', backref='sale_items', lazy=True)
+
+    status = db.Column(db.Integer, default=1)
+
 
     def calculate_total(self):
         """Automatically calculate total_price."""
