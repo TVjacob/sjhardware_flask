@@ -1,6 +1,7 @@
 from flask import Blueprint, request, jsonify
 from app import db
 from app.models import Account, Payment, Product, PurchaseOrderItem, Sale, SaleItem, GeneralLedger
+from app.utils.auth import token_required
 from app.utils.gl_utils import post_to_ledger, generate_transaction_number_partone,generate_transaction_number
 from datetime import datetime
 
@@ -13,6 +14,7 @@ def update_timestamps(obj):
         obj.created_at = datetime.utcnow()
 
 # # ------------------ Create a Sale & Invoice with GL ------------------ #
+@token_required
 @sales_bp.route('/', methods=['POST'])
 def create_sale():
     data = request.json
@@ -190,6 +192,7 @@ def create_sale():
 
 
 # ------------------ Get All Sales ------------------ #
+@token_required
 @sales_bp.route('/', methods=['GET'])
 def get_sales():
     sales = Sale.query.filter(Sale.status.in_([1, 2, 3,4])).all()  # Only active
@@ -220,6 +223,7 @@ def get_sales():
 
 
 # ------------------ Get Single Sale ------------------ #
+@token_required
 @sales_bp.route('/<int:sale_id>', methods=['GET'])
 def get_sale(sale_id):
     sale = Sale.query.get_or_404(sale_id)
@@ -246,6 +250,7 @@ def get_sale(sale_id):
 
 
 # ------------------ Update Sale ------------------ #
+@token_required
 @sales_bp.route('/<int:sale_id>', methods=['PUT'])
 def update_sale(sale_id):
     sale = Sale.query.get_or_404(sale_id)
@@ -323,6 +328,7 @@ def update_sale(sale_id):
 
 
 # ------------------ Soft Delete Sale (Status = 0) ------------------ #
+@token_required
 @sales_bp.route('/<int:sale_id>', methods=['DELETE'])
 def delete_sale(sale_id):
     sale = Sale.query.get_or_404(sale_id)

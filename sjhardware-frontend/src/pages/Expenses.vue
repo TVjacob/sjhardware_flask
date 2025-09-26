@@ -66,6 +66,9 @@
             <td class="p-2 border flex gap-2">
               <button @click="editExpense(expense)" class="bg-blue-400 text-white px-2 py-1 rounded">Edit</button>
               <button @click="deleteExpense(expense.id)" class="bg-red-500 text-white px-2 py-1 rounded">Delete</button>
+              <router-link :to="`/reports/expenses/${expense.id}`" class="text-indigo-600 underline">
+              View
+            </router-link>
             </td>
           </tr>
 
@@ -107,6 +110,7 @@
           {{ editingExpense ? 'Edit Expense' : 'Add Expense' }}
         </h2>
 
+        
         <!-- Close Button -->
         <button
           @click="closeModal"

@@ -129,7 +129,7 @@ const fetchSuppliers = async () => {
 };
 
 const fetchProducts = async () => {
-  const res = await api.get('/inventory/products/');
+  const res = await api.get('/inventory/products');
   products.value = res.data.map(p => ({
     ...p,
     unit: p.category_name || '' // add unit from category

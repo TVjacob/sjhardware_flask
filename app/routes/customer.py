@@ -3,12 +3,16 @@ from app import db
 from app.models import Customer
 from datetime import datetime
 
+from app.utils.auth import token_required
+
 customer_bp = Blueprint('customer', __name__, url_prefix='/customer')
 
 # ------------------ Customers CRUD ------------------
 
 # --- Add a new customer ---
 @customer_bp.route('/', methods=['POST'])
+@token_required
+
 def add_customer():
     data = request.json
     customer = Customer(
@@ -26,6 +30,8 @@ def add_customer():
 
 # --- List all customers ---
 @customer_bp.route('/', methods=['GET'])
+@token_required
+
 def list_customers():
     customers = Customer.query.all()
     result = [
@@ -44,6 +50,8 @@ def list_customers():
     return jsonify(result)
 
 # --- Get customer by ID ---
+@token_required
+
 @customer_bp.route('/<int:id>', methods=['GET'])
 def get_customer(id):
     c = Customer.query.get_or_404(id)
@@ -59,6 +67,8 @@ def get_customer(id):
     })
 
 # --- Search customers by name, phone, or email ---
+@token_required
+
 @customer_bp.route('/search', methods=['GET'])
 def search_customer():
     query = Customer.query
@@ -88,6 +98,8 @@ def search_customer():
     return jsonify(result)
 
 # --- Update customer ---
+@token_required
+
 @customer_bp.route('/<int:id>', methods=['PUT'])
 def update_customer(id):
     c = Customer.query.get_or_404(id)
@@ -101,6 +113,8 @@ def update_customer(id):
     return jsonify({"message": "Customer updated", "customer_id": c.id})
 
 # --- Delete customer ---
+@token_required
+
 @customer_bp.route('/<int:id>', methods=['DELETE'])
 def delete_customer(id):
     c = Customer.query.get_or_404(id)

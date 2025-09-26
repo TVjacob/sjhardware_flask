@@ -3,9 +3,12 @@ from app import db
 from app.models import Product, Category
 from datetime import datetime
 
+from app.utils.auth import token_required
+
 inventory_bp = Blueprint('inventory', __name__, url_prefix='/inventory')
 
 # --- Add a product (quantity cannot be set manually) ---
+@token_required
 @inventory_bp.route('/products', methods=['POST'])
 def add_product():
     data = request.json
@@ -24,6 +27,7 @@ def add_product():
     return jsonify({"message": "Product added", "product_id": product.id}), 201
 
 # --- View all products ---
+@token_required
 @inventory_bp.route('/products', methods=['GET'])
 def list_products():
     products = Product.query.all()
@@ -46,6 +50,7 @@ def list_products():
 
 
 # --- Find product by ID ---
+@token_required
 @inventory_bp.route('/products/<int:id>', methods=['GET'])
 def get_product(id):
     p = Product.query.get_or_404(id)
@@ -65,6 +70,7 @@ def get_product(id):
     })
 
 # --- Find product by SKU or Name ---
+@token_required
 @inventory_bp.route('/products/search', methods=['GET'])
 def search_product():
     sku = request.args.get('sku')
@@ -95,6 +101,7 @@ def search_product():
     return jsonify(result)
 
 # --- Update product (quantity cannot be manually updated here) ---
+@token_required
 @inventory_bp.route('/products/<int:id>', methods=['PUT'])
 def update_product(id):
     product = Product.query.get_or_404(id)
@@ -109,6 +116,7 @@ def update_product(id):
     return jsonify({"message": "Product updated", "product_id": product.id})
 
 # --- Delete product ---
+@token_required
 @inventory_bp.route('/products/<int:id>', methods=['DELETE'])
 def delete_product(id):
     product = Product.query.get_or_404(id)
@@ -120,6 +128,7 @@ def delete_product(id):
 # ---------------- Category CRUD ---------------- #
 
 # --- Add category ---
+@token_required
 @inventory_bp.route('/categories', methods=['POST'])
 def add_category():
     data = request.json
@@ -135,6 +144,7 @@ def add_category():
     return jsonify({"message": "Category added", "category_id": category.id}), 201
 
 # --- View all categories ---
+@token_required
 @inventory_bp.route('/categories', methods=['GET'])
 def list_categories():
     categories = Category.query.all()
@@ -144,6 +154,7 @@ def list_categories():
     return jsonify(result)
 
 # --- Find category by ID ---
+@token_required
 @inventory_bp.route('/categories/<int:id>', methods=['GET'])
 def get_category(id):
     c = Category.query.get_or_404(id)
@@ -157,6 +168,7 @@ def get_category(id):
     })
 
 # --- Update category ---
+@token_required
 @inventory_bp.route('/categories/<int:id>', methods=['PUT'])
 def update_category(id):
     c = Category.query.get_or_404(id)
@@ -168,6 +180,7 @@ def update_category(id):
     return jsonify({"message": "Category updated", "category_id": c.id})
 
 # --- Delete category ---
+@token_required
 @inventory_bp.route('/categories/<int:id>', methods=['DELETE'])
 def delete_category(id):
     c = Category.query.get_or_404(id)

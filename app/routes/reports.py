@@ -5,10 +5,13 @@ from sqlalchemy import func
 from datetime import datetime, timedelta
 from sqlalchemy.orm import joinedload
 
+from app.utils.auth import token_required
+
 
 reports_bp = Blueprint('reports', __name__, url_prefix='/reports')
 
 # ------------------ General Ledger ------------------
+@token_required
 @reports_bp.route('/general-ledger', methods=['GET'])
 def general_ledger():
     ledgers = db.session.query(
@@ -34,6 +37,7 @@ def general_ledger():
     return jsonify(result)
 
 # ------------------ Trial Balance ------------------
+@token_required
 @reports_bp.route('/trial-balance', methods=['GET'])
 def trial_balance():
     # Group by account
@@ -54,6 +58,7 @@ def trial_balance():
     return jsonify(result)
 
 # ------------------ Profit & Loss ------------------
+@token_required
 @reports_bp.route('/profit-loss', methods=['GET'])
 def profit_loss():
     # Total sales
@@ -77,6 +82,7 @@ def profit_loss():
     return jsonify(result)
 
 # ------------------ Cash Flow ------------------
+@token_required
 @reports_bp.route('/cash-flow', methods=['GET'])
 def cash_flow():
     # Cash inflows: Sales
@@ -108,6 +114,7 @@ def cash_flow():
 # reports_bp = Blueprint('reports', __name__, url_prefix='/reports')
 
 # ------------------ Debtors Report ------------------
+@token_required
 @reports_bp.route('/debtors-report', methods=['GET'])
 def debtors_report():
     # Only include customers with outstanding balance > 0
@@ -132,6 +139,7 @@ def debtors_report():
 
 
 # ------------------ Creditors Report ------------------
+@token_required
 @reports_bp.route('/creditors-report', methods=['GET'])
 def creditors_report():
     # Only include suppliers with unpaid purchase orders
@@ -158,6 +166,7 @@ def creditors_report():
 
 
 # ------------------ Out of Stock ------------------
+@token_required
 @reports_bp.route('/out-of-stock', methods=['GET'])
 def out_of_stock():
     products = db.session.query(Product,Category).join(Category,Product.category_id==Category.id).filter(Product.status != 9, Product.quantity <= 0).all()
@@ -171,6 +180,7 @@ def out_of_stock():
     return jsonify(result)
 
 # ------------------ Stock List ------------------
+@token_required
 
 @reports_bp.route('/stock-list', methods=['GET'])
 def stock_list():
@@ -190,6 +200,7 @@ def stock_list():
     return jsonify(result)
 
 # ------------------ Consumption List ------------------
+@token_required
 @reports_bp.route('/consumption-list', methods=['GET'])
 def consumption_list():
     seven_days_ago = datetime.utcnow() - timedelta(days=7)
@@ -212,6 +223,7 @@ def consumption_list():
     return jsonify(result)
 
 # ------------------ Performance List ------------------
+@token_required
 @reports_bp.route('/performance-list', methods=['GET'])
 def performance_list():
     # Best performing products by revenue
@@ -237,6 +249,7 @@ def performance_list():
     return jsonify(result)
 
 # ------------------ Sales List ------------------
+@token_required
 @reports_bp.route('/sales-list', methods=['GET'])
 def sales_list():
     sales = db.session.query(Sale).filter(Sale.status != 9).all()
@@ -250,9 +263,10 @@ def sales_list():
     return jsonify(result)
 
 # ------------------ Purchases List ------------------
+@token_required
 @reports_bp.route('/purchases-list', methods=['GET'])
 def purchases_list():
-    purchases = db.session.query(Purchase).filter(Purchase.status != 9).all()
+    purchases = db.session.query(PurchaseOrder).filter(PurchaseOrder.status != 9).all()
     result = [{
         "id": p.id,
         "product_name": p.product.name if p.product else "N/A",
@@ -263,6 +277,7 @@ def purchases_list():
     return jsonify(result)
 
 # ------------------ Expenses Report ------------------
+@token_required
 @reports_bp.route('/expenses-report', methods=['GET'])
 def expenses_report():
     expenses = db.session.query(Expense).filter(Expense.status != 9).all()

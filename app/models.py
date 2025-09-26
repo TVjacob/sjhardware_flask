@@ -122,6 +122,8 @@ class SupplierPayment(db.Model, StatusMixin):
     reference = db.Column(db.String(100))
     # transaction_no = db.Column(db.Integer, db.ForeignKey('transaction_number.id'))
     transaction_no = db.Column(db.Integer, db.ForeignKey('transaction_number.id'), nullable=True)
+    status = db.Column(db.Integer, default=1)
+
 
 
 # ------------------ Sales & Invoices ------------------

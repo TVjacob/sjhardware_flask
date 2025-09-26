@@ -3,9 +3,12 @@ from app import db
 from app.models import GeneralLedger, Account
 from datetime import datetime
 
+from app.utils.auth import token_required
+
 ledger_bp = Blueprint('ledger', __name__, url_prefix='/ledger')
 
 # --- Add a transaction ---
+@token_required
 @ledger_bp.route('/', methods=['POST'])
 def add_transaction():
     data = request.json
@@ -29,6 +32,7 @@ def add_transaction():
 
 
 # --- Get all ledger entries ---
+@token_required
 @ledger_bp.route('/', methods=['GET'])
 def get_ledger():
     entries = GeneralLedger.query.all()
@@ -50,6 +54,7 @@ def get_ledger():
 
 
 # --- Get ledger by account ---
+@token_required
 @ledger_bp.route('/account/<int:account_id>', methods=['GET'])
 def get_ledger_by_account(account_id):
     account = Account.query.filter_by(id=account_id, status=1).first_or_404()
@@ -68,6 +73,7 @@ def get_ledger_by_account(account_id):
 
 
 # --- Update ledger entry ---
+@token_required
 @ledger_bp.route('/<int:entry_id>', methods=['PUT'])
 def update_entry(entry_id):
     entry = GeneralLedger.query.get_or_404(entry_id)
@@ -89,6 +95,7 @@ def update_entry(entry_id):
 
 
 # --- Delete ledger entry (soft delete) ---
+@token_required
 @ledger_bp.route('/<int:entry_id>', methods=['DELETE'])
 def delete_entry(entry_id):
     entry = GeneralLedger.query.get_or_404(entry_id)

@@ -1,12 +1,58 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify,current_app
 from app import db
 from app.models import User, Permission
 from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import datetime
+# from datetime import datetime
+import jwt
+from datetime import datetime, timedelta
+from app.utils.auth import token_required
+
+# from flask import current_app
 
 users_bp = Blueprint('users', __name__, url_prefix='/users')
 
 # ---------------- User Routes ---------------- #
+
+
+# from flask import session  # optional if using session login
+# from werkzeug.security import check_password_hash
+
+# Login route
+@users_bp.route('/login', methods=['POST'])
+def login():
+    data = request.json
+    username = data.get('username')
+    password = data.get('password')
+
+    if not username or not password:
+        return jsonify({"error": "Username and password required"}), 400
+
+    user = User.query.filter_by(username=username).first()
+    if not user or not check_password_hash(user.password_hash, password):
+        return jsonify({"error": "Invalid username or password"}), 401
+
+    # Create JWT payload
+    payload = {
+        "user_id": user.id,
+        "username": user.username,
+        "role": user.role,
+        "exp": datetime.utcnow() + timedelta(hours=2)  # token expires in 2 hours
+    }
+
+    # Encode JWT using a secret key
+    token = jwt.encode(payload, current_app.config["SECRET_KEY"], algorithm="HS256")
+
+    return jsonify({
+        "message": "Login successful",
+        "token": token,
+        "user": {
+            "id": user.id,
+            "username": user.username,
+            "role": user.role
+        }
+    }), 200
+
+
 
 # Create a new user
 @users_bp.route('/', methods=['POST'])

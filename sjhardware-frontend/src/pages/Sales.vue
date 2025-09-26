@@ -138,11 +138,11 @@ export default {
   },
   methods: {
     async fetchPaymentAccounts() {
-      const res = await api.get('/accounts?type=asset');
+      const res = await api.get('/accounts/?type=asset');
       this.paymentAccounts = res.data;
     },
     async fetchCustomers() {
-      const res = await api.get('/customer');
+      const res = await api.get('/customer/');
       this.customers = res.data;
     },
     addRow() {

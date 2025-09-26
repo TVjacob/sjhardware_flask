@@ -290,7 +290,7 @@ const fetchSales = async () => {
 // Fetch accounts
 const fetchAccounts = async () => {
   try {
-    const res = await api.get('/accounts');
+    const res = await api.get('/accounts/');
     accounts.value = res.data;
   } catch (err) {
     console.error('Error fetching accounts', err);

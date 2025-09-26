@@ -1,8 +1,12 @@
 from flask import Blueprint, request, jsonify
 from app import db
 from app.models import Account, Expense, ExpenseItem, GeneralLedger
+from app.utils.auth import token_required
 from app.utils.gl_utils import post_to_ledger, generate_transaction_number
 from datetime import datetime
+# from flask import Blueprint, jsonify
+from sqlalchemy.orm import joinedload
+
 
 expenses_bp = Blueprint('expenses', __name__, url_prefix='/expenses')
 
@@ -10,6 +14,7 @@ expenses_bp = Blueprint('expenses', __name__, url_prefix='/expenses')
 # --------------------------------------------------------
 # Create a new expense with full double-entry GL posting
 # --------------------------------------------------------
+@token_required
 @expenses_bp.route('/', methods=['POST'])
 def create_expense():
     try:
@@ -110,6 +115,7 @@ def create_expense():
         return jsonify({"error": str(e)}), 500
 
 # --- Get all expenses ---
+@token_required
 @expenses_bp.route('/', methods=['GET'])
 def get_expenses():
     expenses = Expense.query.filter_by( status=1).all()
@@ -139,6 +145,7 @@ def get_expenses():
 
 
 # --- Get expense by ID ---
+@token_required
 @expenses_bp.route('/<int:id>', methods=['GET'])
 def get_expense(id):
     e = Expense.query.get_or_404(id)
@@ -156,6 +163,7 @@ def get_expense(id):
 
 
 # --- Update expense with GL reversal ---
+@token_required
 @expenses_bp.route('/<int:id>', methods=['PUT'])
 def update_expense(id):
     expense = Expense.query.get_or_404(id)
@@ -232,6 +240,7 @@ def update_expense(id):
 
 
 # --- Delete expense with GL reversal ---
+@token_required
 @expenses_bp.route('/<int:id>', methods=['DELETE'])
 def delete_expense(id):
     expense = Expense.query.get_or_404(id)
@@ -282,3 +291,64 @@ def delete_expense(id):
     db.session.commit()
 
     return jsonify({"message": "Expense marked deleted (status=9) and GL entries reversed", "expense_id": id})
+
+
+
+def get_expense_details(expense_id):
+    """
+    Retrieve complete expense details including items and account info
+    """
+    # Fetch the expense header with related items and account
+    expense = (
+        Expense.query
+        .options(
+            joinedload(Expense.items).joinedload(ExpenseItem.account),
+            joinedload(Expense.payment_account)
+        )
+        .filter(Expense.id == expense_id, Expense.status != 9)
+        .first()
+    )
+
+    if not expense:
+        return {"error": "Expense not found or inactive"}, 404
+
+    # Prepare items details
+    item_details = [
+        {
+            "item_id": item.id,
+            "item_name": item.item_name,
+            "description": item.description,
+            "amount": item.amount,
+            "account": {
+                "account_id": item.account.id if item.account else None,
+                "name": item.account.name if item.account else None,
+                "code": item.account.code if item.account else None,
+                "type": item.account.account_type if item.account else None
+            }
+        }
+        for item in expense.items if item.status != 9
+    ]
+
+    # Prepare expense header info
+    response = {
+        "expense_id": expense.id,
+        "description": expense.description,
+        "expense_date": expense.expense_date.strftime("%Y-%m-%d") if expense.expense_date else None,
+        "total_amount": expense.total_amount,
+        "reference": expense.reference,
+        "payment_account": {
+            "account_id": expense.payment_account.id if expense.payment_account else None,
+            "name": expense.payment_account.name if expense.payment_account else None,
+            "code": expense.payment_account.code if expense.payment_account else None,
+            "type": expense.payment_account.account_type if expense.payment_account else None
+        },
+        "items": item_details
+    }
+
+    return jsonify(response)
+
+
+@token_required
+@expenses_bp.route('/expense/<int:expense_id>', methods=['GET'])
+def expense_details(expense_id):
+    return get_expense_details(expense_id)

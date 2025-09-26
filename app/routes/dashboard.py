@@ -4,8 +4,11 @@ from app.models import Product, Sale, SaleItem, Expense
 from sqlalchemy import func
 from datetime import datetime, timedelta
 
+from app.utils.auth import token_required
+
 dashboard_bp = Blueprint('dashboard', __name__, url_prefix='/dashboard')
 
+@token_required
 @dashboard_bp.route('/metrics', methods=['GET'])
 def get_dashboard_metrics():
     # ------------------ Total Products ------------------

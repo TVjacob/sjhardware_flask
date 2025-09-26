@@ -3,10 +3,15 @@ from app import db
 from app.models import Account
 from datetime import datetime
 
+from app.utils.auth import token_required
+
 accounts_bp = Blueprint('accounts', __name__, url_prefix='/accounts')
 
 # --- Add new account ---
+@token_required
+
 @accounts_bp.route('/', methods=['POST'])
+
 def add_account():
     data = request.json
     account = Account(
@@ -24,7 +29,10 @@ def add_account():
 
 
 # --- Get all accounts ---
+@token_required
+
 @accounts_bp.route('/', methods=['GET'])
+
 def get_accounts():
     accounts = Account.query.all()
     data = [{
@@ -41,7 +49,10 @@ def get_accounts():
 
 
 # --- Get account by ID ---
+@token_required
+
 @accounts_bp.route('/<int:id>', methods=['GET'])
+
 def get_account(id):
     a = Account.query.get_or_404(id)
     return jsonify({
@@ -57,7 +68,10 @@ def get_account(id):
 
 
 # --- Update account ---
+@token_required
+
 @accounts_bp.route('/<int:id>', methods=['PUT'])
+
 def update_account(id):
     a = Account.query.get_or_404(id)
     data = request.json
@@ -72,7 +86,10 @@ def update_account(id):
 
 
 # --- Delete account (soft delete) ---
+@token_required
+
 @accounts_bp.route('/<int:id>', methods=['DELETE'])
+
 def delete_account(id):
     a = Account.query.get_or_404(id)
     a.status = 0
@@ -82,7 +99,10 @@ def delete_account(id):
 
 
 # --- Seed predefined chart of accounts ---
+@token_required
+
 @accounts_bp.route('/seed', methods=['POST'])
+
 def seed_accounts():
     """
     Inserts a predefined chart of accounts into the database.

@@ -61,9 +61,16 @@
     },
     methods: {
       async fetchSuppliers() {
-        const res = await api.get('/suppliers');
-        this.suppliers = res.data;
-      },
+  try {
+    const res = await api.get('/suppliers/'); // automatically adds token
+    this.suppliers = res.data;
+  } catch (err) {
+    console.error("Error fetching suppliers:", err);
+  }
+}
+,
+      
+
       async submitSupplier() {
         if (this.editing) {
           await api.put(`/suppliers/${this.supplierForm.id}`, this.supplierForm);
