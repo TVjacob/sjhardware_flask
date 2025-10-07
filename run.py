@@ -5,10 +5,41 @@
 # if __name__ == '__main__':
 #     app.run(debug=True)
 from app import create_app, db
-from app.models import Account
+from app.models import Account,User, Permission
 from datetime import datetime
+from werkzeug.security import generate_password_hash
+from sqlalchemy.exc import SQLAlchemyError
+
 
 app = create_app()
+
+def create_default_admin():
+    """Create a default admin user if not already present."""
+    with app.app_context():
+        existing_user = User.query.filter_by(username='admin').first()
+
+        if existing_user:
+            print("ℹ️ Admin user already exists.")
+            return
+
+        try:
+            admin = User(
+                username='admin',
+                role='Admin',
+                password_hash=generate_password_hash('123456')
+            )
+
+            # Optionally give all permissions
+            all_perms = Permission.query.all()
+            for perm in all_perms:
+                admin.add_permission(perm)
+
+            db.session.add(admin)
+            db.session.commit()
+
+            print("✅ Default admin user created. Username: admin | Password: 123456")
+        except SQLAlchemyError as e:
+            print(f"❌ Failed to create admin user: {e}")
 
 def seed_chart_of_accounts():
     """
@@ -140,4 +171,5 @@ def seed_chart_of_accounts():
 # --- Run the app and seed data ---
 if __name__ == '__main__':
     seed_chart_of_accounts()
+    create_default_admin()
     app.run(debug=True)
