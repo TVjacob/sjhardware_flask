@@ -1,11 +1,10 @@
 <template>
-  <div class="flex h-screen">
+  <div class="flex h-screen overflow-hidden">
     <!-- Sidebar -->
     <Sidebar />
 
     <!-- Main content -->
     <div class="flex-1 flex flex-col bg-gray-100 overflow-auto">
-      <!-- Navbar -->
       <Navbar />
 
       <!-- Optional greeting -->
@@ -13,9 +12,9 @@
         Hello! Welcome to {{ $route.meta.pageName }} page.
       </div>
 
-      <!-- **Child pages will render here** -->
+      <!-- Child pages render here -->
       <main class="flex-1 p-6">
-        <router-view /> <!-- This is key -->
+        <router-view /> <!-- Purchases.vue renders here -->
       </main>
     </div>
   </div>

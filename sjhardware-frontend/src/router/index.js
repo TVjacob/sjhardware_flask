@@ -91,23 +91,25 @@ const router = createRouter({
   history: createWebHistory(),
   routes,
 });
+// JWT expiration check
+function isTokenExpired(token) {
+  if (!token) return true;
+  const payload = JSON.parse(atob(token.split('.')[1]));
+  return payload.exp * 1000 < Date.now();
+}
 
-// -------- Navigation Guard for Authentication --------
 router.beforeEach((to, from, next) => {
-  const token = localStorage.getItem('token'); // JWT token
-  const isLoggedIn = !!token;
+  const token = localStorage.getItem('token');
 
-  if (to.meta.requiresAuth && !isLoggedIn) {
-    // Redirect to login if not logged in
-    return next({ path: '/login' });
+  if (token && isTokenExpired(token)) {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    return next('/login');
   }
 
-  if (to.path === '/login' && isLoggedIn) {
-    // Redirect logged-in user away from login page
-    return next({ path: '/' });
-  }
-
-  next(); // allow access
+  if (to.meta.requiresAuth && !token) return next('/login');
+  if (to.path === '/login' && token) return next('/');
+  next();
 });
 
 export default router;
