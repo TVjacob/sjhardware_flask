@@ -36,7 +36,7 @@ class Category(db.Model, StatusMixin):
 class Product(db.Model, StatusMixin):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
-    sku = db.Column(db.String(50), unique=True, nullable=False)
+    sku = db.Column(db.String(50), unique=False, nullable=False)
     category_id = db.Column(db.Integer, db.ForeignKey('category.id'))
     quantity = db.Column(db.Integer, default=0)
     price = db.Column(db.Float, default=0)
