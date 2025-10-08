@@ -100,8 +100,163 @@
     </div>
   </div>
 </template>
-
 <script>
+import api from '../api';
+import * as XLSX from 'xlsx';
+import jsPDF from 'jspdf';
+import 'jspdf-autotable';
+
+export default {
+  data() {
+    return {
+      activeTab: 'products',
+      products: [],
+      categories: [],
+      productForm: { id: null, name: '', sku: '', price: 0, category_id: '' },
+      editingProduct: false,
+      categoryForm: { id: null, name: '' },
+      editingCategory: false,
+      searchQuery: '',
+      errorMessage: '', // ✅ new field for displaying errors
+    };
+  },
+  methods: {
+    tabClass(tab) {
+      return `px-4 py-2 rounded ${this.activeTab === tab ? 'bg-blue-500 text-white' : 'bg-gray-200'}`;
+    },
+
+    // --- Categories ---
+    async fetchCategories() {
+      const res = await api.get('/inventory/categories');
+      this.categories = res.data;
+    },
+    async submitCategory() {
+      try {
+        if (!this.categoryForm.name.trim()) {
+          alert('Category name is required.');
+          return;
+        }
+
+        if (this.editingCategory) {
+          await api.put(`/inventory/categories/${this.categoryForm.id}`, this.categoryForm);
+        } else {
+          await api.post('/inventory/categories', this.categoryForm);
+        }
+
+        this.categoryForm = { id: null, name: '' };
+        this.editingCategory = false;
+        this.fetchCategories();
+      } catch (err) {
+        console.error('Error saving category:', err);
+        alert('Something went wrong while saving the category.');
+      }
+    },
+    editCategory(cat) {
+      this.categoryForm = { ...cat };
+      this.editingCategory = true;
+    },
+    cancelCategoryEdit() {
+      this.categoryForm = { id: null, name: '' };
+      this.editingCategory = false;
+    },
+    async deleteCategory(id) {
+      if (confirm('Are you sure you want to delete this category?')) {
+        await api.delete(`/inventory/categories/${id}`);
+        this.fetchCategories();
+      }
+    },
+
+    // --- Products ---
+    async fetchProducts() {
+      const res = await api.get('/inventory/products');
+      this.products = res.data;
+    },
+
+    async submitProduct() {
+      // ✅ Input validation before saving
+      this.errorMessage = ''; // reset
+
+      if (!this.productForm.name.trim()) {
+        this.errorMessage = 'Product name is required.';
+      } else if (!this.productForm.sku.trim()) {
+        this.errorMessage = 'SKU is required.';
+      } else if (this.productForm.price <= 0 || isNaN(this.productForm.price)) {
+        this.errorMessage = 'Please enter a valid price greater than 0.';
+      } else if (!this.productForm.category_id) {
+        this.errorMessage = 'Please select a category.';
+      }
+
+      if (this.errorMessage) {
+        alert(this.errorMessage);
+        return;
+      }
+
+      try {
+        if (this.editingProduct) {
+          await api.put(`/inventory/products/${this.productForm.id}`, this.productForm);
+        } else {
+          await api.post('/inventory/products', this.productForm);
+        }
+
+        this.productForm = { id: null, name: '', sku: '', price: 0, category_id: '' };
+        this.editingProduct = false;
+        this.fetchProducts();
+      } catch (err) {
+        console.error('Error saving product:', err);
+        alert('Something went wrong while saving the product.');
+      }
+    },
+
+    editProduct(product) {
+      this.productForm = { ...product };
+      this.editingProduct = true;
+    },
+    cancelProductEdit() {
+      this.productForm = { id: null, name: '', sku: '', price: 0, category_id: '' };
+      this.editingProduct = false;
+    },
+    async deleteProduct(id) {
+      if (confirm('Are you sure you want to delete this product?')) {
+        await api.delete(`/inventory/products/${id}`);
+        this.fetchProducts();
+      }
+    },
+
+    // --- Search ---
+    async searchProducts() {
+      const res = await api.get('/inventory/products/search', { params: { name: this.searchQuery, sku: this.searchQuery } });
+      this.products = res.data;
+    },
+
+    // --- Excel / PDF ---
+    exportExcel() {
+      const ws = XLSX.utils.json_to_sheet(this.products);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Products');
+      XLSX.writeFile(wb, 'products.xlsx');
+    },
+    exportPDF() {
+      const doc = new jsPDF();
+      doc.autoTable({
+        head: [['ID', 'Name', 'SKU', 'Price', 'Category', 'Stock qty']],
+        body: this.products.map(p => [p.id, p.name, p.sku, p.price, this.getCategoryName(p.category_id), p.quantity]),
+      });
+      doc.save('products.pdf');
+    },
+
+    getCategoryName(catId) {
+      const cat = this.categories.find(c => c.id === catId);
+      return cat ? cat.name : '';
+    },
+  },
+  mounted() {
+    this.fetchCategories();
+    this.fetchProducts();
+  },
+};
+</script>
+
+<!-- <script>
 import api from '../api';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
@@ -218,4 +373,4 @@ export default {
     this.fetchProducts();
   },
 };
-</script>
+</script> -->
