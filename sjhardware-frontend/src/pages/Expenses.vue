@@ -47,7 +47,6 @@
       </thead>
       <tbody>
         <template v-for="expense in expenses" :key="expense.id">
-          <!-- Main Expense Row -->
           <tr>
             <td class="p-2 border text-center">
               <button
@@ -67,8 +66,8 @@
               <button @click="editExpense(expense)" class="bg-blue-400 text-white px-2 py-1 rounded">Edit</button>
               <button @click="deleteExpense(expense.id)" class="bg-red-500 text-white px-2 py-1 rounded">Delete</button>
               <router-link :to="`/reports/expenses/${expense.id}`" class="text-indigo-600 underline">
-              View
-            </router-link>
+                View
+              </router-link>
             </td>
           </tr>
 
@@ -100,120 +99,51 @@
       </tbody>
     </table>
 
-    <!-- Popup Modal -->
-    <div
-      v-if="showModal"
-      class="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50"
-    >
+    <!-- Modal -->
+    <div v-if="showModal" class="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
       <div class="bg-white rounded-lg p-6 w-full max-w-2xl relative">
-        <h2 class="text-xl font-bold mb-4">
-          {{ editingExpense ? 'Edit Expense' : 'Add Expense' }}
-        </h2>
+        <h2 class="text-xl font-bold mb-4">{{ editingExpense ? 'Edit Expense' : 'Add Expense' }}</h2>
 
-        
         <!-- Close Button -->
-        <button
-          @click="closeModal"
-          class="absolute top-2 right-2 text-gray-600 hover:text-gray-800"
-        >
+        <button @click="closeModal" class="absolute top-2 right-2 text-gray-600 hover:text-gray-800">
           ✖
         </button>
 
         <!-- Expense Header -->
         <div class="grid grid-cols-2 gap-4 mb-4">
-          <input
-            v-model="expenseForm.description"
-            placeholder="Expense Description"
-            class="border p-2 rounded"
-            required
-          />
-          <input
-            v-model="expenseForm.reference"
-            placeholder="Reference"
-            class="border p-2 rounded"
-          />
-          <select
-            v-model="expenseForm.payment_account_id"
-            class="border p-2 rounded"
-            required
-          >
+          <input v-model="expenseForm.description" placeholder="Expense Description" class="border p-2 rounded" />
+          <input v-model="expenseForm.reference" placeholder="Reference" class="border p-2 rounded" />
+          <select v-model="expenseForm.payment_account_id" class="border p-2 rounded">
             <option value="" disabled>Select Payment Account</option>
-            <option v-for="acc in accounts" :key="acc.id" :value="acc.id">
-              {{ acc.name }}
-            </option>
+            <option v-for="acc in accounts" :key="acc.id" :value="acc.id">{{ acc.name }}</option>
           </select>
-          <input
-            v-model="expenseForm.expense_date"
-            type="date"
-            class="border p-2 rounded"
-          />
+          <input v-model="expenseForm.expense_date" type="date" class="border p-2 rounded" />
         </div>
 
-        <!-- Expense Items Section -->
+        <!-- Expense Items -->
         <h3 class="font-bold mb-2">Expense Items</h3>
         <div v-for="(item, index) in expenseForm.items" :key="index" class="grid grid-cols-5 gap-2 mb-2">
-          <select
-            v-model="item.account_id"
-            class="border p-2 rounded"
-            required
-          >
+          <select v-model="item.account_id" class="border p-2 rounded">
             <option value="" disabled>Select Expense Account</option>
-            <option v-for="acc in accounts" :key="acc.id" :value="acc.id">
-              {{ acc.name }}
-            </option>
+            <option v-for="acc in accounts" :key="acc.id" :value="acc.id">{{ acc.name }}</option>
           </select>
-          <input
-            v-model="item.item_name"
-            placeholder="Item Name"
-            class="border p-2 rounded"
-            required
-          />
-          <input
-            v-model="item.description"
-            placeholder="Item Description"
-            class="border p-2 rounded"
-          />
-          <input
-            v-model.number="item.amount"
-            type="number"
-            placeholder="Amount"
-            class="border p-2 rounded"
-            required
-          />
-          <button
-            type="button"
-            @click="removeItem(index)"
-            class="bg-red-500 text-white px-2 py-1 rounded"
-          >
-            ✖
-          </button>
+          <input v-model="item.item_name" placeholder="Item Name" class="border p-2 rounded" />
+          <input v-model="item.description" placeholder="Item Description" class="border p-2 rounded" />
+          <input v-model.number="item.amount" type="number" placeholder="Amount" class="border p-2 rounded" />
+          <button type="button" @click="removeItem(index)" class="bg-red-500 text-white px-2 py-1 rounded">✖</button>
         </div>
 
-        <button
-          type="button"
-          @click="addItem"
-          class="bg-gray-300 px-4 py-2 rounded mb-4"
-        >
-          + Add Item
-        </button>
+        <button type="button" @click="addItem" class="bg-gray-300 px-4 py-2 rounded mb-4">+ Add Item</button>
 
-        <!-- Amount Paid (Auto-calculated total of expense items) -->
+        <!-- Amount Paid -->
         <div class="mb-4">
           <label class="block text-sm font-bold mb-1">Amount Paid</label>
-          <input
-            type="number"
-            :value="amountPaid.toFixed(2)"
-            class="border p-2 rounded w-full bg-gray-100"
-            disabled
-          />
+          <input type="number" :value="amountPaid.toFixed(2)" class="border p-2 rounded w-full bg-gray-100" disabled />
         </div>
 
-        <!-- Submit Button -->
+        <!-- Submit -->
         <div class="flex justify-end">
-          <button
-            @click="submitExpense"
-            class="bg-indigo-500 text-white px-6 py-2 rounded"
-          >
+          <button @click="submitExpense" class="bg-indigo-500 text-white px-6 py-2 rounded">
             {{ editingExpense ? 'Update Expense' : 'Create Expense' }}
           </button>
         </div>
@@ -248,23 +178,31 @@ export default {
     };
   },
   computed: {
-    // Calculate grand total of all expenses
     grandTotal() {
       return this.expenses.reduce((sum, expense) => sum + (expense.total_amount || 0), 0);
     },
-    // Calculate total of items in the current expense form
     amountPaid() {
       return this.expenseForm.items.reduce((total, item) => total + (item.amount || 0), 0);
     },
   },
   methods: {
     async fetchExpenses() {
-      const res = await api.get("/expenses/");
-      this.expenses = res.data;
+      try {
+        const res = await api.get("/expenses/");
+        this.expenses = res.data;
+      } catch (err) {
+        console.error("❌ Error fetching expenses:", err);
+        alert("Failed to load expenses. Please try again.");
+      }
     },
     async fetchAccounts() {
-      const res = await api.get("/accounts/");
-      this.accounts = res.data;
+      try {
+        const res = await api.get("/accounts/");
+        this.accounts = res.data;
+      } catch (err) {
+        console.error("❌ Error fetching accounts:", err);
+        alert("Failed to load accounts. Please check your connection.");
+      }
     },
     addItem() {
       this.expenseForm.items.push({ account_id: "", item_name: "", description: "", amount: 0 });
@@ -272,19 +210,60 @@ export default {
     removeItem(index) {
       this.expenseForm.items.splice(index, 1);
     },
+
+    validateExpense() {
+      if (!this.expenseForm.description.trim()) {
+        alert("Expense description is required.");
+        return false;
+      }
+      if (!this.expenseForm.payment_account_id) {
+        alert("Please select a payment account.");
+        return false;
+      }
+      if (!this.expenseForm.expense_date) {
+        alert("Expense date is required.");
+        return false;
+      }
+      if (this.expenseForm.items.length === 0) {
+        alert("At least one expense item is required.");
+        return false;
+      }
+      for (const [i, item] of this.expenseForm.items.entries()) {
+        if (!item.account_id) {
+          alert(`Item ${i + 1}: Account is required.`);
+          return false;
+        }
+        if (!item.item_name.trim()) {
+          alert(`Item ${i + 1}: Item name is required.`);
+          return false;
+        }
+        if (!item.amount || item.amount <= 0) {
+          alert(`Item ${i + 1}: Amount must be greater than 0.`);
+          return false;
+        }
+      }
+      return true;
+    },
+
     async submitExpense() {
+      if (!this.validateExpense()) return;
+
       try {
         if (this.editingExpense) {
           await api.put(`/expenses/${this.expenseForm.id}`, this.expenseForm);
+          alert("✅ Expense updated successfully!");
         } else {
           await api.post("/expenses/", this.expenseForm);
+          alert("✅ Expense created successfully!");
         }
         this.closeModal();
         this.fetchExpenses();
       } catch (err) {
-        alert("Error submitting expense: " + (err.response?.data?.error || err.message));
+        console.error("❌ Error submitting expense:", err);
+        alert("Failed to submit expense. " + (err.response?.data?.error || err.message));
       }
     },
+
     editExpense(expense) {
       this.expenseForm = {
         id: expense.id,
@@ -314,16 +293,28 @@ export default {
     },
     async deleteExpense(id) {
       if (confirm("Are you sure you want to delete this expense?")) {
-        await api.delete(`/expenses/${id}`);
-        this.fetchExpenses();
+        try {
+          await api.delete(`/expenses/${id}`);
+          alert("🗑️ Expense deleted successfully!");
+          this.fetchExpenses();
+        } catch (err) {
+          console.error("❌ Error deleting expense:", err);
+          alert("Failed to delete expense. Please try again.");
+        }
       }
     },
     async searchExpenses() {
-      const res = await api.get("/expenses/");
-      this.expenses = res.data.filter((e) =>
-        e.description.toLowerCase().includes(this.searchQuery.toLowerCase()) ||
-        (e.reference && e.reference.toLowerCase().includes(this.searchQuery.toLowerCase()))
-      );
+      try {
+        const res = await api.get("/expenses/");
+        this.expenses = res.data.filter(
+          (e) =>
+            e.description.toLowerCase().includes(this.searchQuery.toLowerCase()) ||
+            (e.reference && e.reference.toLowerCase().includes(this.searchQuery.toLowerCase()))
+        );
+      } catch (err) {
+        console.error("❌ Error searching expenses:", err);
+        alert("Search failed. Please try again.");
+      }
     },
     formatDate(dateStr) {
       if (!dateStr) return "";
@@ -331,36 +322,44 @@ export default {
       return d.toLocaleDateString();
     },
     toggleExpand(id) {
-      if (this.expandedRows.includes(id)) {
-        this.expandedRows = this.expandedRows.filter(rowId => rowId !== id);
-      } else {
-        this.expandedRows.push(id);
-      }
+      this.expandedRows = this.expandedRows.includes(id)
+        ? this.expandedRows.filter((rowId) => rowId !== id)
+        : [...this.expandedRows, id];
     },
     getAccountName(account_id) {
-      const account = this.accounts.find(a => a.id === account_id);
+      const account = this.accounts.find((a) => a.id === account_id);
       return account ? account.name : "Unknown";
     },
     exportExcel() {
-      const ws = XLSX.utils.json_to_sheet(this.expenses);
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "Expenses");
-      XLSX.writeFile(wb, "expenses.xlsx");
+      try {
+        const ws = XLSX.utils.json_to_sheet(this.expenses);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Expenses");
+        XLSX.writeFile(wb, "expenses.xlsx");
+      } catch (err) {
+        console.error("❌ Error exporting Excel:", err);
+        alert("Failed to export Excel.");
+      }
     },
     exportPDF() {
-      const doc = new jsPDF();
-      doc.autoTable({
-        head: [["ID", "Description", "Total Amount", "Reference", "Expense Date", "Transaction No"]],
-        body: this.expenses.map((e) => [
-          e.id,
-          e.description,
-          e.total_amount,
-          e.reference,
-          this.formatDate(e.expense_date),
-          e.transaction_no,
-        ]),
-      });
-      doc.save("expenses.pdf");
+      try {
+        const doc = new jsPDF();
+        doc.autoTable({
+          head: [["ID", "Description", "Total Amount", "Reference", "Expense Date", "Transaction No"]],
+          body: this.expenses.map((e) => [
+            e.id,
+            e.description,
+            e.total_amount,
+            e.reference,
+            this.formatDate(e.expense_date),
+            e.transaction_no,
+          ]),
+        });
+        doc.save("expenses.pdf");
+      } catch (err) {
+        console.error("❌ Error exporting PDF:", err);
+        alert("Failed to export PDF.");
+      }
     },
   },
   mounted() {
@@ -371,7 +370,6 @@ export default {
 </script>
 
 <style scoped>
-/* Smooth popup animation */
 .fixed {
   animation: fadeIn 0.3s ease-in-out;
 }
