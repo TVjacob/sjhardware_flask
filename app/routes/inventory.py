@@ -2,7 +2,7 @@ from flask import Blueprint, request, jsonify
 from app import db
 from app.models import Product, Category
 from datetime import datetime
-
+from sqlalchemy import or_
 from app.utils.auth import token_required
 
 inventory_bp = Blueprint('inventory', __name__, url_prefix='/inventory')
@@ -70,20 +70,28 @@ def get_product(id):
     })
 
 # --- Find product by SKU or Name ---
+# --- Find product by SKU or Name ---
 @token_required
 @inventory_bp.route('/products/search', methods=['GET'])
 def search_product():
-    sku = request.args.get('sku')
     name = request.args.get('name')
     query = Product.query
-    if sku:
-        query = query.filter_by(sku=sku)
+
     if name:
-        query = query.filter(Product.name.ilike(f"%{name}%"))
+        # ✅ Case-insensitive search by name or SKU
+        search_pattern = f"%{name}%"
+        query = query.filter(
+            or_(
+                Product.name.ilike(search_pattern),
+                Product.sku.ilike(search_pattern)
+            )
+        )
+
     products = query.all()
     result = []
+    
     for p in products:
-        category =db.session.query(Category).filter_by(id = p.category_id,status=1).first()
+        category = db.session.query(Category).filter_by(id=p.category_id, status=1).first()
 
         result.append({
             "id": p.id,
@@ -91,13 +99,13 @@ def search_product():
             "sku": p.sku,
             "category_id": p.category_id,
             "category_name": category.name if category else None,
-
             "quantity": p.quantity,
             "price": p.price,
             "status": p.status,
             "created_at": p.created_at,
             "updated_at": p.updated_at
         })
+    
     return jsonify(result)
 
 # --- Update product (quantity cannot be manually updated here) ---
