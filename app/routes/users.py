@@ -36,7 +36,7 @@ def login():
         "user_id": user.id,
         "username": user.username,
         "role": user.role,
-        "exp": datetime.utcnow() + timedelta(hours=2)  # token expires in 2 hours
+        "exp": datetime.utcnow() + timedelta(hours=4)  # token expires in 2 hours
     }
 
     # Encode JWT using a secret key
