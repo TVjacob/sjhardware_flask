@@ -157,6 +157,7 @@ const searchProduct = async (item) => {
     item.searchResults = [];
     return;
   }
+
   try {
     const res = await api.get(`/inventory/products/search?name=${item.product_name}`);
     item.searchResults = res.data.map(p => ({ ...p, unit: p.category_name || '' }));

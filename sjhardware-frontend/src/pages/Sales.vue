@@ -167,7 +167,7 @@ export default {
         return;
       }
       try {
-        const res = await api.get(`/inventory/products/search?q=${item.product_name}`);
+        const res = await api.get(`/inventory/products/search?name=${item.product_name}`);
         item.searchResults = res.data.map(p => ({
           ...p,
           unit: p.category_name || '' // populate unit from category_name
