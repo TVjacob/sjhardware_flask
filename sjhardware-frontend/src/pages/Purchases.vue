@@ -33,8 +33,9 @@
         <tr class="bg-gray-100">
           <th class="p-2 border">Product</th>
           <th class="p-2 border">Stock Qty</th>
-          <th class="p-2 border">Unit</th>
           <th class="p-2 border">Cost Price</th>
+          <th class="p-2 border">Unit</th>
+         
           <th class="p-2 border">Quantity</th>
           <th class="p-2 border">Total Price</th>
           <th class="p-2 border">Actions</th>
@@ -62,7 +63,6 @@
             </ul>
           </td>
           <td class="p-2 border">{{ item.stock_qty || 0 }}</td>
-          <td class="p-2 border">{{ item.unit || '' }}</td>
           <td class="p-2 border">
             <input
               type="number"
@@ -73,6 +73,8 @@
               step="0.01"
             />
           </td>
+          <td class="p-2 border">{{ item.unit || '' }}</td>
+
           <td class="p-2 border">
             <input
               type="number"
