@@ -31,7 +31,7 @@ def create_app():
 # )
     CORS(
         app,
-        resources={r"/api/*": {"origins": "http://localhost:5173"}},  # Vue dev server
+        resources={r"/api/*": {"origins": ["http://localhost:5173","http://localhost:5174","/*"]}},  # Vue dev server
         supports_credentials=True,
         expose_headers=["Content-Type", "Authorization"],
         allow_headers=["Content-Type", "Authorization"]

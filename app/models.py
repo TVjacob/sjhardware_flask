@@ -64,6 +64,8 @@ class PurchaseOrder(db.Model, StatusMixin):
     total_amount = db.Column(db.Float, default=0)    # sum of all items
     total_paid = db.Column(db.Float, default=0)      # payments made
     total_balance = db.Column(db.Float, default=0)   # total_amount - total_paid
+    status= db.Column(db.Integer, nullable=False,default=1)
+
 
     supplier = db.relationship('Supplier', backref='purchase_orders', lazy=True)
     items = db.relationship('PurchaseOrderItem', backref='purchase_order', lazy=True, cascade="all, delete-orphan")
@@ -86,7 +88,7 @@ class PurchaseOrderItem(db.Model, StatusMixin):
     quantity = db.Column(db.Integer, nullable=False)
     unit_price = db.Column(db.Float, default=0)
     total_price = db.Column(db.Float, default=0)  # quantity * unit_price
-
+    status= db.Column(db.Integer, nullable=False,default=1)
     product = db.relationship('Product', backref='purchase_order_items', lazy=True)
 
     def __repr__(self):

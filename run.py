@@ -5,10 +5,12 @@
 # if __name__ == '__main__':
 #     app.run(debug=True)
 from app import create_app, db
-from app.models import Account,User, Permission
+from app.models import Account, PurchaseOrder,User, Permission
 from datetime import datetime
 from werkzeug.security import generate_password_hash
 from sqlalchemy.exc import SQLAlchemyError
+
+from app.utils.gl_utils import generate_transaction_number, post_to_ledger
 
 
 app = create_app()
@@ -40,6 +42,60 @@ def create_default_admin():
             print("✅ Default admin user created. Username: admin | Password: 123456")
         except SQLAlchemyError as e:
             print(f"❌ Failed to create admin user: {e}")
+
+
+def fix_missing_purchase_order_transactions():
+    """
+    Find purchase orders with null transaction_no and create ledger entries for them.
+    """
+    with app.app_context():
+        # Fetch all purchase orders where transaction_no is NULL
+        missing_txn_pos = PurchaseOrder.query.filter_by(transaction_no=None).all()
+
+        if not missing_txn_pos:
+            print("ℹ️ No purchase orders with missing transaction numbers.")
+            return
+
+        for po in missing_txn_pos:
+            # Recalculate totals in case they are out of sync
+            po.update_totals()
+            total_amount = po.total_amount
+
+            # Prepare ledger entries
+            entries = [
+                {
+                    "account_id": 1200,  # Stock Inventory
+                    "transaction_type": "Debit",
+                    "amount": total_amount
+                },
+                {
+                    "account_id": 2100,  # Accounts Payable
+                    "transaction_type": "Credit",
+                    "amount": total_amount
+                }
+            ]
+
+            # Generate transaction number
+            txn_id, txn_str = generate_transaction_number('CREDIT-PAY', transaction_date=po.purchase_date)
+            po.transaction_no = txn_id
+
+            # Post entries to ledger
+            post_to_ledger(
+                entries,
+                transaction_no_id=txn_id,
+                description=f"Credit for PO #{po.id}",
+                transaction_date=po.purchase_date
+            )
+
+            db.session.add(po)
+
+        # Commit all changes
+        try:
+            db.session.commit()
+            print(f"✅ Updated {len(missing_txn_pos)} purchase orders with missing transaction numbers.")
+        except SQLAlchemyError as e:
+            db.session.rollback()
+            print(f"❌ Failed to update purchase orders: {e}")
 
 def seed_chart_of_accounts():
     """
@@ -172,4 +228,5 @@ def seed_chart_of_accounts():
 if __name__ == '__main__':
     seed_chart_of_accounts()
     create_default_admin()
+    fix_missing_purchase_order_transactions()
     app.run(debug=True)
