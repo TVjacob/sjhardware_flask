@@ -63,6 +63,13 @@
             >
               Receive Payment
             </button>
+            <!-- 🟣 New Edit Button -->
+            <router-link
+              :to="`/purchase-orders/${po.id}/edit`"
+              class="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1 rounded mr-2"
+            >
+              Edit
+            </router-link>
             <router-link :to="`/purchase-orders/${po.id}`" class="text-indigo-600 underline">
               View
             </router-link>
