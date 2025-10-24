@@ -1,255 +1,179 @@
 <template>
   <div class="p-6 max-w-7xl mx-auto">
-    <h1 class="text-2xl font-bold mb-4">Purchase Orders</h1>
+    <h1 class="text-3xl font-bold mb-6 text-gray-800 animate-fadeIn">Purchase Orders</h1>
 
     <!-- Tabs -->
     <div class="flex space-x-4 mb-6">
       <button
-        :class="currentTab === 'paid' ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-700'"
-        class="px-4 py-2 rounded"
+        :class="currentTab === 'paid' ? activeTabClass : inactiveTabClass"
         @click="currentTab = 'paid'"
       >
         Paid Invoices
       </button>
       <button
-        :class="currentTab === 'unpaid' ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-700'"
-        class="px-4 py-2 rounded"
+        :class="currentTab === 'unpaid' ? activeTabClass : inactiveTabClass"
         @click="currentTab = 'unpaid'"
       >
         Unpaid Invoices
       </button>
     </div>
 
-    <!-- Table -->
-    <table class="min-w-full border">
-      <thead>
-        <tr class="bg-gray-100">
-          <th class="p-2 border">PO ID</th>
-          <th class="p-2 border">Supplier</th>
-          <th class="p-2 border">Invoice Number</th>
-          <th class="p-2 border">Purchase Date</th>
-          <th class="p-2 border">Total Amount</th>
-          <th class="p-2 border">Paid</th>
-          <th class="p-2 border">Balance</th>
-          <th class="p-2 border">Status</th>
-          <th class="p-2 border text-center">Actions</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr
-          v-for="po in filteredPurchaseOrders"
-          :key="po.id"
-          class="hover:bg-gray-50 cursor-pointer"
-        >
-          <td class="p-2 border">{{ po.id }}</td>
-          <td class="p-2 border">{{ po.supplier_name }}</td>
-          <td class="p-2 border">{{ po.invoice_number }}</td>
-          <td class="p-2 border">{{ formatDate(po.purchase_date) }}</td>
-          <td class="p-2 border">{{ po.total_amount.toFixed(2) }}</td>
-          <td class="p-2 border">{{ po.total_paid.toFixed(2) }}</td>
-          <td class="p-2 border">{{ po.total_balance.toFixed(2) }}</td>
-          <td class="p-2 border">
-            <span
-              :class="po.total_balance === 0 ? 'text-green-600 font-bold' : 'text-red-600 font-bold'"
-            >
-              {{ po.total_balance === 0 ? 'Paid' : 'Unpaid' }}
-            </span>
-          </td>
-          <td class="p-2 border text-center">
-            <button
-              v-if="po.total_balance > 0"
-              @click="openPaymentModal(po)"
-              class="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded"
-            >
-              Receive Payment
-            </button>
-            <!-- 🟣 New Edit Button -->
-            <router-link
-              :to="`/purchase-orders/${po.id}/edit`"
-              class="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1 rounded mr-2"
-            >
-              Edit
-            </router-link>
-            <router-link :to="`/purchase-orders/${po.id}`" class="text-indigo-600 underline">
-              View
-            </router-link>
+    <!-- Export Buttons -->
+    <div class="flex space-x-2 mb-4">
+      <button @click="exportCSV" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded shadow transition transform hover:scale-105">
+        Export CSV
+      </button>
+      <button @click="exportPDF" class="px-4 py-2 bg-gray-700 hover:bg-gray-800 text-white rounded shadow transition transform hover:scale-105">
+        Export PDF
+      </button>
+    </div>
 
-          </td>
-        </tr>
-      </tbody>
-    </table>
+    <!-- Purchase Orders Table -->
+    <div class="overflow-x-auto border rounded-lg shadow-lg">
+      <table class="min-w-full border-collapse">
+        <thead class="bg-gray-100">
+          <tr>
+            <th class="p-3 border-b text-left">PO ID</th>
+            <th class="p-3 border-b text-left">Supplier</th>
+            <th class="p-3 border-b text-left">Invoice Number</th>
+            <th class="p-3 border-b text-left">Purchase Date</th>
+            <th class="p-3 border-b text-right">Total Amount</th>
+            <th class="p-3 border-b text-right">Paid</th>
+            <th class="p-3 border-b text-right">Balance</th>
+            <th class="p-3 border-b text-center">Status</th>
+            <th class="p-3 border-b text-center">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr
+            v-for="po in filteredPurchaseOrders"
+            :key="po.id"
+            class="hover:bg-gray-50 cursor-pointer transition-all duration-300 ease-in-out transform hover:scale-[1.01]"
+          >
+            <td class="p-3 border">{{ po.id }}</td>
+            <td class="p-3 border">{{ po.supplier_name }}</td>
+            <td class="p-3 border">{{ po.invoice_number }}</td>
+            <td class="p-3 border">{{ formatDate(po.purchase_date) }}</td>
+            <td class="p-3 border text-right">{{ po.total_amount.toFixed(2) }}</td>
+            <td class="p-3 border text-right">{{ po.total_paid.toFixed(2) }}</td>
+            <td class="p-3 border text-right">{{ po.total_balance.toFixed(2) }}</td>
+            <td class="p-3 border text-center">
+              <span
+                :class="po.total_balance === 0 ? 'text-green-600 font-bold' : 'text-red-600 font-bold'"
+              >
+                {{ po.total_balance === 0 ? 'Paid' : 'Unpaid' }}
+              </span>
+            </td>
+            <td class="p-3 border text-center space-x-2">
+              <button
+                v-if="po.total_balance > 0"
+                @click="openPaymentModal(po)"
+                class="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded shadow transition transform hover:scale-105"
+              >
+                Receive Payment
+              </button>
+              <router-link
+                :to="`/purchase-orders/${po.id}/edit`"
+                class="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1 rounded shadow transition transform hover:scale-105"
+              >
+                Edit
+              </router-link>
+              <router-link
+                :to="`/purchase-orders/${po.id}`"
+                class="text-indigo-600 underline hover:text-indigo-800 transition"
+              >
+                View
+              </router-link>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
 
     <!-- Payment Modal -->
-    <div
-      v-if="showPaymentModal"
-      class="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50"
-    >
-      <div class="bg-white rounded-lg shadow-lg p-6 w-96">
-        <h2 class="text-lg font-bold mb-4">Receive Payment for PO #{{ selectedPO?.id }}</h2>
-
-        <div class="mb-4">
-          <label class="block text-sm font-medium">Amount</label>
-          <input
-            v-model="paymentForm.amount"
-            type="number"
-            step="0.01"
-            class="w-full p-2 border rounded"
-            :max="selectedPO?.total_balance"
-          />
-        </div>
-
-        <div class="mb-4">
-          <label class="block text-sm font-medium">Payment Type</label>
-          <select v-model="paymentForm.payment_type" class="w-full p-2 border rounded">
-            <option value="Cash">Cash</option>
-            <option value="Bank">Bank</option>
-            <option value="Mobile Money">Mobile Money</option>
-          </select>
-        </div>
-
-        <div class="mb-4">
-          <label class="block text-sm font-medium">Payment Account</label>
-          <select v-model="paymentForm.payment_account_id" class="w-full p-2 border rounded">
-            <option v-for="account in accounts" :key="account.id" :value="account.id">
-              {{ account.name }}
-            </option>
-          </select>
-        </div>
-
-        <!-- Transaction Date -->
-        <div class="mb-4">
-          <label class="block text-sm font-medium">Transaction Date</label>
-          <input
-            v-model="paymentForm.transaction_date"
-            type="date"
-            class="w-full p-2 border rounded"
-          />
-        </div>
-
-        <div class="mb-4">
-          <label class="block text-sm font-medium">Reference (Optional)</label>
-          <input
-            v-model="paymentForm.reference"
-            type="text"
-            class="w-full p-2 border rounded"
-            placeholder="Enter reference"
-          />
-        </div>
-
-        <div class="flex justify-end space-x-2">
-          <button
-            @click="closePaymentModal"
-            class="bg-gray-300 hover:bg-gray-400 text-black px-3 py-1 rounded"
-          >
-            Cancel
-          </button>
-          <button
-            @click="submitPayment"
-            class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 rounded"
-          >
-            Save Payment
-          </button>
-        </div>
-      </div>
-    </div>
+    <PaymentPurchaseModal
+      v-model:modelValue="showPaymentModal"
+      :po="selectedPO"
+      :accounts="accounts"
+      @saved="refreshPurchaseOrders"
+    />
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted } from 'vue';
 import api from '../api';
+import PaymentPurchaseModal from './PaymentPurchaseModal.vue';
 
 const currentTab = ref('unpaid');
 const purchaseOrders = ref([]);
 const accounts = ref([]);
-
-// Modal state
 const showPaymentModal = ref(false);
 const selectedPO = ref(null);
 
-// Payment form
-const paymentForm = ref({
-  amount: '',
-  payment_type: 'Cash',
-  payment_account_id: '',
-  transaction_date: new Date().toISOString().split('T')[0], // Default to today
-  reference: ''
-});
+const activeTabClass = 'px-4 py-2 rounded bg-indigo-600 text-white transition transform hover:scale-105';
+const inactiveTabClass = 'px-4 py-2 rounded bg-gray-200 text-gray-700 transition transform hover:scale-105';
 
-// Fetch purchase orders
 const fetchPurchaseOrders = async () => {
   try {
     const res = await api.get('/suppliers/orders');
     purchaseOrders.value = res.data;
   } catch (err) {
-    console.error('Error fetching purchase orders', err);
+    console.error(err);
   }
 };
 
-// Fetch accounts
 const fetchAccounts = async () => {
   try {
     const res = await api.get('/accounts/');
     accounts.value = res.data;
   } catch (err) {
-    console.error('Error fetching accounts', err);
+    console.error(err);
   }
 };
 
-// Filter purchase orders
 const filteredPurchaseOrders = computed(() => {
   return currentTab.value === 'paid'
     ? purchaseOrders.value.filter(po => po.total_balance === 0)
     : purchaseOrders.value.filter(po => po.total_balance > 0);
 });
 
-// Format date
-const formatDate = (dateStr) => {
-  const d = new Date(dateStr);
-  return d.toLocaleDateString();
-};
+const formatDate = dateStr => new Date(dateStr).toLocaleDateString();
 
-// Open modal
-const openPaymentModal = (po) => {
+const openPaymentModal = po => {
   selectedPO.value = po;
-  paymentForm.value = {
-    amount: po.total_balance,
-    payment_type: 'Cash',
-    payment_account_id: '',
-    transaction_date: new Date().toISOString().split('T')[0],
-    reference: ''
-  };
   showPaymentModal.value = true;
 };
 
-// Close modal
-const closePaymentModal = () => {
-  showPaymentModal.value = false;
-  selectedPO.value = null;
-};
+const refreshPurchaseOrders = () => fetchPurchaseOrders();
 
-// Submit payment
-const submitPayment = async () => {
-  try {
-    const payload = {
-      amount: parseFloat(paymentForm.value.amount),
-      payment_type: paymentForm.value.payment_type,
-      payment_account_id: paymentForm.value.payment_account_id,
-      transaction_date: paymentForm.value.transaction_date,
-      reference: paymentForm.value.reference
-    };
-
-    await api.post(`/suppliers/orders/${selectedPO.value.id}/pay`, payload);
-
-    closePaymentModal();
-    fetchPurchaseOrders();
-  } catch (err) {
-    console.error('Error saving payment', err.response?.data || err.message);
-  }
-};
+// Export placeholders
+const exportCSV = () => alert('CSV export not implemented yet!');
+const exportPDF = () => alert('PDF export not implemented yet!');
 
 onMounted(() => {
   fetchPurchaseOrders();
   fetchAccounts();
 });
 </script>
+
+<style scoped>
+/* Fade-in animation for header */
+@keyframes fadeIn {
+  0% { opacity: 0; transform: translateY(-10px);}
+  100% { opacity: 1; transform: translateY(0);}
+}
+.animate-fadeIn {
+  animation: fadeIn 0.5s ease-in-out forwards;
+}
+
+/* Table hover shadow */
+tbody tr:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+/* Smooth button hover */
+button, a {
+  transition: all 0.3s ease-in-out;
+}
+</style>

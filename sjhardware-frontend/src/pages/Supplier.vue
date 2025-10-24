@@ -1,97 +1,119 @@
 <template>
-  <div class="p-6">
-    <h1 class="text-2xl font-bold mb-4">Suppliers</h1>
+  <div class="p-6 bg-gray-50 min-h-screen">
+    <h1 class="text-3xl font-bold mb-6 text-gray-800">Suppliers</h1>
 
-    <!-- Add/Edit Supplier Form -->
-    <form @submit.prevent="submitSupplier" class="mb-4 flex flex-wrap gap-2">
+    <!-- Add / Edit Supplier Form -->
+    <form
+      @submit.prevent="submitSupplier"
+      class="mb-8 flex flex-wrap gap-3 bg-white p-4 rounded-xl shadow-sm"
+    >
       <input
         v-model="supplierForm.name"
         placeholder="Supplier Name"
-        class="border p-2 rounded"
+        class="form-input"
         required
       />
       <input
         v-model="supplierForm.contact"
         placeholder="Contact"
-        class="border p-2 rounded"
+        class="form-input"
       />
       <input
         v-model="supplierForm.email"
         placeholder="Email"
-        class="border p-2 rounded"
+        type="email"
+        class="form-input"
       />
-      <button class="bg-blue-500 text-white px-4 py-2 rounded">
+
+      <button
+        type="submit"
+        class="btn-primary"
+      >
         {{ editing ? 'Update' : 'Add' }} Supplier
       </button>
+
       <button
         v-if="editing"
         type="button"
         @click="cancelEdit"
-        class="bg-gray-500 text-white px-4 py-2 rounded"
+        class="btn-secondary"
       >
         Cancel
       </button>
     </form>
 
-    <!-- Search Supplier -->
-    <div class="mb-4 flex gap-2">
+    <!-- Search & Export -->
+    <div class="mb-4 flex flex-wrap gap-2 items-center">
       <input
         v-model="searchQuery"
-        placeholder="Search by name or contact"
-        class="border p-2 rounded"
+        placeholder="🔍 Search by name or contact..."
+        class="form-input w-72"
       />
-      <button
-        @click="searchSuppliers"
-        class="bg-green-500 text-white px-4 py-2 rounded"
-      >
-        Search
-      </button>
-      <button @click="fetchSuppliers" class="bg-gray-300 px-4 py-2 rounded">
-        Reset
-      </button>
+      <button @click="fetchSuppliers" class="btn-gray">Reset</button>
+      <button @click="exportExcel" class="btn-warning">Export Excel</button>
+      <button @click="exportPDF" class="btn-danger">Export PDF</button>
     </div>
 
     <!-- Suppliers Table -->
-    <table class="min-w-full bg-white border">
-      <thead>
-        <tr>
-          <th class="p-2 border">ID</th>
-          <th class="p-2 border">Name</th>
-          <th class="p-2 border">Contact</th>
-          <th class="p-2 border">Email</th>
-          <th class="p-2 border">Actions</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="supplier in suppliers" :key="supplier.id">
-          <td class="p-2 border">{{ supplier.id }}</td>
-          <td class="p-2 border">{{ supplier.name }}</td>
-          <td class="p-2 border">{{ supplier.contact }}</td>
-          <td class="p-2 border">{{ supplier.email }}</td>
-          <td class="p-2 border flex gap-2">
-            <button
-              @click="editSupplier(supplier)"
-              class="bg-blue-400 text-white px-2 py-1 rounded"
-            >
-              Edit
-            </button>
-            <button
-              @click="deleteSupplier(supplier.id)"
-              class="bg-red-500 text-white px-2 py-1 rounded"
-            >
-              Delete
-            </button>
-          </td>
-        </tr>
-      </tbody>
-    </table>
+    <div class="overflow-x-auto bg-white rounded-xl shadow-sm border">
+      <table class="min-w-full border-collapse">
+        <thead class="bg-gray-100 text-gray-700">
+          <tr>
+            <th class="table-header">ID</th>
+            <th class="table-header">Name</th>
+            <th class="table-header">Contact</th>
+            <th class="table-header">Email</th>
+            <th class="table-header">Actions</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          <tr
+            v-for="supplier in filteredSuppliers"
+            :key="supplier.id"
+            class="hover:bg-gray-50 transition-colors"
+          >
+            <td class="table-cell">{{ supplier.id }}</td>
+            <td class="table-cell">{{ supplier.name }}</td>
+            <td class="table-cell">{{ supplier.contact }}</td>
+            <td class="table-cell">{{ supplier.email }}</td>
+            <td class="table-cell">
+              <div class="flex gap-2">
+                <button
+                  @click="editSupplier(supplier)"
+                  class="btn-edit"
+                >
+                  Edit
+                </button>
+                <button
+                  @click="deleteSupplier(supplier.id)"
+                  class="btn-delete"
+                >
+                  Delete
+                </button>
+              </div>
+            </td>
+          </tr>
+
+          <tr v-if="filteredSuppliers.length === 0">
+            <td colspan="5" class="p-4 text-center text-gray-500">
+              No suppliers found.
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
   </div>
 </template>
 
 <script>
 import api from "../api";
+import * as XLSX from "xlsx";
+import jsPDF from "jspdf";
+import "jspdf-autotable";
 
 export default {
+  name: "SuppliersPage",
   data() {
     return {
       suppliers: [],
@@ -100,17 +122,30 @@ export default {
       searchQuery: "",
     };
   },
+  computed: {
+    /** 🔍 Live filtered list */
+    filteredSuppliers() {
+      const q = this.searchQuery.toLowerCase();
+      return this.suppliers.filter(
+        (s) =>
+          s.name.toLowerCase().includes(q) ||
+          (s.contact && s.contact.toLowerCase().includes(q))
+      );
+    },
+  },
   methods: {
+    /** Fetch all suppliers */
     async fetchSuppliers() {
       try {
-        const res = await api.get("/suppliers/");
-        this.suppliers = res.data;
+        const { data } = await api.get("/suppliers/");
+        this.suppliers = data;
       } catch (err) {
         console.error("❌ Error fetching suppliers:", err);
-        alert("Failed to fetch suppliers. Please check your connection or try again.");
+        alert("Failed to fetch suppliers. Please check your connection.");
       }
     },
 
+    /** Add or update supplier */
     async submitSupplier() {
       try {
         if (this.editing) {
@@ -120,12 +155,12 @@ export default {
           await api.post("/suppliers/", this.supplierForm);
           alert("✅ Supplier added successfully!");
         }
-        this.supplierForm = { id: null, name: "", contact: "", email: "" };
-        this.editing = false;
+
+        this.resetForm();
         this.fetchSuppliers();
       } catch (err) {
         console.error("❌ Error submitting supplier:", err);
-        alert("Failed to save supplier. Please verify inputs or try again.");
+        alert("Failed to save supplier. Please verify your inputs.");
       }
     },
 
@@ -135,38 +170,59 @@ export default {
     },
 
     cancelEdit() {
+      this.resetForm();
+    },
+
+    resetForm() {
       this.supplierForm = { id: null, name: "", contact: "", email: "" };
       this.editing = false;
     },
 
     async deleteSupplier(id) {
-      if (confirm("Are you sure you want to delete this supplier?")) {
-        try {
-          await api.delete(`/suppliers/${id}`);
-          alert("🗑️ Supplier deleted successfully!");
-          this.fetchSuppliers();
-        } catch (err) {
-          console.error("❌ Error deleting supplier:", err);
-          alert("Failed to delete supplier. Please try again later.");
-        }
+      if (!confirm("Are you sure you want to delete this supplier?")) return;
+      try {
+        await api.delete(`/suppliers/${id}`);
+        alert("🗑️ Supplier deleted successfully!");
+        this.fetchSuppliers();
+      } catch (err) {
+        console.error("❌ Error deleting supplier:", err);
+        alert("Failed to delete supplier. Please try again later.");
       }
     },
 
-    async searchSuppliers() {
-      try {
-        const res = await api.get("/suppliers");
-        this.suppliers = res.data.filter(
-          (s) =>
-            s.name.toLowerCase().includes(this.searchQuery.toLowerCase()) ||
-            (s.contact && s.contact.includes(this.searchQuery))
-        );
-      } catch (err) {
-        console.error("❌ Error searching suppliers:", err);
-        alert("Search failed. Please try again.");
-      }
+    /** 📤 Export to Excel */
+    exportExcel() {
+      const ws = XLSX.utils.json_to_sheet(
+        this.filteredSuppliers.map((s) => ({
+          ID: s.id,
+          Name: s.name,
+          Contact: s.contact,
+          Email: s.email,
+        }))
+      );
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Suppliers");
+      XLSX.writeFile(wb, "Suppliers_List.xlsx");
+    },
+
+    /** 📄 Export to PDF */
+    exportPDF() {
+      const doc = new jsPDF();
+      doc.setFontSize(16);
+      doc.text("Suppliers List", 14, 15);
+      doc.autoTable({
+        head: [["ID", "Name", "Contact", "Email"]],
+        body: this.filteredSuppliers.map((s) => [
+          s.id,
+          s.name,
+          s.contact,
+          s.email,
+        ]),
+        startY: 25,
+      });
+      doc.save("Suppliers_List.pdf");
     },
   },
-
   mounted() {
     this.fetchSuppliers();
   },
@@ -174,10 +230,45 @@ export default {
 </script>
 
 <style scoped>
-button {
-  transition: background 0.3s;
+/* 🌈 Modern dashboard-style CSS */
+
+.form-input {
+  @apply border border-gray-300 rounded-lg p-2 w-52 focus:ring-2 focus:ring-blue-400 focus:outline-none transition;
 }
-button:hover {
-  opacity: 0.9;
+
+.btn-primary {
+  @apply bg-blue-600 text-white px-4 py-2 rounded-lg shadow hover:bg-blue-700 active:scale-95 transition;
+}
+
+.btn-secondary {
+  @apply bg-gray-500 text-white px-4 py-2 rounded-lg hover:bg-gray-600 active:scale-95 transition;
+}
+
+.btn-gray {
+  @apply bg-gray-200 text-gray-800 px-4 py-2 rounded-lg hover:bg-gray-300 transition;
+}
+
+.btn-warning {
+  @apply bg-yellow-500 text-white px-4 py-2 rounded-lg hover:bg-yellow-600 active:scale-95 transition;
+}
+
+.btn-danger {
+  @apply bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 active:scale-95 transition;
+}
+
+.btn-edit {
+  @apply bg-blue-400 text-white px-3 py-1 rounded-lg hover:bg-blue-500 transition;
+}
+
+.btn-delete {
+  @apply bg-red-500 text-white px-3 py-1 rounded-lg hover:bg-red-600 transition;
+}
+
+.table-header {
+  @apply p-3 text-left border-b font-semibold;
+}
+
+.table-cell {
+  @apply p-3 border-b text-gray-700;
 }
 </style>

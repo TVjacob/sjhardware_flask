@@ -269,6 +269,7 @@ def get_sale_details(sale_id, doc_type='invoice'):
             "amount": payment.amount,
             "type": payment.payment_type,
             "account_id": payment.payment_account_id,
+            "payment_account": Account.query.filter(Account.id == payment.payment_account_id).first().name if payment.payment_account_id else "",
             "reference": payment.reference
         }
         for payment in Payment.query.filter_by(sale_id=sale.id).order_by(Payment.payment_date).all()

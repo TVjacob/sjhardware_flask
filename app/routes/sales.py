@@ -14,182 +14,337 @@ def update_timestamps(obj):
         obj.created_at = datetime.utcnow()
 
 # # ------------------ Create a Sale & Invoice with GL ------------------ #
+# @token_required
+# @sales_bp.route('/', methods=['POST'])
+# def create_sale():
+#     data = request.json
+#     items = data['items']
+#     amount_paid = data.get('amount_paid', 0)
+#     payment_account_id = data.get('payment_account_id', None)
+#     sale_date_str = data.get("sale_date")  # frontend sends date as string
+
+#     if not items or len(items) == 0:
+#         return jsonify({"error": "At least one item is required"}), 400
+
+#     # Parse sale_date or default to now
+#     try:
+#         sale_date = datetime.strptime(sale_date_str, "%Y-%m-%d") if sale_date_str else datetime.utcnow()
+#     except ValueError:
+#         return jsonify({"error": "Invalid date format. Use YYYY-MM-DD"}), 400
+
+#     # Create Sale record
+#     sale = Sale(
+#         sale_number=data['memo'],
+#         customer_id=data.get('customer_id', 1),
+#         total_paid=amount_paid,
+#         status=1,
+#         sale_date=sale_date
+#     )
+#     db.session.add(sale)
+#     db.session.flush()  # generate sale.id
+
+#     total_amount = 0
+#     cogs_total = 0
+
+#     for item_data in items:
+#         product = Product.query.get(item_data['product_id'])
+#         if not product:
+#             return jsonify({"error": f"Product {item_data['product_id']} not found"}), 404
+
+#         if product.quantity < item_data['quantity']:
+#             return jsonify({"error": f"Insufficient stock for {product.name}"}), 400
+
+#         # Get latest purchase price from Purchase table
+#         latest_purchase = (
+#             PurchaseOrderItem.query
+#             .filter(PurchaseOrderItem.product_id == product.id)
+#             .order_by(PurchaseOrderItem.created_at.desc())
+#             .first()
+#         )
+#         purchase_price = latest_purchase.unit_price if latest_purchase else item_data.get('purchase_price', 0)
+
+#         # Reduce stock
+#         product.quantity -= item_data['quantity']
+#         db.session.add(product)
+
+#         # Create SaleItem
+#         sale_item = SaleItem(
+#             sale_id=sale.id,
+#             product_id=product.id,
+#             product_name=product.name,
+#             quantity=item_data['quantity'],
+#             unit_price=item_data['unit_price'],
+#             total_price=item_data['unit_price'] * item_data['quantity'],
+#             status=1
+#         )
+#         db.session.add(sale_item)
+
+#         total_amount += sale_item.total_price
+#         cogs_total += purchase_price * item_data['quantity']
+
+#     sale.total_amount = total_amount
+#     balance = total_amount - amount_paid
+#     sale.balance = balance
+
+#     # Determine sale status
+#     if amount_paid == 0:
+#         sale.status = 3  # Full Credit
+#     elif 0 < amount_paid < total_amount:
+#         sale.status = 4  # Partial Payment
+#     else:
+#         sale.status = 1  # Fully Paid
+
+#     db.session.flush()
+#     payment_type=data.get('payment_type', 'Cash')
+
+
+
+
+#     # ---------- Determine GL accounts ----------
+#     if payment_account_id:
+#         payment_account = Account.query.get(payment_account_id)
+#         if not payment_account:
+#             return jsonify({"error": "Invalid payment account"}), 400
+#         credit_account_code = payment_account.code
+#     else:
+#         credit_account_code = 1100  # Default: Accounts Receivable
+
+
+
+#     # ---------- Generate GL Transaction ----------
+#     # txn_id, txn_str = generate_transaction_number_partone('INV', transaction_date=sale_date)
+
+#     if amount_paid > 0:# double entry for payments
+#         if amount_paid >=total_amount:
+#             entries = [
+#                 {"account_id": credit_account_code, "transaction_type": "Debit", "amount": amount_paid},
+                
+#                 {"account_id": 4000, "transaction_type": "Credit", "amount": amount_paid},
+#                 {"account_id": 5000, "transaction_type": "Debit", "amount": cogs_total},
+#                 {"account_id": 1200, "transaction_type": "Credit", "amount": cogs_total},
+#         ]
+#         else:# half double entry 
+#             entries = [
+#                 {"account_id": credit_account_code, "transaction_type": "Debit", "amount": amount_paid},
+#                 {"account_id": 1100, "transaction_type": "Debit", "amount": balance},
+#                 {"account_id": 4000, "transaction_type": "Credit", "amount": total_amount},
+#                 {"account_id": 5000, "transaction_type": "Debit", "amount": cogs_total},
+#                 {"account_id": 1200, "transaction_type": "Credit", "amount": cogs_total},
+#         ]
+
+#     else:
+#         entries = [
+#             {"account_id": 1100, "transaction_type": "Debit", "amount": total_amount},
+#             {"account_id": 4000, "transaction_type": "Credit", "amount": total_amount},
+#             {"account_id": 5000, "transaction_type": "Debit", "amount": cogs_total},
+#             {"account_id": 1200, "transaction_type": "Credit", "amount": cogs_total},
+#         ]
+#     txn_id, txn_str = generate_transaction_number_partone('INV', transaction_date=sale_date)
+
+
+
+
+#     # Post ledger entries
+#     gl_entries = post_to_ledger(
+#         entries,
+#         transaction_no_id=txn_id,  # pass the correct txn_id
+#         description=f"Sale #{sale.id}",
+#         transaction_date=sale_date
+#     )
+
+#     # Assign the correct transaction_number.id to sale
+#     sale.transaction_no = txn_id
+
+#     if amount_paid>0:
+#         payment = Payment(
+#             sale_id=sale.id,
+#             amount=amount_paid,
+#             payment_type=payment_type,
+#             reference=data['memo'],
+#             payment_date=sale_date,
+#             payment_account_id=payment_account_id,
+#             status=1,
+#             transaction_no=txn_id,
+#         )
+#         db.session.add(payment)
+#         db.session.flush()  # So we can access payment.id before commit
+
+#     db.session.commit()
+
+#     # gl_entries = post_to_ledger(entries, transaction_no_id=txn_id, description=f"Sale #{sale.id}", transaction_date=sale_date)
+#     # # db.session.flush()  # flush will write txn_id to DB without committing fully
+#     # sale.transaction_no = gl_entries[0].id
+
+#     # db.session.commit()
+
+#     return jsonify({
+#         "message": "Sale created successfully",
+#         "sale_id": sale.id,
+#         "total_amount": sale.total_amount,
+#         "total_paid": sale.total_paid,
+#         "balance": sale.balance,
+#         "payment_status": sale.status,
+#         "transaction_no": txn_str,
+#         "sale_date": sale.sale_date.strftime("%Y-%m-%d")
+#     }), 201
+
+
 @token_required
 @sales_bp.route('/', methods=['POST'])
 def create_sale():
     data = request.json
-    items = data['items']
+    items = data.get('items', [])
     amount_paid = data.get('amount_paid', 0)
-    payment_account_id = data.get('payment_account', None)
-    sale_date_str = data.get("sale_date")  # frontend sends date as string
+    payment_account_id = data.get('payment_account_id')
+    sale_date_str = data.get("sale_date")
 
-    if not items or len(items) == 0:
+    if not items:
         return jsonify({"error": "At least one item is required"}), 400
 
-    # Parse sale_date or default to now
+    # Parse sale_date
     try:
         sale_date = datetime.strptime(sale_date_str, "%Y-%m-%d") if sale_date_str else datetime.utcnow()
     except ValueError:
         return jsonify({"error": "Invalid date format. Use YYYY-MM-DD"}), 400
 
-    # Create Sale record
-    sale = Sale(
-        sale_number=data['sale_number'],
-        customer_id=data.get('customer_id', 1),
-        total_paid=amount_paid,
-        status=1,
-        sale_date=sale_date
-    )
-    db.session.add(sale)
-    db.session.flush()  # generate sale.id
+    try:
+        # --- Start manual transaction ---
+        total_amount = 0
+        cogs_total = 0
+        txn_id, txn_str = generate_transaction_number_partone('INV', transaction_date=sale_date)
 
-    total_amount = 0
-    cogs_total = 0
 
-    for item_data in items:
-        product = Product.query.get(item_data['product_id'])
-        if not product:
-            return jsonify({"error": f"Product {item_data['product_id']} not found"}), 404
-
-        if product.quantity < item_data['quantity']:
-            return jsonify({"error": f"Insufficient stock for {product.name}"}), 400
-
-        # Get latest purchase price from Purchase table
-        latest_purchase = (
-            PurchaseOrderItem.query
-            .filter(PurchaseOrderItem.product_id == product.id)
-            .order_by(PurchaseOrderItem.created_at.desc())
-            .first()
+        # Create sale
+        sale = Sale(
+            sale_number=txn_str,
+            customer_id=data.get('customer_id', 1),
+            total_paid=amount_paid,
+            status=1,
+            sale_date=sale_date
         )
-        purchase_price = latest_purchase.unit_price if latest_purchase else item_data.get('purchase_price', 0)
+        db.session.add(sale)
+        db.session.flush()
 
-        # Reduce stock
-        product.quantity -= item_data['quantity']
-        db.session.add(product)
+        # Process items
+        for item_data in items:
+            product = Product.query.get(item_data['product_id'])
+            if not product:
+                raise ValueError(f"Product {item_data['product_id']} not found")
+            if product.quantity < item_data['quantity']:
+                raise ValueError(f"Insufficient stock for {product.name}")
 
-        # Create SaleItem
-        sale_item = SaleItem(
-            sale_id=sale.id,
-            product_id=product.id,
-            product_name=product.name,
-            quantity=item_data['quantity'],
-            unit_price=item_data['unit_price'],
-            total_price=item_data['unit_price'] * item_data['quantity'],
-            status=1
-        )
-        db.session.add(sale_item)
+            latest_purchase = (
+                PurchaseOrderItem.query
+                .filter(PurchaseOrderItem.product_id == product.id)
+                .order_by(PurchaseOrderItem.created_at.desc())
+                .first()
+            )
+            purchase_price = latest_purchase.unit_price if latest_purchase else item_data.get('purchase_price', 0)
 
-        total_amount += sale_item.total_price
-        cogs_total += purchase_price * item_data['quantity']
+            product.quantity -= item_data['quantity']
+            db.session.add(product)
 
-    sale.total_amount = total_amount
-    balance = total_amount - amount_paid
-    sale.balance = balance
+            sale_item = SaleItem(
+                sale_id=sale.id,
+                product_id=product.id,
+                product_name=product.name,
+                quantity=item_data['quantity'],
+                unit_price=item_data['unit_price'],
+                total_price=item_data['unit_price'] * item_data['quantity'],
+                status=1
+            )
+            db.session.add(sale_item)
 
-    # Determine sale status
-    if amount_paid == 0:
-        sale.status = 3  # Full Credit
-    elif 0 < amount_paid < total_amount:
-        sale.status = 4  # Partial Payment
-    else:
-        sale.status = 1  # Fully Paid
+            total_amount += sale_item.total_price
+            cogs_total += purchase_price * item_data['quantity']
 
-    db.session.flush()
-    payment_type=data.get('payment_type', 'Cash')
+        sale.total_amount = total_amount
+        balance = total_amount - amount_paid
+        sale.balance = balance
 
+        if amount_paid == 0:
+            sale.status = 3  # Full credit
+        elif 0 < amount_paid < total_amount:
+            sale.status = 4  # Partial payment
+        else:
+            sale.status = 1  # Fully paid
 
+        db.session.flush()
 
+        # Ledger logic
+        payment_type = data.get('payment_type', 'Cash')
+        credit_account_code = 1100  # default AR
+        if payment_account_id:
+            payment_account = Account.query.get(payment_account_id)
+            if not payment_account:
+                raise ValueError("Invalid payment account")
+            credit_account_code = payment_account.code
 
-    # ---------- Determine GL accounts ----------
-    if payment_account_id:
-        payment_account = Account.query.get(payment_account_id)
-        if not payment_account:
-            return jsonify({"error": "Invalid payment account"}), 400
-        credit_account_code = payment_account.code
-    else:
-        credit_account_code = 1100  # Default: Accounts Receivable
-
-
-
-    # ---------- Generate GL Transaction ----------
-    txn_id, txn_str = generate_transaction_number_partone('INV', transaction_date=sale_date)
-
-    if amount_paid > 0:# double entry for payments
-        if amount_paid >=total_amount:
+        if amount_paid > 0:
+            if amount_paid >= total_amount:
+                entries = [
+                    {"account_id": credit_account_code, "transaction_type": "Debit", "amount": amount_paid},
+                    {"account_id": 4000, "transaction_type": "Credit", "amount": amount_paid},
+                    {"account_id": 5000, "transaction_type": "Debit", "amount": cogs_total},
+                    {"account_id": 1200, "transaction_type": "Credit", "amount": cogs_total},
+                ]
+            else:
+                entries = [
+                    {"account_id": credit_account_code, "transaction_type": "Debit", "amount": amount_paid},
+                    {"account_id": 1100, "transaction_type": "Debit", "amount": balance},
+                    {"account_id": 4000, "transaction_type": "Credit", "amount": total_amount},
+                    {"account_id": 5000, "transaction_type": "Debit", "amount": cogs_total},
+                    {"account_id": 1200, "transaction_type": "Credit", "amount": cogs_total},
+                ]
+        else:
             entries = [
-                {"account_id": credit_account_code, "transaction_type": "Debit", "amount": amount_paid},
-                
-                {"account_id": 4000, "transaction_type": "Credit", "amount": amount_paid},
-                {"account_id": 5000, "transaction_type": "Debit", "amount": cogs_total},
-                {"account_id": 1200, "transaction_type": "Credit", "amount": cogs_total},
-        ]
-        else:# half double entry 
-            entries = [
-                {"account_id": credit_account_code, "transaction_type": "Debit", "amount": amount_paid},
-                {"account_id": 1100, "transaction_type": "Debit", "amount": balance},
+                {"account_id": 1100, "transaction_type": "Debit", "amount": total_amount},
                 {"account_id": 4000, "transaction_type": "Credit", "amount": total_amount},
                 {"account_id": 5000, "transaction_type": "Debit", "amount": cogs_total},
                 {"account_id": 1200, "transaction_type": "Credit", "amount": cogs_total},
-        ]
+            ]
 
-    else:
-        entries = [
-            {"account_id": 1100, "transaction_type": "Debit", "amount": total_amount},
-            {"account_id": 4000, "transaction_type": "Credit", "amount": total_amount},
-            {"account_id": 5000, "transaction_type": "Debit", "amount": cogs_total},
-            {"account_id": 1200, "transaction_type": "Credit", "amount": cogs_total},
-        ]
-    txn_id, txn_str = generate_transaction_number_partone('INV', transaction_date=sale_date)
-
-
-
-
-    # Post ledger entries
-    gl_entries = post_to_ledger(
-        entries,
-        transaction_no_id=txn_id,  # pass the correct txn_id
-        description=f"Sale #{sale.id}",
-        transaction_date=sale_date
-    )
-
-    # Assign the correct transaction_number.id to sale
-    sale.transaction_no = txn_id
-
-    if amount_paid>0:
-        payment = Payment(
-            sale_id=sale.id,
-            amount=amount_paid,
-            payment_type=payment_type,
-            reference=data['sale_number'],
-            payment_date=sale_date,
-            payment_account_id=payment_account_id,
-            status=1,
-            transaction_no=txn_id,
+        gl_entries = post_to_ledger(
+            entries,
+            transaction_no_id=txn_id,
+            description=f"Sale #{sale.id}",
+            transaction_date=sale_date
         )
-        db.session.add(payment)
-        db.session.flush()  # So we can access payment.id before commit
 
-    db.session.commit()
+        sale.transaction_no = txn_id
 
-    # gl_entries = post_to_ledger(entries, transaction_no_id=txn_id, description=f"Sale #{sale.id}", transaction_date=sale_date)
-    # # db.session.flush()  # flush will write txn_id to DB without committing fully
-    # sale.transaction_no = gl_entries[0].id
+        if amount_paid > 0:
+            payment = Payment(
+                sale_id=sale.id,
+                amount=amount_paid,
+                payment_type=payment_type,
+                reference=txn_str,
+                payment_date=sale_date,
+                payment_account_id=payment_account_id,
+                status=1,
+                transaction_no=txn_id
+            )
+            db.session.add(payment)
 
-    # db.session.commit()
+        db.session.commit()  # commit everything manually
 
-    return jsonify({
-        "message": "Sale created successfully",
-        "sale_id": sale.id,
-        "total_amount": sale.total_amount,
-        "total_paid": sale.total_paid,
-        "balance": sale.balance,
-        "payment_status": sale.status,
-        "transaction_no": txn_str,
-        "sale_date": sale.sale_date.strftime("%Y-%m-%d")
-    }), 201
+        return jsonify({
+            "message": "Sale created successfully",
+            "sale_id": sale.id,
+            "total_amount": sale.total_amount,
+            "total_paid": sale.total_paid,
+            "balance": sale.balance,
+            "payment_status": sale.status,
+            "transaction_no": txn_str,
+            "sale_date": sale.sale_date.strftime("%Y-%m-%d")
+        }), 201
 
-
-
+    except ValueError as ve:
+        db.session.rollback()
+        return jsonify({"error": str(ve)}), 400
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": f"Internal server error: {str(e)}"}), 500
 
 # ------------------ Get All Sales ------------------ #
 @token_required

@@ -1,8 +1,8 @@
 from app import db
 from datetime import datetime
 from werkzeug.security import generate_password_hash, check_password_hash
-
-
+import enum
+from sqlalchemy import Enum
 # ------------------ Mixin for Status ------------------
 class StatusMixin:
     status = db.Column(db.Integer, default=1, nullable=False)  # 1 = Active, 0 = Inactive
@@ -362,18 +362,73 @@ class ExpenseItem(db.Model, StatusMixin):
     def __repr__(self):
         return f"<ExpenseItem {self.item_name} - {self.amount}>"
 
-# ------------------ Accounts ------------------
+# -------------------------------
+# Enums for Account Types & Subtypes
+# -------------------------------
+
+class AccountTypeEnum(enum.Enum):
+    ASSET = "ASSET"
+    LIABILITY = "LIABILITY"
+    EQUITY = "EQUITY"
+    REVENUE = "REVENUE"
+    EXPENSE = "EXPENSE"
+
+
+class AssetSubtypeEnum(enum.Enum):
+    CASH = "Cash"
+    ACCOUNTS_RECEIVABLE = "Accounts Receivable"
+    INVENTORY = "Inventory"
+    PREPAID_EXPENSES = "Prepaid Expenses"
+    FIXED_ASSET = "Fixed Asset"
+    BANK = "Bank"
+
+class LiabilitySubtypeEnum(enum.Enum):
+    ACCOUNTS_PAYABLE = "Accounts Payable"
+    ACCRUED_LIABILITIES = "Accrued Liabilities"
+    LONG_TERM_DEBT = "Long Term Debt"
+
+class EquitySubtypeEnum(enum.Enum):
+    OWNERS_EQUITY = "Owner's Equity"
+    RETAINED_EARNINGS = "Retained Earnings"
+
+class RevenueSubtypeEnum(enum.Enum):
+    SALES = "Sales Revenue"
+    SERVICE = "Service Revenue"
+
+class ExpenseSubtypeEnum(enum.Enum):
+    COGS = "Cost of Goods Sold"
+    RENT = "Rent Expense"
+    SALARIES = "Salaries Expense"
+    UTILITIES = "Utilities Expense"
+
+
+# -------------------------------
+# Account Model
+# -------------------------------
 class Account(db.Model, StatusMixin):
+    __tablename__ = 'account'
+
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
     code = db.Column(db.String(20), unique=True, nullable=False)
-    account_type = db.Column(db.String(50), nullable=False)
+    
+    account_type = db.Column(Enum(AccountTypeEnum), nullable=False)  # Enum type
+    account_subtype = db.Column(db.String(50))  # Optional, can validate dynamically or with subtype enums
+    parent_id = db.Column(db.Integer, db.ForeignKey('account.id'), nullable=True)
     description = db.Column(db.String(200))
-    # transaction_date = db.Column(db.DateTime, default=datetime.utcnow)
-        # Relationships
+
+    # Relationships
+    children = db.relationship(
+        'Account',
+        backref=db.backref('parent', remote_side=[id]),
+        lazy=True
+    )
     expenses_paid = db.relationship('Expense', backref='payment_account', lazy=True)
     expense_items = db.relationship('ExpenseItem', backref='account', lazy=True)
 
+    def __repr__(self):
+        return f"<Account {self.code} - {self.name}>"
+    
 # ------------------ General Ledger ------------------
 class GeneralLedger(db.Model, StatusMixin):
     id = db.Column(db.Integer, primary_key=True)

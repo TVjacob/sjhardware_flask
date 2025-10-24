@@ -1,232 +1,262 @@
-# from app import create_app
-
-# app = create_app()
-
-# if __name__ == '__main__':
-#     app.run(debug=True)
 from app import create_app, db
-from app.models import Account, PurchaseOrder,User, Permission
 from datetime import datetime
 from werkzeug.security import generate_password_hash
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import SQLAlchemyError, ProgrammingError, OperationalError, IntegrityError
+from sqlalchemy import text
 
-from app.utils.gl_utils import generate_transaction_number, post_to_ledger
-
+from app.models import AssetSubtypeEnum, EquitySubtypeEnum, ExpenseSubtypeEnum, LiabilitySubtypeEnum, RevenueSubtypeEnum
+from datetime import datetime, timezone
 
 app = create_app()
 
+
+# Mapping of accounts with proper enum subtypes and parent_id
+account_updates = [
+    {"id": 1, "account_subtype": AssetSubtypeEnum.CASH, "parent_id": None},   # Cash on Hand
+    {"id": 2, "account_subtype": AssetSubtypeEnum.CASH, "parent_id": 1},      # Petty Cash
+    {"id": 3, "account_subtype": AssetSubtypeEnum.CASH, "parent_id": 1},      # MTN Mobile Money
+    {"id": 4, "account_subtype": AssetSubtypeEnum.CASH, "parent_id": 1},      # Airtel Money
+    {"id": 5, "account_subtype": AssetSubtypeEnum.CASH, "parent_id": 1},      # Other Mobile Wallets
+    {"id": 6, "account_subtype": AssetSubtypeEnum.BANK, "parent_id": None}, # Stanbic Bank Account
+    {"id": 7, "account_subtype": AssetSubtypeEnum.BANK, "parent_id": None}, # Equity Bank Account
+    {"id": 8, "account_subtype": AssetSubtypeEnum.BANK, "parent_id": None}, # Centenary Bank Account
+    {"id": 9, "account_subtype": AssetSubtypeEnum.BANK, "parent_id": None}, # Other Bank Accounts
+    {"id": 10, "account_subtype": AssetSubtypeEnum.ACCOUNTS_RECEIVABLE, "parent_id": None}, # Accounts Receivable
+    {"id": 11, "account_subtype": AssetSubtypeEnum.PREPAID_EXPENSES, "parent_id": None},     # Employee Advances
+    {"id": 12, "account_subtype": AssetSubtypeEnum.INVENTORY, "parent_id": None}, # Inventory
+    {"id": 13, "account_subtype": AssetSubtypeEnum.PREPAID_EXPENSES, "parent_id": None}, # Prepaid Expenses
+    {"id": 14, "account_subtype": AssetSubtypeEnum.FIXED_ASSET, "parent_id": None}, # Fixed Assets
+    {"id": 15, "account_subtype": LiabilitySubtypeEnum.ACCOUNTS_PAYABLE, "parent_id": None}, # Accounts Payable
+    {"id": 16, "account_subtype": LiabilitySubtypeEnum.ACCRUED_LIABILITIES, "parent_id": None}, # Accrued Expenses
+    {"id": 17, "account_subtype": LiabilitySubtypeEnum.ACCRUED_LIABILITIES, "parent_id": None}, # Taxes Payable
+    {"id": 18, "account_subtype": LiabilitySubtypeEnum.ACCRUED_LIABILITIES, "parent_id": None}, # Wages Payable
+    {"id": 19, "account_subtype": LiabilitySubtypeEnum.LONG_TERM_DEBT, "parent_id": None}, # Loan Payable
+    {"id": 20, "account_subtype": LiabilitySubtypeEnum.ACCOUNTS_PAYABLE, "parent_id": None}, # Mobile Money Payable
+    {"id": 21, "account_subtype": LiabilitySubtypeEnum.ACCOUNTS_PAYABLE, "parent_id": None}, # Credit Card Payable
+    {"id": 22, "account_subtype": EquitySubtypeEnum.OWNERS_EQUITY, "parent_id": None}, # Owner's Equity
+    {"id": 23, "account_subtype": EquitySubtypeEnum.RETAINED_EARNINGS, "parent_id": None}, # Retained Earnings
+    {"id": 24, "account_subtype": EquitySubtypeEnum.OWNERS_EQUITY, "parent_id": None}, # Drawings
+    {"id": 25, "account_subtype": RevenueSubtypeEnum.SALES, "parent_id": None}, # Sales Revenue
+    {"id": 26, "account_subtype": RevenueSubtypeEnum.SERVICE, "parent_id": 25}, # Service Revenue
+    {"id": 27, "account_subtype": RevenueSubtypeEnum.SERVICE, "parent_id": 25}, # Mobile Money Income
+    {"id": 28, "account_subtype": RevenueSubtypeEnum.SERVICE, "parent_id": 25}, # Bank Transfer Income
+    {"id": 29, "account_subtype": RevenueSubtypeEnum.SERVICE, "parent_id": 25}, # Other Income
+    {"id": 30, "account_subtype": ExpenseSubtypeEnum.COGS, "parent_id": None}, # Cost of Goods Sold
+    {"id": 31, "account_subtype": ExpenseSubtypeEnum.RENT, "parent_id": None}, # Rent Expense
+    {"id": 32, "account_subtype": ExpenseSubtypeEnum.SALARIES, "parent_id": None}, # Salaries & Wages Expense
+    {"id": 33, "account_subtype": ExpenseSubtypeEnum.SALARIES, "parent_id": 32}, # Overtime Expense
+    {"id": 34, "account_subtype": ExpenseSubtypeEnum.SALARIES, "parent_id": 32}, # Employee Benefits Expense
+    {"id": 35, "account_subtype": ExpenseSubtypeEnum.UTILITIES, "parent_id": None}, # Utilities Expense
+    {"id": 36, "account_subtype": ExpenseSubtypeEnum.UTILITIES, "parent_id": None}, # Office Supplies Expense
+    {"id": 37, "account_subtype": ExpenseSubtypeEnum.UTILITIES, "parent_id": 36},   # Cleaning Supplies Expense
+    {"id": 38, "account_subtype": ExpenseSubtypeEnum.UTILITIES, "parent_id": None}, # Waste Management Expense
+    {"id": 39, "account_subtype": ExpenseSubtypeEnum.UTILITIES, "parent_id": None}, # Repairs & Maintenance Expense
+    {"id": 40, "account_subtype": ExpenseSubtypeEnum.UTILITIES, "parent_id": None}, # IT Maintenance Expense
+    {"id": 41, "account_subtype": ExpenseSubtypeEnum.UTILITIES, "parent_id": None}, # Depreciation Expense
+    {"id": 42, "account_subtype": ExpenseSubtypeEnum.UTILITIES, "parent_id": None}, # Insurance Expense
+    {"id": 43, "account_subtype": ExpenseSubtypeEnum.UTILITIES, "parent_id": None}, # Bank Charges Expense
+    {"id": 44, "account_subtype": ExpenseSubtypeEnum.UTILITIES, "parent_id": None}, # Mobile Money Charges Expense
+    {"id": 45, "account_subtype": ExpenseSubtypeEnum.UTILITIES, "parent_id": None}, # Credit Card Fees Expense
+    {"id": 46, "account_subtype": ExpenseSubtypeEnum.UTILITIES, "parent_id": None}, # Advertising Expense
+    {"id": 47, "account_subtype": ExpenseSubtypeEnum.UTILITIES, "parent_id": 46},   # Promotional Expense
+    {"id": 48, "account_subtype": ExpenseSubtypeEnum.UTILITIES, "parent_id": None}, # Travel Expense
+    {"id": 49, "account_subtype": ExpenseSubtypeEnum.UTILITIES, "parent_id": None}, # Training Expense
+    {"id": 50, "account_subtype": ExpenseSubtypeEnum.UTILITIES, "parent_id": None}, # Miscellaneous Expense
+]
+
+
+def update_all_accounts():
+    try:
+        for acc in account_updates:
+            account = Account.query.filter_by(id=acc["id"]).first()
+            if account:
+                # Convert enum to string
+                subtype = acc.get("account_subtype")
+                if subtype:
+                    account.account_subtype = subtype.value  # <-- key change
+                account.parent_id = acc.get("parent_id")
+                account.updated_at = datetime.now(timezone.utc)  # timezone-aware
+        db.session.commit()
+        print("✅ All 50 accounts updated successfully with ENUM subtypes and parent_id references.")
+    except Exception as e:
+        db.session.rollback()
+        print(f"❌ Failed to update accounts: {e}")
+
+
+
+def normalize_account_type_enum_uppercase():
+    print("🔄 Converting account_type to uppercase enum...")
+
+    with app.app_context():
+        try:
+            db.session.execute(text("""
+                ALTER TYPE accounttypeenum RENAME TO accounttypeenum_old;
+            """))
+            db.session.execute(text("""
+                CREATE TYPE accounttypeenum AS ENUM ('ASSET','LIABILITY','EQUITY','REVENUE','EXPENSE');
+            """))
+            db.session.execute(text("""
+                ALTER TABLE account
+                ALTER COLUMN account_type TYPE accounttypeenum
+                USING UPPER(account_type::text)::accounttypeenum;
+            """))
+            db.session.execute(text("""
+                DROP TYPE accounttypeenum_old;
+            """))
+            db.session.commit()
+            print("✅ account_type is now uppercase and enum-safe.")
+        except Exception as e:
+            db.session.rollback()
+            print(f"❌ Failed to normalize account_type: {e}")
+
+
+
 def create_default_admin():
     """Create a default admin user if not already present."""
-    with app.app_context():
-        existing_user = User.query.filter_by(username='admin').first()
+    existing_user = User.query.filter_by(username='admin').first()
+    if existing_user:
+        print("ℹ️ Admin user already exists.")
+        return
 
-        if existing_user:
-            print("ℹ️ Admin user already exists.")
-            return
+    try:
+        admin = User(
+            username='admin',
+            role='Admin',
+            password_hash=generate_password_hash('123456')
+        )
 
-        try:
-            admin = User(
-                username='admin',
-                role='Admin',
-                password_hash=generate_password_hash('123456')
-            )
+        # Assign all permissions
+        for perm in Permission.query.all():
+            admin.add_permission(perm)
 
-            # Optionally give all permissions
-            all_perms = Permission.query.all()
-            for perm in all_perms:
-                admin.add_permission(perm)
-
-            db.session.add(admin)
-            db.session.commit()
-
-            print("✅ Default admin user created. Username: admin | Password: 123456")
-        except SQLAlchemyError as e:
-            print(f"❌ Failed to create admin user: {e}")
+        db.session.add(admin)
+        db.session.commit()
+        print("✅ Default admin user created (Username: admin | Password: 123456)")
+    except SQLAlchemyError as e:
+        db.session.rollback()
+        print(f"❌ Failed to create admin user: {e}")
 
 
 def fix_missing_purchase_order_transactions():
-    """
-    Find purchase orders with null transaction_no and create ledger entries for them.
-    """
-    with app.app_context():
-        # Fetch all purchase orders where transaction_no is NULL
-        missing_txn_pos = PurchaseOrder.query.filter_by(transaction_no=None).all()
+    """Fix purchase orders missing transaction_no."""
+    missing = PurchaseOrder.query.filter_by(transaction_no=None).all()
+    if not missing:
+        print("ℹ️ No purchase orders with missing transaction numbers.")
+        return
 
-        if not missing_txn_pos:
-            print("ℹ️ No purchase orders with missing transaction numbers.")
-            return
+    for po in missing:
+        po.update_totals()
+        total = po.total_amount
 
-        for po in missing_txn_pos:
-            # Recalculate totals in case they are out of sync
-            po.update_totals()
-            total_amount = po.total_amount
+        entries = [
+            {"account_id": 1200, "transaction_type": "Debit", "amount": total},
+            {"account_id": 2100, "transaction_type": "Credit", "amount": total},
+        ]
 
-            # Prepare ledger entries
-            entries = [
-                {
-                    "account_id": 1200,  # Stock Inventory
-                    "transaction_type": "Debit",
-                    "amount": total_amount
-                },
-                {
-                    "account_id": 2100,  # Accounts Payable
-                    "transaction_type": "Credit",
-                    "amount": total_amount
-                }
-            ]
+        txn_id, _ = generate_transaction_number("CREDIT-PAY", transaction_date=po.purchase_date)
+        po.transaction_no = txn_id
 
-            # Generate transaction number
-            txn_id, txn_str = generate_transaction_number('CREDIT-PAY', transaction_date=po.purchase_date)
-            po.transaction_no = txn_id
+        post_to_ledger(
+            entries,
+            transaction_no_id=txn_id,
+            description=f"Credit for PO #{po.id}",
+            transaction_date=po.purchase_date
+        )
 
-            # Post entries to ledger
-            post_to_ledger(
-                entries,
-                transaction_no_id=txn_id,
-                description=f"Credit for PO #{po.id}",
-                transaction_date=po.purchase_date
-            )
+        db.session.add(po)
 
-            db.session.add(po)
+    try:
+        db.session.commit()
+        print(f"✅ Fixed {len(missing)} purchase orders.")
+    except SQLAlchemyError as e:
+        db.session.rollback()
+        print(f"❌ Failed to update purchase orders: {e}")
 
-        # Commit all changes
-        try:
-            db.session.commit()
-            print(f"✅ Updated {len(missing_txn_pos)} purchase orders with missing transaction numbers.")
-        except SQLAlchemyError as e:
-            db.session.rollback()
-            print(f"❌ Failed to update purchase orders: {e}")
 
 def seed_chart_of_accounts():
-    """
-    Runs at startup to check if essential chart of accounts exists,
-    and creates them if missing.
-    """
+    """Seed and assign chart of accounts, subtypes, and parents in one pass."""
     predefined_accounts = [
-        # -------------------------
         # ASSETS
-        # -------------------------
-        {"code": "1000", "name": "Cash on Hand", "account_type": "Asset", "description": "Physical cash kept at the premises"},
-        {"code": "1010", "name": "Petty Cash", "account_type": "Asset", "description": "Small amount of cash for minor expenses"},
-
-        # Mobile Money Accounts
-        {"code": "1020", "name": "MTN Mobile Money", "account_type": "Asset", "description": "MTN mobile money account balance"},
-        {"code": "1030", "name": "Airtel Money", "account_type": "Asset", "description": "Airtel mobile money account balance"},
-        {"code": "1040", "name": "Other Mobile Wallets", "account_type": "Asset", "description": "Balances in other mobile wallets"},
-
-        # Bank Accounts
-        {"code": "1050", "name": "Stanbic Bank Account", "account_type": "Asset", "description": "Primary Stanbic bank account balance"},
-        {"code": "1060", "name": "Equity Bank Account", "account_type": "Asset", "description": "Equity bank account balance"},
-        {"code": "1070", "name": "Centenary Bank Account", "account_type": "Asset", "description": "Centenary bank account balance"},
-        {"code": "1080", "name": "Other Bank Accounts", "account_type": "Asset", "description": "Other secondary bank accounts"},
-
-        # Accounts Receivable
-        {"code": "1100", "name": "Accounts Receivable", "account_type": "Asset", "description": "Money owed by customers"},
-        {"code": "1110", "name": "Employee Advances", "account_type": "Asset", "description": "Cash advances given to employees"},
-
-        # Inventory & Prepaid
-        {"code": "1200", "name": "Inventory", "account_type": "Asset", "description": "Products available for sale"},
-        {"code": "1300", "name": "Prepaid Expenses", "account_type": "Asset", "description": "Expenses paid in advance"},
-        {"code": "1400", "name": "Fixed Assets", "account_type": "Asset", "description": "Property, plant, and equipment"},
-
-        # -------------------------
+        {"code": "1000", "name": "Cash on Hand", "account_type": "ASSET", "description": "Physical cash kept at the premises"},
+        {"code": "1010", "name": "Petty Cash", "account_type": "ASSET", "description": "Small cash for expenses"},
+        {"code": "1020", "name": "MTN Mobile Money", "account_type": "ASSET", "description": "MTN mobile money balance"},
+        {"code": "1030", "name": "Airtel Money", "account_type": "ASSET", "description": "Airtel mobile money balance"},
+        {"code": "1040", "name": "Other Mobile Wallets", "account_type": "ASSET", "description": "Other wallet balances"},
+        {"code": "1050", "name": "Stanbic Bank Account", "account_type": "ASSET", "description": "Stanbic bank account balance"},
+        {"code": "1060", "name": "Equity Bank Account", "account_type": "ASSET", "description": "Equity bank account balance"},
+        {"code": "1070", "name": "Centenary Bank Account", "account_type": "ASSET", "description": "Centenary bank account balance"},
+        {"code": "1080", "name": "Other Bank Accounts", "account_type": "ASSET", "description": "Secondary bank accounts"},
+        {"code": "1100", "name": "Accounts Receivable", "account_type": "ASSET", "description": "Money owed by customers"},
+        {"code": "1200", "name": "Inventory", "account_type": "ASSET", "description": "Goods available for sale"},
+        {"code": "1400", "name": "Fixed Assets", "account_type": "ASSET", "description": "Property, plant, and equipment"},
         # LIABILITIES
-        # -------------------------
-        {"code": "2000", "name": "Accounts Payable", "account_type": "Liability", "description": "Money owed to suppliers"},
-        {"code": "2100", "name": "Accrued Expenses", "account_type": "Liability", "description": "Expenses incurred but not yet paid"},
-        {"code": "2200", "name": "Taxes Payable", "account_type": "Liability", "description": "Outstanding tax obligations"},
-        {"code": "2300", "name": "Wages Payable", "account_type": "Liability", "description": "Wages owed to employees"},
-        {"code": "2400", "name": "Loan Payable", "account_type": "Liability", "description": "Outstanding business loans"},
-        {"code": "2500", "name": "Mobile Money Payable", "account_type": "Liability", "description": "Mobile money amounts owed to customers or suppliers"},
-        {"code": "2600", "name": "Credit Card Payable", "account_type": "Liability", "description": "Outstanding balances on business credit cards"},
-
-        # -------------------------
+        {"code": "2000", "name": "Accounts Payable", "account_type": "LIABILITY", "description": "Money owed to suppliers"},
+        {"code": "2100", "name": "Accrued Expenses", "account_type": "LIABILITY", "description": "Expenses incurred but unpaid"},
         # EQUITY
-        # -------------------------
-        {"code": "3000", "name": "Owner's Equity", "account_type": "Equity", "description": "Owner's capital contribution"},
-        {"code": "3100", "name": "Retained Earnings", "account_type": "Equity", "description": "Accumulated profits kept in the business"},
-        {"code": "3200", "name": "Drawings", "account_type": "Equity", "description": "Owner withdrawals for personal use"},
-
-        # -------------------------
+        {"code": "3000", "name": "Owner's Equity", "account_type": "EQUITY", "description": "Owner capital"},
         # REVENUE
-        # -------------------------
-        {"code": "4000", "name": "Sales Revenue", "account_type": "Revenue", "description": "Revenue from sale of goods"},
-        {"code": "4100", "name": "Service Revenue", "account_type": "Revenue", "description": "Revenue from services rendered"},
-        {"code": "4200", "name": "Mobile Money Income", "account_type": "Revenue", "description": "Revenue received via mobile money transactions"},
-        {"code": "4300", "name": "Bank Transfer Income", "account_type": "Revenue", "description": "Revenue received through bank transfers"},
-        {"code": "4400", "name": "Other Income", "account_type": "Revenue", "description": "Miscellaneous income sources"},
-
-        # -------------------------
-        # EXPENSES
-        # -------------------------
-
-        # Cost of Sales
-        {"code": "5000", "name": "Cost of Goods Sold", "account_type": "Expense", "description": "Direct cost of goods sold"},
-
-        # Operating Expenses
-        {"code": "5100", "name": "Rent Expense", "account_type": "Expense", "description": "Rental payments for premises"},
-        {"code": "5200", "name": "Salaries & Wages Expense", "account_type": "Expense", "description": "Employee salaries and wages"},
-        {"code": "5210", "name": "Overtime Expense", "account_type": "Expense", "description": "Extra pay for employee overtime"},
-        {"code": "5220", "name": "Employee Benefits Expense", "account_type": "Expense", "description": "Benefits like health insurance and allowances"},
-        {"code": "5300", "name": "Utilities Expense", "account_type": "Expense", "description": "Electricity, water, internet, etc."},
-
-        # Office & Cleaning
-        {"code": "5400", "name": "Office Supplies Expense", "account_type": "Expense", "description": "Office supplies and consumables"},
-        {"code": "5410", "name": "Cleaning Supplies Expense", "account_type": "Expense", "description": "Cleaning supplies and detergents"},
-        {"code": "5420", "name": "Waste Management Expense", "account_type": "Expense", "description": "Garbage collection and disposal fees"},
-
-        # Maintenance & Repairs
-        {"code": "5500", "name": "Repairs & Maintenance Expense", "account_type": "Expense", "description": "Repair and maintenance costs for equipment or facilities"},
-        {"code": "5510", "name": "IT Maintenance Expense", "account_type": "Expense", "description": "Software updates, system maintenance, and IT repairs"},
-
-        # Financial & Administrative
-        {"code": "5600", "name": "Depreciation Expense", "account_type": "Expense", "description": "Depreciation of fixed assets"},
-        {"code": "5610", "name": "Insurance Expense", "account_type": "Expense", "description": "Business insurance premiums"},
-        {"code": "5620", "name": "Bank Charges Expense", "account_type": "Expense", "description": "Bank service charges and fees"},
-        {"code": "5630", "name": "Mobile Money Charges Expense", "account_type": "Expense", "description": "Transaction fees for mobile money services"},
-        {"code": "5640", "name": "Credit Card Fees Expense", "account_type": "Expense", "description": "Credit card processing fees"},
-
-        # Marketing & Advertising
-        {"code": "5700", "name": "Advertising Expense", "account_type": "Expense", "description": "Marketing and advertising costs"},
-        {"code": "5710", "name": "Promotional Expense", "account_type": "Expense", "description": "Discounts and promotional offers"},
-
-        # Travel & Miscellaneous
-        {"code": "5800", "name": "Travel Expense", "account_type": "Expense", "description": "Travel and transportation expenses"},
-        {"code": "5810", "name": "Training Expense", "account_type": "Expense", "description": "Employee training and development costs"},
-        {"code": "5820", "name": "Miscellaneous Expense", "account_type": "Expense", "description": "Any other minor expenses"}
+        {"code": "4000", "name": "Sales Revenue", "account_type": "REVENUE", "description": "Sales income"},
+        # EXPENSE
+        {"code": "5000", "name": "Cost of Goods Sold", "account_type": "EXPENSE", "description": "Direct cost of sales"},
     ]
 
+    subtype_map = {
+        "ASSET": {"1000": "Cash", "1010": "Cash", "1050": "Bank"},
+        "LIABILITY": {"2000": "Current Liability", "2100": "Accrued"},
+        "EQUITY": {"3000": "Owner Equity"},
+        "REVENUE": {"4000": "Sales"},
+        "EXPENSE": {"5000": "COGS"},
+    }
 
+    parent_map = {"1000": None, "2000": None, "3000": None, "4000": None, "5000": None}
+
+    existing = {a.code: a for a in Account.query.all()}
+    added = []
+
+    for acc in predefined_accounts:
+        if acc["code"] in existing:
+            continue
+
+        new_acc = Account(
+            name=acc["name"],
+            code=acc["code"],
+            account_type=acc["account_type"],
+            description=acc["description"],
+            status=1,
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow(),
+        )
+
+        subtype = subtype_map.get(acc["account_type"], {}).get(acc["code"])
+        if subtype:
+            new_acc.account_subtype = subtype
+
+        if acc["code"] not in parent_map:
+            parent_code = str(int(acc["code"]) // 1000 * 1000)
+            parent = existing.get(parent_code)
+            if parent:
+                new_acc.parent_id = parent.id
+
+        db.session.add(new_acc)
+        existing[acc["code"]] = new_acc
+        added.append(acc["name"])
+
+    try:
+        db.session.commit()
+        print(f"✅ Seeded {len(added)} new accounts.")
+    except SQLAlchemyError as e:
+        db.session.rollback()
+        print(f"❌ Failed to seed accounts: {e}")
+
+
+if __name__ == "__main__":
     with app.app_context():
-        added_accounts = []
-        skipped_accounts = []
+        from app.models import Account, PurchaseOrder, User, Permission
+        from app.utils.gl_utils import generate_transaction_number, post_to_ledger
+        update_all_accounts()
+        normalize_account_type_enum_uppercase()
+        seed_chart_of_accounts()
+        create_default_admin()
+        fix_missing_purchase_order_transactions()
 
-        for acc in predefined_accounts:
-            exists = Account.query.filter_by(code=acc["code"]).first()
-            if not exists:
-                new_account = Account(
-                    name=acc["name"],
-                    code=acc["code"],
-                    account_type=acc["account_type"],
-                    description=acc["description"],
-                    status=1,
-                    created_at=datetime.utcnow(),
-                    updated_at=datetime.utcnow()
-                )
-                db.session.add(new_account)
-                added_accounts.append(acc["name"])
-            else:
-                skipped_accounts.append(acc["name"])
-
-        if added_accounts:
-            db.session.commit()
-            print(f"✅ Added {len(added_accounts)} new accounts: {', '.join(added_accounts)}")
-        else:
-            print("ℹ️ All predefined accounts already exist.")
-
-# --- Run the app and seed data ---
-if __name__ == '__main__':
-    seed_chart_of_accounts()
-    create_default_admin()
-    fix_missing_purchase_order_transactions()
     app.run(debug=True)

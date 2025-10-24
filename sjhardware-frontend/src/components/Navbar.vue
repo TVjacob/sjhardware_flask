@@ -28,6 +28,8 @@
           case '/users': return 'Users';
           case '/purchaselist': return 'PurchaseList';
           case '/saleslist': return 'SalesList';
+          case '/accounts': return 'accounts';
+
 
 
           default: return '';

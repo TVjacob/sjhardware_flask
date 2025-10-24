@@ -32,6 +32,7 @@ import ExpenseDetailsReport from '@/pages/reports/ExpenseDetailsReport.vue';
 import Login from '@/pages/Login.vue';
 import PurchaseOrderEdit from '@/pages/PurchaseOrderEdit.vue';
 import Acoa from '@/pages/reports/Acoa.vue';
+import Accounts from '@/pages/Accounts.vue';
 
 const routes = [
   {
@@ -40,6 +41,7 @@ const routes = [
     children: [
       { path: '', component: Dashboard, meta: { showGreeting: true, pageName: 'Dashboard',requiresAuth: true, } },
       { path: 'dashboard', component: Dashboard, meta: { showGreeting: true, pageName: 'Dashboard',requiresAuth: true, } },
+      { path: 'accounts', component: Accounts, meta: { showGreeting: true, pageName: 'Accounts',requiresAuth: true, } },
 
       { path: 'products', component: Products, meta: { showGreeting: true, pageName: 'Products',requiresAuth: true, } },
       { path: 'customers', component: Customer, meta: { showGreeting: false, pageName: 'Customers',requiresAuth: true, } },

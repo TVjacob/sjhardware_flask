@@ -73,6 +73,7 @@ export default {
 
     const menuItems = [
       { name: 'Dashboard', path: '/', icon: '🏠' },
+      { name: 'Accounts', path: '/accounts', icon: '🏠' },
       { name: 'Products', path: '/products', icon: '📦' },
       { name: 'Customers', path: '/customers', icon: '👥' },
       { name: 'Sales', path: '/sales', icon: '💰' },

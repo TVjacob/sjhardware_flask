@@ -107,7 +107,7 @@ def delete_supplier(id):
 @suppliers_bp.route('/orders', methods=['GET'])
 
 def get_purchase_orders():
-    orders = PurchaseOrder.query.filter(PurchaseOrder.status.in_([1, 2, 3])).all()
+    orders = PurchaseOrder.query.filter(PurchaseOrder.status.in_([1, 2, 3,5,4])).all()
     data = [{
         'id': o.id,
         'supplier_id': o.supplier_id,

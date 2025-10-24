@@ -72,15 +72,13 @@ def get_customer(id):
 @customer_bp.route('/search', methods=['GET'])
 def search_customer():
     query = Customer.query
-    name = request.args.get('name')
-    phone = request.args.get('phone')
-    email = request.args.get('email')
-    if name:
-        query = query.filter(Customer.name.ilike(f"%{name}%"))
-    if phone:
-        query = query.filter(Customer.phone.ilike(f"%{phone}%"))
-    if email:
-        query = query.filter(Customer.email.ilike(f"%{email}%"))
+    search = request.args.get('query')
+    # phone = request.args.get('phone')
+    # email = request.args.get('email')
+    if search:
+        query = query.filter(Customer.name.ilike(f"%{search}%"))
+        query = query.filter(Customer.phone.ilike(f"%{search}%"))
+        query = query.filter(Customer.email.ilike(f"%{search}%"))
     customers = query.all()
     result = [
         {
