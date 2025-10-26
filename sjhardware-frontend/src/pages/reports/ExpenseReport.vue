@@ -1,7 +1,9 @@
 <template>
     <div class="p-6">
       <h1 class="text-2xl font-bold mb-6">{{ reportTitle }}</h1>
-  
+      <button @click="$router.push('/reports')" class="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600">
+        Back to Reports
+      </button>
       <table class="min-w-full border border-gray-200 rounded shadow">
         <thead class="bg-gray-100">
           <tr>

@@ -73,9 +73,7 @@ def add_payment():
         transaction_date=transaction_date
     )
 
-    # Link payment to transaction
-    payment.transaction_no = txn_id
-    payment.updated_at = datetime.utcnow()
+
     
     # ----------------- Create Payment -----------------
     payment = Payment(
@@ -88,6 +86,10 @@ def add_payment():
         status =1 ,
         transaction_no=txn_id
     )
+    # Link payment to transaction
+    payment.transaction_no = txn_id
+    payment.updated_at = datetime.utcnow()
+    
     db.session.add(payment)
     db.session.flush()  # So we can access payment.id before commit
 

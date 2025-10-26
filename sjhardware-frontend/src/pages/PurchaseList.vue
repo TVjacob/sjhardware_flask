@@ -70,7 +70,7 @@
                 @click="openPaymentModal(po)"
                 class="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded shadow transition transform hover:scale-105"
               >
-                Receive Payment
+                Make Payment
               </button>
               <router-link
                 :to="`/purchase-orders/${po.id}/edit`"
@@ -125,7 +125,7 @@ const fetchPurchaseOrders = async () => {
 
 const fetchAccounts = async () => {
   try {
-    const res = await api.get('/accounts/');
+    const res = await api.get('/accounts/cash-bank');
     accounts.value = res.data;
   } catch (err) {
     console.error(err);

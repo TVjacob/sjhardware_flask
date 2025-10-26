@@ -273,3 +273,53 @@ def build_chart(accounts):
 def get_chart_of_accounts():
     accounts = Account.query.all()
     return jsonify(build_chart(accounts))
+
+
+def build_chart_grouped(accounts):
+    """
+    Build Chart of Accounts grouped by type with totals and children.
+    """
+    # Group by account type
+    grouped = {}
+    for atype in AccountTypeEnum:
+        grouped[atype.value] = []
+
+    # Recursive function to build hierarchy
+    def build_node(acc):
+        children = [build_node(child) for child in acc.children if child.status != 9]
+        return {
+            "id": acc.id,
+            "name": acc.name,
+            "code": acc.code,
+            "account_subtype": acc.account_subtype,
+            "children": children,
+            "child_count": len(children)
+        }
+
+    # Assign accounts to their group
+    top_level_accounts = [a for a in accounts if not a.parent_id and a.status != 9]
+    for acc in top_level_accounts:
+        grouped[acc.account_type.value].append(build_node(acc))
+
+    # Compute totals per group
+    totals = {}
+    for atype, acc_list in grouped.items():
+        # For demo purposes, we'll use count of accounts as "total"
+        def count_nodes(nodes):
+            total = 0
+            for n in nodes:
+                total += 1
+                if n['children']:
+                    total += count_nodes(n['children'])
+            return total
+        totals[atype] = count_nodes(acc_list)
+
+    return {"grouped_accounts": grouped, "totals": totals}
+
+
+@accounts_bp.route('/chart-report', methods=['GET'])
+@token_required
+def chart_of_accounts_report():
+    accounts = Account.query.all()
+    report = build_chart_grouped(accounts)
+    return jsonify(report)

@@ -33,6 +33,7 @@ import Login from '@/pages/Login.vue';
 import PurchaseOrderEdit from '@/pages/PurchaseOrderEdit.vue';
 import Acoa from '@/pages/reports/Acoa.vue';
 import Accounts from '@/pages/Accounts.vue';
+import BalanceSheet from '@/pages/reports/BalanceSheet.vue';
 
 const routes = [
   {
@@ -71,7 +72,7 @@ const routes = [
       { path: 'reports/cash-flow', component: CashFlow, meta: { showGreeting: false, pageName: 'Cash Flow',requiresAuth: true, } },
       { path: 'reports/debtors-report', component: Debtor, meta: { showGreeting: false, pageName: 'Debtors Report',requiresAuth: true, } },
       { path: 'reports/creditors-report', component: Creditor, meta: { showGreeting: false, pageName: 'Creditors Report',requiresAuth: true, } },
-      { path: 'reports/expenses-report', component: ExpenseReport, meta: { showGreeting: false, pageName: 'Expenses Report',requiresAuth: true, } },
+      { path: 'reports/balance-sheet', component: BalanceSheet, meta: { showGreeting: false, pageName: 'Balance Sheet',requiresAuth: true, } },
       { path: 'reports/chart-of-accounts', component: Acoa, meta: { showGreeting: false, pageName: 'chart-of-accounts',requiresAuth: true, } },
 
       { path: 'reports/purchases-list', component: PurchaseReport, meta: { showGreeting: false, pageName: 'Purchases Report',requiresAuth: true, } },

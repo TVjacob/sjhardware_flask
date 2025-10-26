@@ -350,7 +350,7 @@ def create_sale():
 @token_required
 @sales_bp.route('/', methods=['GET'])
 def get_sales():
-    sales = Sale.query.filter(Sale.status.in_([1, 2, 3,4])).all()  # Only active
+    sales = Sale.query.filter(Sale.status.in_([1, 2, 3,4])).order_by(Sale.id.desc()).all()  # Only active
     data = []
     for s in sales:
         sale_items = SaleItem.query.filter_by(sale_id=s.id, status=1).all()

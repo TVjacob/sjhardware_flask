@@ -11,9 +11,10 @@
             v-if="localShow"
             class="bg-white rounded-xl shadow-xl w-full max-w-md p-6 transform transition-all"
           >
+          
             <!-- Header -->
             <h2 class="text-xl font-bold mb-4 text-gray-800">
-              Receive Payment for PO #{{ po?.id || 'N/A' }}
+              Make Payment for PO #{{ po?.id || 'N/A' }}
             </h2>
   
             <!-- Payment Form -->

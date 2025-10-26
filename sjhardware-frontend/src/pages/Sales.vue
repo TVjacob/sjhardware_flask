@@ -1,44 +1,32 @@
 <template>
-  <div class="p-6 max-w-6xl mx-auto">
+  <div class="p-6 max-w-6xl mx-auto bg-white shadow-lg rounded-lg">
     <h1 class="text-3xl font-bold mb-6 text-gray-800">Sales Dashboard</h1>
 
     <!-- --------- Sale Header --------- -->
     <div class="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
-
       <!-- Sale Date -->
       <div>
         <label class="block font-semibold mb-1">Sale Date</label>
         <input
           type="date"
           v-model="saleHeader.sale_date"
-          class="border p-2 rounded w-full focus:ring-2 focus:ring-indigo-400 transition"
+          class="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-400 transition"
         />
       </div>
 
-      <!-- Customer Typeahead -->
-      <div class="relative">
-        <label class="block font-semibold mb-1">Customer</label>
-        <input
-          type="text"
-          v-model="saleHeader.customer_name"
-          @input="debouncedSearchCustomer"
-          placeholder="Search or type customer"
-          class="border p-2 rounded w-full focus:ring-2 focus:ring-indigo-400 transition"
-        />
-        <ul
-          v-if="customerResults.length"
-          class="absolute z-50 bg-white border rounded shadow-lg w-full max-h-40 overflow-auto mt-1"
-        >
-          <li
-            v-for="cust in customerResults"
-            :key="cust.id"
-            @click="selectCustomer(cust)"
-            class="p-2 hover:bg-indigo-100 cursor-pointer transition"
-          >
-            {{ cust.name }}
-          </li>
-        </ul>
-      </div>
+      <!-- Customer Combobox -->
+      <v-autocomplete
+        v-model="selectedCustomerObj"
+        :items="customers"
+        item-title="name"
+        item-value="id"
+        label="Customer"
+        variant="outlined"
+        density="comfortable"
+        clearable
+        :loading="loadingCustomers"
+        @update:model-value="selectCustomerById"
+      ></v-autocomplete>
 
       <!-- Amount Paid -->
       <div>
@@ -47,7 +35,7 @@
           type="number"
           v-model.number="saleHeader.amount_paid"
           min="0"
-          class="border p-2 rounded w-full focus:ring-2 focus:ring-indigo-400 transition"
+          class="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-400 transition"
         />
       </div>
 
@@ -58,38 +46,27 @@
           type="text"
           v-model="saleHeader.memo"
           placeholder="Optional"
-          class="border p-2 rounded w-full focus:ring-2 focus:ring-indigo-400 transition"
+          class="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-400 transition"
         />
       </div>
 
-      <!-- Payment Account Typeahead -->
-      <div class="relative">
-        <label class="block font-semibold mb-1">Payment Account</label>
-        <input
-          type="text"
-          v-model="saleHeader.payment_account_name"
-          @input="debouncedSearchPaymentAccount"
-          placeholder="Search or type account"
-          class="border p-2 rounded w-full focus:ring-2 focus:ring-indigo-400 transition"
-        />
-        <ul
-          v-if="paymentResults.length"
-          class="absolute z-50 bg-white border rounded shadow-lg w-full max-h-40 overflow-auto mt-1"
-        >
-          <li
-            v-for="acc in paymentResults"
-            :key="acc.id"
-            @click="selectPaymentAccount(acc)"
-            class="p-2 hover:bg-indigo-100 cursor-pointer transition"
-          >
-            {{ acc.name }}
-          </li>
-        </ul>
-      </div>
+      <!-- Payment Account Combobox -->
+      <v-autocomplete
+        v-model="selectedPaymentObj"
+        :items="paymentAccounts"
+        item-title="name"
+        item-value="id"
+        label="Payment Account"
+        variant="outlined"
+        density="comfortable"
+        clearable
+        :loading="loadingAccounts"
+        @update:model-value="selectPaymentAccountById"
+      ></v-autocomplete>
     </div>
 
     <!-- --------- Sale Items Table --------- -->
-    <table class="min-w-full border mb-4 rounded overflow-visible shadow-sm">
+    <table class="w-full border rounded-lg overflow-hidden relative shadow-sm">
       <thead class="bg-gray-100">
         <tr>
           <th class="p-2 border">Product</th>
@@ -102,291 +79,255 @@
         </tr>
       </thead>
       <tbody>
-        <tr
-          v-for="(item, idx) in saleItems"
-          :key="idx"
-          class="hover:bg-gray-50 transition"
-        >
-          <td class="p-2 border relative">
-            <input
-              type="text"
-              v-model="item.product_name"
-              @input="debouncedSearchProduct(item)"
-              placeholder="Search product..."
-              class="border p-1 rounded w-full focus:ring-2 focus:ring-indigo-400 transition"
-            />
-            <ul
-              v-if="item.searchResults.length"
-              class="absolute z-50 bg-white border rounded shadow-lg w-full max-h-32 overflow-auto mt-1"
-            >
-              <li
-                v-for="product in item.searchResults"
-                :key="product.id"
-                @click="selectProduct(item, product)"
-                class="p-1 hover:bg-indigo-100 cursor-pointer transition"
-              >
-                {{ product.name }} (Stock: {{ product.quantity }})
-              </li>
-            </ul>
+        <tr v-for="(item, idx) in saleItems" :key="idx" class="hover:bg-gray-50 transition">
+          <td class="p-2 border w-64">
+            <v-autocomplete
+              v-model="item.selectedProductObj"
+              :items="item.searchResults"
+              item-title="name"
+              item-value="id"
+              label="Product"
+              variant="outlined"
+              density="comfortable"
+              clearable
+              hide-details
+              :loading="item.loading"
+              @update:search="val => debouncedSearchProduct(val, idx)"
+              @update:model-value="id => selectProduct(id, idx)"
+            ></v-autocomplete>
           </td>
-          <td class="p-2 border">{{ item.stock_qty || 0 }}</td>
-          <td class="p-2 border">{{ item.unit || '' }}</td>
+          <td class="p-2 border text-center">{{ item.stock_qty }}</td>
+          <td class="p-2 border text-center">{{ item.unit }}</td>
           <td class="p-2 border">
             <input
               type="number"
               v-model.number="item.unit_price"
-              min="0"
-              class="border p-1 rounded w-full focus:ring-2 focus:ring-indigo-400 transition"
-              :disabled="!item.product_id"
               @input="calculateTotal(item)"
+              class="w-full text-right border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-400 transition"
             />
           </td>
           <td class="p-2 border">
             <input
               type="number"
               v-model.number="item.quantity"
-              min="0"
-              class="border p-1 rounded w-full focus:ring-2 focus:ring-indigo-400 transition"
-              :disabled="!item.product_id"
               @input="validateQuantity(item)"
+              class="w-full text-right border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-400 transition"
             />
-            <p v-if="item.error" class="text-red-500 text-xs mt-1">{{ item.error }}</p>
           </td>
-          <td class="p-2 border">{{ item.total_price.toFixed(2) }}</td>
-          <td class="p-2 border">
+          <td class="p-2 border text-right font-semibold">{{ item.total_price.toFixed(2) }}</td>
+          <td class="p-2 border text-center">
             <button
               @click="removeRow(idx)"
-              class="bg-red-500 hover:bg-red-600 text-white px-2 py-1 rounded transition transform hover:scale-105"
+              class="px-3 py-1 bg-red-500 text-white rounded-lg hover:bg-red-600 transition transform hover:scale-105"
             >
-              Remove
+              ✕
             </button>
           </td>
         </tr>
       </tbody>
     </table>
 
-    <button
-      @click="addRow"
-      class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded transition transform hover:scale-105 mb-4"
-    >
-      Add Item
-    </button>
-
-    <!-- --------- Grand Total --------- -->
-    <div class="text-right text-xl font-bold mb-6">
-      Grand Total: {{ grandTotal.toFixed(2) }}
+    <!-- Add Item & Grand Total -->
+    <div class="flex justify-between items-center mt-6">
+      <button
+        @click="addRow"
+        class="px-4 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition transform hover:scale-105"
+      >
+        + Add Item
+      </button>
+      <div class="text-xl font-bold">
+        Grand Total: <span class="text-indigo-600">{{ grandTotal.toFixed(2) }}</span>
+      </div>
     </div>
 
-    <!-- --------- Save Button --------- -->
-    <button
-      @click="saveSale"
-      class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded w-full md:w-auto transition transform hover:scale-105"
-    >
-      Save Sale
-    </button>
-
-    <!-- --------- Report Modal --------- -->
-    <ReportModal
-      v-if="showReportModal"
-      :report="invoiceData"
-      v-model:show="showReportModal"
-    />
+    <!-- Save -->
+    <div class="mt-6 text-right">
+      <button
+        @click="saveSale"
+        class="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition transform hover:scale-105"
+      >
+        Save Sale
+      </button>
+    </div>
   </div>
 </template>
 
-<script>
-import api from '../api';
-import debounce from 'lodash.debounce';
-import ReportModal from './ReportModal.vue';
-import { watch } from 'vue';
+<script setup>
+import { ref, computed, onMounted } from 'vue'
+import debounce from 'lodash.debounce'
+import api from '../api'
 
-export default {
-  data() {
-    return {
-      saleHeader: {
-        sale_date: new Date().toISOString().substr(0, 10),
-        amount_paid: 0,
-        memo: '',
-        payment_account: '',
-        payment_account_name: '',
-        customer_id: '',
-        customer_name: ''
-      },
-      paymentAccounts: [],
-      customers: [],
-      customerResults: [],
-      paymentResults: [],
-      saleItems: [],
-      showReportModal: false,
-      invoiceData: null,
-    };
-  },
-  computed: {
-    grandTotal() {
-      return this.saleItems.reduce((sum, item) => sum + item.total_price, 0);
-    }
-  },
-  methods: {
-    async fetchPaymentAccounts() {
-      const res = await api.get('/accounts/?type=asset');
-      this.paymentAccounts = res.data;
-    },
-    async fetchCustomers() {
-      const res = await api.get('/customer/');
-      this.customers = res.data;
-    },
-    searchCustomer() {
-      const q = this.saleHeader.customer_name.toLowerCase();
-      this.customerResults = q ? this.customers.filter(c => c.name.toLowerCase().includes(q)) : [];
-    },
-    selectCustomer(cust) {
-      this.saleHeader.customer_id = cust.id;
-      this.saleHeader.customer_name = cust.name;
-      this.customerResults = [];
-    },
-    searchPaymentAccount() {
-      const q = this.saleHeader.payment_account_name.toLowerCase();
-      this.paymentResults = q ? this.paymentAccounts.filter(a => a.name.toLowerCase().includes(q)) : [];
-    },
-    selectPaymentAccount(acc) {
-      this.saleHeader.payment_account = acc.id;
-      this.saleHeader.payment_account_name = acc.name;
-      this.paymentResults = [];
-    },
-    async searchProduct(item) {
-      if (!item.product_name || item.product_name.length < 2) {
-        item.searchResults = [];
-        return;
-      }
-      try {
-        const res = await api.get(`/inventory/products/search?name=${item.product_name}`);
-        item.searchResults = res.data.map(p => ({
-          id: p.id,
-          name: p.name,
-          quantity: p.quantity || 0,
-          unit: p.unit || '',
-          price: p.price || 0
-        }));
-      } catch (err) {
-        console.error(err);
-        item.searchResults = [];
-      }
-    },
-    selectProduct(item, product) {
-      item.product_id = product.id;
-      item.product_name = product.name;
-      item.stock_qty = product.quantity;
-      item.unit = product.unit;
-      item.unit_price = product.price;
-      item.quantity = 0;
-      item.total_price = 0;
-      item.searchResults = [];
-      item.error = '';
-    },
-    addRow() {
-      this.saleItems.push({
-        product_id: null,
-        product_name: '',
-        stock_qty: 0,
-        unit: '',
-        unit_price: 0,
-        quantity: 0,
-        total_price: 0,
-        searchResults: [],
-        error: ''
-      });
-    },
-    removeRow(idx) {
-      this.saleItems.splice(idx, 1);
-    },
-    validateQuantity(item) {
-      if (item.quantity > item.stock_qty) item.quantity = item.stock_qty;
-      if (item.quantity < 0) item.quantity = 0;
-      this.calculateTotal(item);
-    },
-    calculateTotal(item) {
-      item.total_price = (item.quantity || 0) * (item.unit_price || 0);
-    },
-    async saveSale() {
-      if (!this.saleHeader.sale_date) return alert("Please select a sale date.");
-      if (!this.saleHeader.customer_id) return alert("Please select a customer.");
-      if (!this.saleItems.length) return alert("Please add at least one sale item.");
-      if (this.amount_paid > 0 && !this.saleHeader.payment_account) {
-        return alert("Please select a payment account for the amount paid.");
-      }
-      // if()
+// ---------- Header ----------
+const saleHeader = ref({
+  sale_date: new Date().toISOString().slice(0, 10),
+  amount_paid: 0,
+  memo: '',
+  payment_account: '',
+  customer_id: ''
+})
 
-      for (const [idx, item] of this.saleItems.entries()) {
-        if (!item.product_id) return alert(`Item ${idx + 1}: Please select a product.`);
-        if (!item.quantity || item.quantity <= 0) return alert(`Item ${idx + 1}: Quantity must be greater than 0.`);
-      }
+// ---------- State ----------
+const saleItems = ref([])
+const customers = ref([])
+const paymentAccounts = ref([])
+const selectedCustomerObj = ref(null)
+const selectedPaymentObj = ref(null)
+const loadingCustomers = ref(false)
+const loadingAccounts = ref(false)
 
-      const payload = {
-        sale_date: this.saleHeader.sale_date,
-        customer_id: this.saleHeader.customer_id,
-        payment_account_id: this.saleHeader.payment_account,
-        amount_paid: this.saleHeader.amount_paid || 0,
-        memo: this.saleHeader.memo || '',
-        items: this.saleItems.map(item => ({
-          product_id: item.product_id,
-          unit_price: item.unit_price,
-          quantity: item.quantity,
-          total_price: item.total_price
-        }))
-      };
+// ---------- Computed ----------
+const grandTotal = computed(() =>
+  saleItems.value.reduce((sum, item) => sum + (item.total_price || 0), 0)
+)
 
-      try {
-        const res = await api.post('/sales/', payload);
-        alert("Sale saved successfully!");
-        // Fetch invoice data
-        const invoiceRes = await api.get(`/payments/details?sale_id=${res.data.sale_id}&type=invoice`);
-        this.invoiceData = invoiceRes.data;
-        this.showReportModal = true;
-      } catch (err) {
-        console.error("Error saving sale:", err);
-        let message = "Failed to save sale. Check console.";
-        if (err.response && err.response.data && err.response.data.error) {
-          message = err.response.data.error;
-        } else if (err.message) {
-          message = err.message;
-        }
-        alert(message);
-      }
-    },
-    resetForm() {
-      this.saleHeader = {
-        sale_date: new Date().toISOString().substr(0, 10),
-        amount_paid: 0,
-        memo: '',
-        payment_account: '',
-        payment_account_name: '',
-        customer_id: '',
-        customer_name: ''
-      };
-      this.saleItems = [];
-      this.customerResults = [];
-      this.paymentResults = [];
-      this.addRow();
-    },
-    debouncedSearchProduct: debounce(function(item) { this.searchProduct(item); }, 300),
-    debouncedSearchCustomer: debounce(function() { this.searchCustomer(); }, 300),
-    debouncedSearchPaymentAccount: debounce(function() { this.searchPaymentAccount(); }, 300)
-  },
-  mounted() {
-    this.fetchPaymentAccounts();
-    this.fetchCustomers();
-    this.addRow();
-  },
-  watch: {
-    showReportModal(val) {
-      if (!val) this.resetForm();
-    }
-  },
-  components: { ReportModal }
-};
+// ---------- Customer Logic ----------
+const fetchCustomers = async () => {
+  loadingCustomers.value = true
+  try {
+    const res = await api.get('/customer/')
+    customers.value = res.data
+  } finally {
+    loadingCustomers.value = false
+  }
+}
+const selectCustomerById = (id) => {
+  const cust = customers.value.find(c => c.id === id)
+  if (cust) {
+    selectedCustomerObj.value = cust
+    saleHeader.value.customer_id = cust.id
+  } else {
+    selectedCustomerObj.value = null
+    saleHeader.value.customer_id = ''
+  }
+}
+
+// ---------- Payment Account Logic ----------
+const fetchAccounts = async () => {
+  loadingAccounts.value = true
+  try {
+    const res = await api.get('/accounts/?type=asset')
+    paymentAccounts.value = res.data
+  } finally {
+    loadingAccounts.value = false
+  }
+}
+const selectPaymentAccountById = (id) => {
+  const acc = paymentAccounts.value.find(a => a.id === id)
+  if (acc) {
+    selectedPaymentObj.value = acc
+    saleHeader.value.payment_account = acc.id
+  } else {
+    selectedPaymentObj.value = null
+    saleHeader.value.payment_account = ''
+  }
+}
+
+// ---------- Product Logic ----------
+const debouncedSearchProduct = debounce(async (query, idx) => {
+  const item = saleItems.value[idx]
+  if (!query?.trim()) {
+    item.searchResults = []
+    return
+  }
+  item.loading = true
+  try {
+    const res = await api.get('/inventory/products/search', { params: { name: query } })
+    item.searchResults = res.data.map(p => ({
+      id: p.id,
+      name: p.name,
+      stock_qty: p.quantity,
+      unit: p.category_name || '',
+      price: p.price
+    }))
+  } finally {
+    item.loading = false
+  }
+}, 400)
+
+const selectProduct = (id, idx) => {
+  const item = saleItems.value[idx]
+  const prod = item.searchResults.find(p => p.id === id)
+  if (!prod) return
+  item.selectedProductObj = prod
+  item.product_id = prod.id
+  item.product_name = prod.name
+  item.stock_qty = prod.stock_qty
+  item.unit = prod.unit
+  item.unit_price = prod.price
+  item.quantity = 0
+  item.total_price = 0
+  item.searchResults = []
+}
+
+// ---------- Rows ----------
+const addRow = () => {
+  saleItems.value.push({
+    product_id: null,
+    product_name: '',
+    stock_qty: 0,
+    unit: '',
+    unit_price: 0,
+    quantity: 0,
+    total_price: 0,
+    selectedProductObj: null,
+    searchResults: [],
+    loading: false
+  })
+}
+const removeRow = (idx) => saleItems.value.splice(idx, 1)
+const calculateTotal = (item) => item.total_price = (item.quantity || 0) * (item.unit_price || 0)
+const validateQuantity = (item) => {
+  if (item.quantity < 0) item.quantity = 0
+  if (item.quantity > item.stock_qty) item.quantity = item.stock_qty
+  calculateTotal(item)
+}
+
+// ---------- Save ----------
+const saveSale = async () => {
+  if (!saleHeader.value.customer_id) return alert("Select a customer")
+  if (!saleItems.value.length) return alert("Add at least one item")
+  for (const [i, item] of saleItems.value.entries()) {
+    if (!item.product_id) return alert(`Item ${i+1}: Select a product`)
+    if (!item.quantity || item.quantity <= 0) return alert(`Item ${i+1}: Quantity > 0 required`)
+  }
+
+  const payload = {
+    sale_date: saleHeader.value.sale_date,
+    customer_id: saleHeader.value.customer_id,
+    payment_account_id: saleHeader.value.payment_account,
+    amount_paid: saleHeader.value.amount_paid,
+    memo: saleHeader.value.memo,
+    items: saleItems.value.map(i => ({
+      product_id: i.product_id,
+      unit_price: i.unit_price,
+      quantity: i.quantity,
+      total_price: i.total_price
+    }))
+  }
+
+  try {
+    const res = await api.post('/sales/', payload)
+    alert(`Sale saved! ID: ${res.data.sale_id}`)
+    // reset
+    saleHeader.value = { sale_date: new Date().toISOString().slice(0,10), amount_paid:0, memo:'', payment_account:'', customer_id:'' }
+    selectedCustomerObj.value = null
+    selectedPaymentObj.value = null
+    saleItems.value = []
+    addRow()
+  } catch (err) {
+    alert(err.response?.data?.error || err.message)
+  }
+}
+
+// ---------- Lifecycle ----------
+onMounted(() => {
+  fetchCustomers()
+  fetchAccounts()
+  addRow()
+})
 </script>
 
-<style scoped>
+<!-- <style scoped>
 input[type="text"],
 input[type="number"],
 input[type="date"],
@@ -420,4 +361,4 @@ ul { width: 100%; border-radius: 0.5rem; max-height: 10rem; overflow-y: auto; z-
 ul li { padding: 0.5rem 0.75rem; cursor: pointer; transition: all 0.2s ease; }
 ul li:hover { background-color: #e0e7ff; }
 .text-red-500 { color: #dc2626; font-size: 0.75rem; }
-</style>
+</style> -->

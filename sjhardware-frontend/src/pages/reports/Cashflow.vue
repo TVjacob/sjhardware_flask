@@ -2,13 +2,10 @@
   <div class="p-6">
     <h1 class="text-2xl font-bold mb-6">{{ reportTitle }}</h1>
 
-    <!-- Buttons -->
     <div class="mb-4 flex justify-between items-center">
-      <div>
-        <button @click="goBack" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded mr-2">
-          Back
-        </button>
-      </div>
+      <button @click="goBack" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded mr-2">
+        Back
+      </button>
       <div>
         <button @click="exportExcel" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded mr-2">
           Export Excel
@@ -19,26 +16,44 @@
       </div>
     </div>
 
-    <!-- Cashflow Summary Table -->
     <table class="min-w-full border border-gray-200 rounded shadow">
       <thead class="bg-gray-100">
         <tr>
-          <th class="p-2 border-b text-left">Description</th>
-          <th class="p-2 border-b text-left">Amount (UGX)</th>
+          <th class="p-2 border-b">Description</th>
+          <th class="p-2 border-b text-right">Opening Balance (UGX)</th>
+          <th class="p-2 border-b text-right">Period Movement (UGX)</th>
+          <th class="p-2 border-b text-right">Closing Balance (UGX)</th>
         </tr>
       </thead>
       <tbody>
-        <tr>
-          <td class="p-2 border-b">Cash Inflow</td>
-          <td class="p-2 border-b">{{ reportData.cash_inflow.toFixed(2) }}</td>
+        <!-- Inflows -->
+        <tr class="font-bold text-green-700">
+          <td class="p-2 border-b">Cash Inflows</td>
+          <td class="p-2 border-b text-right">{{ totals.inflows.total_opening.toLocaleString() }}</td>
+          <td class="p-2 border-b text-right">{{ totals.inflows.total_movement.toLocaleString() }}</td>
+          <td class="p-2 border-b text-right">{{ totals.inflows.total_closing.toLocaleString() }}</td>
         </tr>
-        <tr>
-          <td class="p-2 border-b">Cash Outflow</td>
-          <td class="p-2 border-b">{{ reportData.cash_outflow.toFixed(2) }}</td>
+        <template v-for="acc in inflows" :key="acc.account_id">
+          <CashFlowRow :account="acc" :level="1" color="green" />
+        </template>
+
+        <!-- Outflows -->
+        <tr class="font-bold text-red-600">
+          <td class="p-2 border-b">Cash Outflows</td>
+          <td class="p-2 border-b text-right">{{ totals.outflows.total_opening.toLocaleString() }}</td>
+          <td class="p-2 border-b text-right">{{ totals.outflows.total_movement.toLocaleString() }}</td>
+          <td class="p-2 border-b text-right">{{ totals.outflows.total_closing.toLocaleString() }}</td>
         </tr>
-        <tr>
-          <td class="p-2 border-b font-bold">Net Cash Flow</td>
-          <td class="p-2 border-b font-bold">{{ reportData.net_cash_flow.toFixed(2) }}</td>
+        <template v-for="acc in outflows" :key="acc.account_id">
+          <CashFlowRow :account="acc" :level="1" color="red" />
+        </template>
+
+        <!-- Net Cash Flow -->
+        <tr class="font-bold bg-gray-200">
+          <td class="p-2 border-b">Net Cash Flow</td>
+          <td class="p-2 border-b text-right">{{ totals.net.opening_balance.toLocaleString() }}</td>
+          <td class="p-2 border-b text-right">{{ totals.net.movement.toLocaleString() }}</td>
+          <td class="p-2 border-b text-right">{{ totals.net.closing_balance.toLocaleString() }}</td>
         </tr>
       </tbody>
     </table>
@@ -47,69 +62,80 @@
 
 <script setup>
 import { ref, onMounted } from 'vue';
-import api from '@/api'; // Axios instance
+import api from '@/api';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
+import CashFlowRow from './CashFlowRow.vue'; // <-- separate SFC for recursive row
 
-const reportData = ref({
-  cash_inflow: 0,
-  cash_outflow: 0,
-  net_cash_flow: 0
+const reportTitle = ref('Cash Flow Statement');
+const inflows = ref([]);
+const outflows = ref([]);
+const totals = ref({
+  inflows: { total_opening: 0, total_movement: 0, total_closing: 0 },
+  outflows: { total_opening: 0, total_movement: 0, total_closing: 0 },
+  net: { opening_balance: 0, movement: 0, closing_balance: 0 },
 });
-const reportTitle = ref('Cashflows Summary');
-const endpoint = ref('/reports/cash-flow');
+const endpoint = '/reports/cash-flow';
 
-// Fetch summary data
 const fetchReport = async () => {
   try {
-    const res = await api.get(endpoint.value);
-    reportData.value = res.data;
+    const res = await api.get(endpoint);
+    inflows.value = res.data.inflows;
+    outflows.value = res.data.outflows;
+    totals.value = res.data.totals;
   } catch (err) {
-    console.error(`Error fetching ${reportTitle.value}:`, err);
+    console.error('Error fetching Cash Flow:', err);
   }
 };
 
-// Back button
+onMounted(fetchReport);
+
 const goBack = () => window.history.back();
 
-// Export to Excel
-const exportExcel = () => {
-  const ws = XLSX.utils.json_to_sheet([
-    { Description: 'Cash Inflow', Amount: reportData.value.cash_inflow },
-    { Description: 'Cash Outflow', Amount: reportData.value.cash_outflow },
-    { Description: 'Net Cash Flow', Amount: reportData.value.net_cash_flow }
-  ]);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Cashflows');
-  XLSX.writeFile(wb, 'Cashflows_Summary.xlsx');
+// --- Exports ---
+const flattenAccounts = (accounts) => {
+  let rows = [];
+  accounts.forEach(acc => {
+    rows.push({
+      Description: acc.account_name,
+      'Opening Balance': acc.opening_balance,
+      'Period Movement': acc.movement,
+      'Closing Balance': acc.closing_balance
+    });
+    if (acc.children && acc.children.length) {
+      rows = rows.concat(flattenAccounts(acc.children));
+    }
+  });
+  return rows;
 };
 
-// Export to PDF
+const exportExcel = () => {
+  const data = [
+    ...flattenAccounts(inflows.value),
+    ...flattenAccounts(outflows.value),
+    { Description: 'Net Cash Flow', 'Opening Balance': totals.value.net.opening_balance, 'Period Movement': totals.value.net.movement, 'Closing Balance': totals.value.net.closing_balance }
+  ];
+  const ws = XLSX.utils.json_to_sheet(data);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Cash Flow');
+  XLSX.writeFile(wb, 'CashFlow_Statement.xlsx');
+};
+
 const exportPDF = () => {
   const doc = new jsPDF();
   doc.text(reportTitle.value, 14, 20);
   const rows = [
-    ['Cash Inflow', reportData.value.cash_inflow.toFixed(2)],
-    ['Cash Outflow', reportData.value.cash_outflow.toFixed(2)],
-    ['Net Cash Flow', reportData.value.net_cash_flow.toFixed(2)]
+    ...flattenAccounts(inflows.value).map(r => [r.Description, r['Opening Balance'], r['Period Movement'], r['Closing Balance']]),
+    ...flattenAccounts(outflows.value).map(r => [r.Description, r['Opening Balance'], r['Period Movement'], r['Closing Balance']]),
+    ['Net Cash Flow', totals.value.net.opening_balance, totals.value.net.movement, totals.value.net.closing_balance]
   ];
-  doc.autoTable({
-    startY: 30,
-    head: [['Description', 'Amount (UGX)']],
-    body: rows
-  });
-  doc.save('Cashflows_Summary.pdf');
+  doc.autoTable({ startY: 30, head: [['Description', 'Opening', 'Movement', 'Closing']], body: rows });
+  doc.save('CashFlow_Statement.pdf');
 };
-
-onMounted(fetchReport);
 </script>
 
 <style scoped>
-table {
-  border-collapse: collapse;
-}
-th, td {
-  text-align: left;
-}
+table { border-collapse: collapse; }
+th, td { text-align: left; }
 </style>

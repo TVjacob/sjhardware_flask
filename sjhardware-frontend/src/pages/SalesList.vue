@@ -95,7 +95,7 @@
       v-if="showPaymentModal"
       :sale="selectedSale"
       :accounts="accounts"
-      v-model:show="showPaymentModal"
+      v-model:modelValue="showPaymentModal"
       @saved="fetchSales"
     />
 
@@ -137,7 +137,7 @@ const fetchSales = async () => {
 // Fetch accounts
 const fetchAccounts = async () => {
   try {
-    const res = await api.get('/accounts/');
+    const res = await api.get('/accounts/cash-bank');
     accounts.value = res.data;
   } catch (err) {
     console.error(err);
@@ -158,8 +158,11 @@ const filteredSales = computed(() => {
 const formatDate = dateStr => new Date(dateStr).toLocaleDateString();
 const formatCurrency = val => Number(val).toLocaleString(undefined, { style: 'currency', currency: 'UGX' });
 
+
+
 // Modals
 const openPaymentModal = sale => {
+  console.log("sale ",sale.balance)
   selectedSale.value = sale;
   showPaymentModal.value = true;
 };

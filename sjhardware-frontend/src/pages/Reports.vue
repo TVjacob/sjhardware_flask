@@ -28,7 +28,7 @@
       <ReportCard title="Cash Flow Statement" link="/reports/cash-flow" />
       <ReportCard title="Debtors Report" link="/reports/debtors-report" />
       <ReportCard title="Creditors Report" link="/reports/creditors-report" />
-      <ReportCard title="Expenses Report" link="/reports/expenses-report" />
+      <ReportCard title="Balance Sheet" link="/reports/balance-sheet" />
     </div>
   </div>
 </template>

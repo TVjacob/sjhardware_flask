@@ -1,7 +1,9 @@
 <template>
   <div class="p-6">
     <h1 class="text-2xl font-bold mb-6">{{ reportTitle }}</h1>
-
+    <button @click="$router.push('/reports')" class="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600">
+        Back to Reports
+      </button>
     <!-- Export Buttons -->
     <div class="mb-4 space-x-2">
       <button @click="exportExcel" class="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600">Export Excel</button>
