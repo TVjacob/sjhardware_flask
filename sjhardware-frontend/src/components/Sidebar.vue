@@ -19,7 +19,7 @@
     <!-- Menu -->
     <nav class="flex-1 mt-4 overflow-y-auto">
       <ul>
-        <li v-for="item in menuItems" :key="item.name">
+        <li v-for="item in filteredMenuItems" :key="item.name">
           <router-link
             :to="item.path"
             class="flex items-center px-6 py-3 hover:bg-gray-700 rounded gap-3 transition-colors"
@@ -46,7 +46,7 @@
 </template>
 
 <script>
-import { ref, onMounted, onBeforeUnmount } from 'vue';
+import { ref, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import api from '../api';
 
@@ -71,22 +71,32 @@ export default {
       router.push('/login');
     };
 
+    // --- Load user permissions ---
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    const permissions = user.permissions || [];
+    console.log('User Permissions:', permissions);
+
+    // --- Full menu with associated permissions ---
     const menuItems = [
-      { name: 'Dashboard', path: '/', icon: '🏠' },
-      { name: 'Accounts', path: '/accounts', icon: '🏠' },
-      { name: 'Products', path: '/products', icon: '📦' },
-      { name: 'Customers', path: '/customers', icon: '👥' },
-      { name: 'Sales', path: '/sales', icon: '💰' },
-      { name: 'Sales List', path: '/saleslist', icon: '📃' },
-      { name: 'Supplier', path: '/supplier', icon: '🚚' },
-      { name: 'Purchases', path: '/purchases', icon: '🛒' },
-      { name: 'Purchase List', path: '/purchaselist', icon: '📋' },
-      { name: 'Expenses', path: '/expenses', icon: '💸' },
-      { name: 'Reports', path: '/reports', icon: '📊' },
-      { name: 'Users', path: '/users', icon: '👤' },
+      { name: 'Dashboard', path: '/', icon: '🏠', permission: null },
+      { name: 'Accounts', path: '/accounts', icon: '🏦', permission: 'view_ledger' },
+      { name: 'Products', path: '/products', icon: '📦', permission: 'view_inventory' },
+      { name: 'Customers', path: '/customers', icon: '👥', permission: 'view_customers' },
+      { name: 'Sales', path: '/sales', icon: '💰', permission: 'create_invoice' },
+      { name: 'Sales List', path: '/saleslist', icon: '📃', permission: 'view_invoices' },
+      { name: 'Supplier', path: '/supplier', icon: '🚚', permission: 'view_suppliers' },
+      { name: 'Purchases', path: '/purchases', icon: '🛒', permission: 'create_purchase' },
+      { name: 'Purchase List', path: '/purchaselist', icon: '📋', permission: 'view_purchases' },
+      { name: 'Expenses', path: '/expenses', icon: '💸', permission: 'view_expense' },
+      { name: 'Reports', path: '/reports', icon: '📊', permission: 'view_reports' },
+      { name: 'Users', path: '/users', icon: '👤', permission: 'view_users' },
     ];
 
-    return { menuItems, isActive, logout };
+    // --- Filter menu based on user permissions ---
+    const filteredMenuItems = menuItems.filter(item => !item.permission || permissions.includes(item.permission));
+
+    return { filteredMenuItems, isActive, logout };
   },
 };
 </script>
+

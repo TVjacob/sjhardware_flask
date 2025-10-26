@@ -64,6 +64,129 @@ account_updates = [
     {"id": 50, "account_subtype": ExpenseSubtypeEnum.UTILITIES, "parent_id": None}, # Miscellaneous Expense
 ]
 
+permissions = [
+    # --- User & Access Management ---
+    ("view_users", "View list of users"),
+    ("create_user", "Add new users"),
+    ("edit_user", "Edit user details"),
+    ("delete_user", "Remove a user"),
+    ("view_roles", "View user roles"),
+    ("manage_roles", "Create or edit roles"),
+    ("view_permissions", "View permission list"),
+    ("assign_permissions", "Assign or remove user permissions"),
+
+    # --- Sales / Invoicing ---
+    ("view_invoices", "View all sales invoices"),
+    ("create_invoice", "Create a new invoice"),
+    ("edit_invoice", "Edit existing invoices"),
+    ("delete_invoice", "Delete an invoice"),
+    ("approve_invoice", "Approve or finalize invoices"),
+    ("export_invoices", "Export invoice data to Excel/PDF"),
+
+    # --- Purchases / Suppliers ---
+    ("view_purchases", "View purchase orders"),
+    ("create_purchase", "Create a new purchase order"),
+    ("edit_purchase", "Edit purchase records"),
+    ("delete_purchase", "Delete a purchase order"),
+    ("approve_purchase", "Approve supplier purchase requests"),
+    ("export_purchases", "Export purchase reports"),
+
+    # --- Inventory / Stock ---
+    ("view_inventory", "View current inventory levels"),
+    ("add_inventory_item", "Add new products/items"),
+    ("edit_inventory_item", "Edit item details"),
+    ("delete_inventory_item", "Remove items from stock"),
+    ("adjust_stock", "Perform stock adjustments"),
+    ("export_inventory", "Export inventory data"),
+
+    # --- Accounting / Ledger ---
+    ("view_ledger", "View general ledger entries"),
+    ("create_journal_entry", "Add journal entries"),
+    ("edit_journal_entry", "Edit existing entries"),
+    ("delete_journal_entry", "Remove journal entries"),
+    ("approve_journal_entry", "Approve accounting entries"),
+
+    # --- Financial Reports ---
+    ("view_balance_sheet", "View balance sheet report"),
+    ("view_income_statement", "View income statement (P&L)"),
+    ("view_cash_flow", "View cash flow statement"),
+    ("view_trial_balance", "View trial balance"),
+    ("view_debtors_aging", "View debtors aging report"),
+    ("view_creditors_aging", "View creditors aging report"),
+    ("export_reports", "Export reports to Excel/PDF"),
+
+    # --- Customers / Debtors ---
+    ("view_customers", "View customer list"),
+    ("create_customer", "Add a new customer"),
+    ("edit_customer", "Edit customer details"),
+    ("delete_customer", "Remove customer"),
+    ("view_customer_invoices", "View customer invoices"),
+    ("send_customer_statement", "Send statements to customers"),
+
+    # --- Suppliers / Creditors ---
+    ("view_suppliers", "View supplier list"),
+    ("create_supplier", "Add a new supplier"),
+    ("edit_supplier", "Edit supplier details"),
+    ("delete_supplier", "Remove supplier"),
+    ("view_supplier_invoices", "View supplier invoices"),
+    ("send_supplier_statement", "Send statements to suppliers"),
+
+    # --- Settings / Configuration ---
+    ("view_settings", "View system settings"),
+    ("update_settings", "Modify system configuration"),
+    ("manage_account_types", "Manage chart of accounts and account types"),
+    ("backup_database", "Perform database backup"),
+    ("restore_database", "Restore data from backup"),
+
+    # --- Payroll (Optional) ---
+    ("view_payroll", "View payroll records"),
+    ("create_payroll", "Create new payroll run"),
+    ("edit_payroll", "Edit payroll details"),
+    ("delete_payroll", "Delete payroll record"),
+    ("approve_payroll", "Approve payroll run"),
+]
+
+
+def seed_permissions():
+    """Insert permissions if they don’t already exist and assign all to admin."""
+    with app.app_context():
+        added = 0
+
+        # 1️⃣ Get or create admin user
+        admin_user = User.query.filter_by(username='admin').first()
+
+        # 2️⃣ Seed permissions
+        all_permissions = []
+        for name, desc in permissions:
+            existing = db.session.execute(
+                db.select(Permission).filter_by(name=name)
+            ).scalar_one_or_none()
+            if not existing:
+                perm = Permission(
+                    name=name,
+                    description=desc,
+                    status=1,
+                    created_at=datetime.utcnow(),
+                    updated_at=datetime.utcnow()
+                )
+                db.session.add(perm)
+                all_permissions.append(perm)
+                added += 1
+            else:
+                all_permissions.append(existing)
+
+        db.session.commit()
+        print(f"✅ {added} new permissions added successfully.")
+
+        # 3️⃣ Assign all permissions to admin if admin exists
+        if admin_user:
+            for perm in all_permissions:
+                admin_user.add_permission(perm)
+            db.session.commit()
+            print("✅ All permissions assigned to admin user.")
+
+
+
 
 def update_all_accounts():
     try:
@@ -255,6 +378,7 @@ if __name__ == "__main__":
         from app.utils.gl_utils import generate_transaction_number, post_to_ledger
         update_all_accounts()
         normalize_account_type_enum_uppercase()
+        seed_permissions()
         seed_chart_of_accounts()
         create_default_admin()
         fix_missing_purchase_order_transactions()

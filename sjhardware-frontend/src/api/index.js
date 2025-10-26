@@ -1,4 +1,3 @@
-// src/api.js
 import axios from 'axios';
 import router from '../router';
 
@@ -7,36 +6,29 @@ const api = axios.create({
   headers: { 'Content-Type': 'application/json' },
 });
 
-// Attach token automatically
+// Automatically attach token
 api.interceptors.request.use(config => {
   const token = localStorage.getItem('token');
-
   if (token) {
-    // Check client-side token expiration
     const payload = JSON.parse(atob(token.split('.')[1]));
     if (payload.exp * 1000 < Date.now()) {
-      // Token expired → logout
       localStorage.removeItem('token');
       localStorage.removeItem('user');
-      delete api.defaults.headers.common['Authorization'];
       router.push('/login');
       throw new axios.Cancel('Token expired');
     }
-
     config.headers.Authorization = `Bearer ${token}`;
   }
-
   return config;
 });
 
-// Handle 401 from backend
+// Handle 401 Unauthorized
 api.interceptors.response.use(
   res => res,
   err => {
     if (err.response && err.response.status === 401) {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
-      delete api.defaults.headers.common['Authorization'];
       router.push('/login');
       alert('Session expired. Please login again.');
     }

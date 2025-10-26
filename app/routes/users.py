@@ -1,45 +1,66 @@
-from flask import Blueprint, request, jsonify,current_app
+# app/routes/users.py
+from flask import Blueprint, request, jsonify, current_app
+from werkzeug.security import check_password_hash
+from datetime import datetime, timedelta
+import jwt
 from app import db
 from app.models import User, Permission
-from werkzeug.security import generate_password_hash, check_password_hash
-# from datetime import datetime
-import jwt
-from datetime import datetime, timedelta
-from app.utils.auth import token_required
+from app.utils.auth import token_required, permission_required, role_required
 
-# from flask import current_app
+users_bp = Blueprint("users", __name__, url_prefix="/users")
 
-users_bp = Blueprint('users', __name__, url_prefix='/users')
+# ---------------- Authentication ---------------- #
 
-# ---------------- User Routes ---------------- #
+# @users_bp.route("/login", methods=["POST"])
+# def login():
+#     data = request.json or {}
+#     username = data.get("username")
+#     password = data.get("password")
 
+#     if not username or not password:
+#         return jsonify({"error": "Username and password required"}), 400
 
-# from flask import session  # optional if using session login
-# from werkzeug.security import check_password_hash
+#     user = User.query.filter_by(username=username).first()
+#     if not user or not check_password_hash(user.password_hash, password):
+#         return jsonify({"error": "Invalid credentials"}), 401
 
-# Login route
-@users_bp.route('/login', methods=['POST'])
+#     payload = {
+#         "user_id": user.id,
+#         "username": user.username,
+#         "role": user.role,
+#         "exp": datetime.utcnow() + timedelta(hours=4)
+#     }
+#     token = jwt.encode(payload, current_app.config["SECRET_KEY"], algorithm="HS256")
+
+#     return jsonify({
+#         "message": "Login successful",
+#         "token": token,
+#         "user": {
+#             "id": user.id,
+#             "username": user.username,
+#             "role": user.role,
+#             "permissions": [p.name for p in user.permissions]
+#         }
+#     })
+@users_bp.route("/login", methods=["POST"])
 def login():
     data = request.json
-    username = data.get('username')
-    password = data.get('password')
+    username = data.get("username")
+    password = data.get("password")
 
     if not username or not password:
         return jsonify({"error": "Username and password required"}), 400
 
     user = User.query.filter_by(username=username).first()
     if not user or not check_password_hash(user.password_hash, password):
-        return jsonify({"error": "Invalid username or password"}), 401
+        return jsonify({"error": "Invalid credentials"}), 401
 
-    # Create JWT payload
     payload = {
         "user_id": user.id,
         "username": user.username,
         "role": user.role,
-        "exp": datetime.utcnow() + timedelta(hours=4)  # token expires in 2 hours
+        "exp": datetime.utcnow() + timedelta(hours=4)  # token expires in 4 hours
     }
-
-    # Encode JWT using a secret key
     token = jwt.encode(payload, current_app.config["SECRET_KEY"], algorithm="HS256")
 
     return jsonify({
@@ -50,17 +71,18 @@ def login():
             "username": user.username,
             "role": user.role
         }
-    }), 200
+    })
 
+# ---------------- User Management ---------------- #
 
-
-# Create a new user
-@users_bp.route('/', methods=['POST'])
+@users_bp.route("/", methods=["POST"])
+@token_required
+@permission_required("create_user")
 def create_user():
     data = request.json
-    username = data.get('username')
-    password = data.get('password')
-    role = data.get('role', 'Staff')
+    username = data.get("username")
+    password = data.get("password")
+    role = data.get("role", "Staff")
 
     if not username or not password:
         return jsonify({"error": "Username and password required"}), 400
@@ -71,7 +93,7 @@ def create_user():
     user = User(
         username=username,
         role=role,
-        status=1,  # Active
+        status=1,
         created_at=datetime.utcnow(),
         updated_at=datetime.utcnow()
     )
@@ -81,117 +103,100 @@ def create_user():
 
     return jsonify({"message": "User created", "user_id": user.id}), 201
 
-# Get all users
-@users_bp.route('/', methods=['GET'])
+
+@users_bp.route("/", methods=["GET"])
+@token_required
+@permission_required("view_users")
 def get_users():
     users = User.query.all()
-    data = []
-    for u in users:
-        data.append({
+    return jsonify([
+        {
             "id": u.id,
             "username": u.username,
             "role": u.role,
             "status": u.status,
+            "permissions": [p.name for p in u.permissions],
             "created_at": u.created_at,
-            "updated_at": u.updated_at,
-            "permissions": [p.name for p in u.permissions]
-        })
-    return jsonify(data)
+            "updated_at": u.updated_at
+        } for u in users
+    ])
 
-# Get a user by ID
-@users_bp.route('/<int:user_id>', methods=['GET'])
-def get_user(user_id):
-    user = User.query.get_or_404(user_id)
-    return jsonify({
-        "id": user.id,
-        "username": user.username,
-        "role": user.role,
-        "status": user.status,
-        "created_at": user.created_at,
-        "updated_at": user.updated_at,
-        "permissions": [p.name for p in user.permissions]
-    })
 
-# Update a user
-@users_bp.route('/<int:user_id>', methods=['PUT'])
+@users_bp.route("/<int:user_id>", methods=["PUT"])
+@token_required
+@permission_required("edit_user")
 def update_user(user_id):
     user = User.query.get_or_404(user_id)
     data = request.json
 
-    user.username = data.get('username', user.username)
-    user.role = data.get('role', user.role)
-    if 'password' in data and data['password']:
-        user.set_password(data['password'])
+    user.username = data.get("username", user.username)
+    user.role = data.get("role", user.role)
+    if "password" in data and data["password"]:
+        user.set_password(data["password"])
     user.updated_at = datetime.utcnow()
+
     db.session.commit()
+    return jsonify({"message": "User updated"})
 
-    return jsonify({"message": "User updated", "user_id": user.id})
 
-# Delete a user
-@users_bp.route('/<int:user_id>', methods=['DELETE'])
+@users_bp.route("/<int:user_id>", methods=["DELETE"])
+@token_required
+@permission_required("delete_user")
 def delete_user(user_id):
     user = User.query.get_or_404(user_id)
     db.session.delete(user)
     db.session.commit()
-    return jsonify({"message": "User deleted", "user_id": user.id})
-
-# ---------------- Permission Routes ---------------- #
-
-# Create a permission
-@users_bp.route('/permissions', methods=['POST'])
-def create_permission():
-    data = request.json
-    name = data.get('name')
-    description = data.get('description', '')
-
-    if Permission.query.filter_by(name=name).first():
-        return jsonify({"error": "Permission already exists"}), 400
-
-    perm = Permission(
-        name=name,
-        description=description,
-        status=1,
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow()
-    )
-    db.session.add(perm)
-    db.session.commit()
-
-    return jsonify({"message": "Permission created", "permission_id": perm.id}), 201
+    return jsonify({"message": "User deleted"})
 
 
-@users_bp.route('/permissions', methods=['GET'])
+# ---------------- Permissions ---------------- #
+
+@users_bp.route("/permissions", methods=["GET"])
+@token_required
+@permission_required("view_permissions")
 def get_permissions():
     permissions = Permission.query.all()
-
     return jsonify([
         {
-            "id": perm.id,
-            "name": perm.name,
-            "description": perm.description,
-            "status": perm.status,
-            "created_at": perm.created_at,
-            "updated_at": perm.updated_at
-        } for perm in permissions
+            "id": p.id,
+            "name": p.name,
+            "description": p.description,
+            "status": p.status
+        } for p in permissions
     ])
 
 
-# Assign permission to user
-@users_bp.route('/<int:user_id>/permissions/<int:perm_id>', methods=['POST'])
+@users_bp.route("/<int:user_id>/permissions/<int:perm_id>", methods=["POST"])
+@token_required
+@permission_required("assign_permissions")
 def assign_permission(user_id, perm_id):
     user = User.query.get_or_404(user_id)
     perm = Permission.query.get_or_404(perm_id)
     user.add_permission(perm)
-    user.updated_at = datetime.utcnow()
     db.session.commit()
-    return jsonify({"message": f"Permission '{perm.name}' assigned to user '{user.username}'"})
+    return jsonify({"message": f"Permission '{perm.name}' assigned to {user.username}"})
 
-# Remove permission from user
-@users_bp.route('/<int:user_id>/permissions/<int:perm_id>', methods=['DELETE'])
+
+@users_bp.route("/<int:user_id>/permissions/<int:perm_id>", methods=["DELETE"])
+@token_required
+@permission_required("assign_permissions")
 def remove_permission(user_id, perm_id):
     user = User.query.get_or_404(user_id)
     perm = Permission.query.get_or_404(perm_id)
     user.remove_permission(perm)
-    user.updated_at = datetime.utcnow()
     db.session.commit()
-    return jsonify({"message": f"Permission '{perm.name}' removed from user '{user.username}'"})
+    return jsonify({"message": f"Permission '{perm.name}' removed from {user.username}"})
+
+
+# ---------------- WhoAmI (Verify Token) ---------------- #
+
+@users_bp.route("/me", methods=["GET"])
+@token_required
+def get_current_user():
+    user = request.user
+    return jsonify({
+        "id": user.id,
+        "username": user.username,
+        "role": user.role,
+        "permissions": [p.name for p in user.permissions]
+    })
