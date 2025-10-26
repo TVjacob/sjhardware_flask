@@ -74,7 +74,8 @@ export default {
     // --- Load user permissions ---
     const user = JSON.parse(localStorage.getItem('user') || '{}');
     const permissions = user.permissions || [];
-    console.log('User Permissions:', permissions);
+    console.log('User Permissions: ', permissions);
+    console.log('User Role: ', user);
 
     // --- Full menu with associated permissions ---
     const menuItems = [
