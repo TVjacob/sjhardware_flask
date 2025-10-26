@@ -144,6 +144,14 @@ permissions = [
     ("edit_payroll", "Edit payroll details"),
     ("delete_payroll", "Delete payroll record"),
     ("approve_payroll", "Approve payroll run"),
+    # --- Miscellaneous ---
+    ("view_reports", " View reports screen"),
+    ("view_accounts", "View chart of accounts"),
+    ("view_stock", "View stock levels"),
+    ("view_sales","view sales dashboard"),
+
+
+
 ]
 
 
