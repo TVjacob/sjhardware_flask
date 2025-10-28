@@ -256,7 +256,9 @@ const onProductSelect = (id, idx) => {
     item.product_name = product.name
     item.stock_qty = product.quantity
     item.category_name = product.category_name
-    item.cost_price = product.price || 0
+    item.cost_price =  0
+    // cost_price: 0,
+
     item.quantity = 0
     item.total_price = 0
   } else {
