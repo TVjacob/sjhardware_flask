@@ -152,6 +152,7 @@ permissions = [
     ("view_accounts", "View chart of accounts"),
     ("view_stock", "View stock levels"),
     ("view_sales","view sales dashboard"),
+    ("view_expenses","view expenses dashboard"),
 
 
 
