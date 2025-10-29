@@ -432,7 +432,9 @@ class Account(db.Model, StatusMixin):
 # ------------------ General Ledger ------------------
 class GeneralLedger(db.Model, StatusMixin):
     id = db.Column(db.Integer, primary_key=True)
-    account_id = db.Column(db.Integer, db.ForeignKey('account.id'), nullable=False)
+    account_id = db.Column(db.Integer, nullable=False)
+    # account_id = db.Column(db.Integer, db.ForeignKey('account.id'), nullable=False)
+
     transaction_type = db.Column(db.String(10), nullable=False)
     amount = db.Column(db.Float, nullable=False)
     description = db.Column(db.String(200))
