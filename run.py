@@ -4,8 +4,11 @@ from werkzeug.security import generate_password_hash
 from sqlalchemy.exc import SQLAlchemyError, ProgrammingError, OperationalError, IntegrityError
 from sqlalchemy import text
 
-from app.models import AssetSubtypeEnum, EquitySubtypeEnum, ExpenseSubtypeEnum, LiabilitySubtypeEnum, RevenueSubtypeEnum
+from app.models import AssetSubtypeEnum, EquitySubtypeEnum, ExpenseSubtypeEnum, InventoryTransaction, LiabilitySubtypeEnum, Product, PurchaseOrderItem, RevenueSubtypeEnum, Sale, SaleItem
 from datetime import datetime, timezone
+from sqlalchemy import text
+
+from app.utils.gl_utils import generate_transaction_number_partone
 
 app = create_app()
 
@@ -380,10 +383,249 @@ def seed_chart_of_accounts():
         print(f"❌ Failed to seed accounts: {e}")
 
 
+def update_inventory_from_purchases():
+    """Add product quantities from received purchase orders."""
+    try:
+        purchase_items = PurchaseOrderItem.query.filter_by(status=1).all()
+        count = 0
+
+        for item in purchase_items:
+            product = Product.query.get(item.product_id)
+            if not product:
+                continue
+
+            # Increase stock
+            product.quantity = (product.quantity or 0) + item.quantity
+            count += 1
+
+            # Log inventory transaction
+            # transaction_number = TransactionNumber(prefix="PO", last_number=item.purchase_order_id)
+            # db.session.add(transaction_number)
+            # db.session.flush()
+            # transaction_number = PurchaseOrder.query.get(item.purchase_order_id).first().transaction_no
+            purchase_order = PurchaseOrder.query.get(item.purchase_order_id)
+            transaction_number = purchase_order.transaction_no if purchase_order else None
+
+
+
+            transaction = InventoryTransaction(
+                transaction_no=transaction_number,
+                purchase_order_id=item.purchase_order_id,
+                product_id=item.product_id,
+                quantity=item.quantity,
+                unit_price=item.unit_price,
+                total_price=item.total_price,
+                transaction_type="Purchase",
+                created_at=datetime.utcnow()
+            )
+            db.session.add(transaction)
+
+        db.session.commit()
+        print(f"✅ Updated {count} product quantities from purchase orders.")
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"❌ Failed to update purchase orders: {e}")
+
+
+def update_inventory_from_sales():
+    """Subtract sold product quantities from stock."""
+    try:
+        sale_items = SaleItem.query.filter_by(status=1).all()
+        count = 0
+
+        for item in sale_items:
+            product = Product.query.get(item.product_id)
+            if not product:
+                continue
+
+            # Decrease stock
+            product.quantity = max((product.quantity or 0) - item.quantity, 0)
+            count += 1
+
+            # Log inventory transaction
+            purchase_order = PurchaseOrder.query.get(item.purchase_order_id)
+            transaction_number = purchase_order.transaction_no if purchase_order else None
+
+            transaction = InventoryTransaction(
+                transaction_no=transaction_number,
+                sale_id=item.sale_id,
+                product_id=item.product_id,
+                quantity=item.quantity,
+                unit_price=item.unit_price,
+                total_price=item.total_price,
+                transaction_type="Sale",
+                created_at=datetime.utcnow()
+            )
+            db.session.add(transaction)
+
+        db.session.commit()
+        print(f"✅ Updated {count} product quantities from sales.")
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"❌ Failed to update sales: {e}")
+
+
+def rebuild_product_quantities():
+    """
+    Recalculate and rebuild product quantities:
+    SUM(all purchase quantities where status != 9)
+    MINUS SUM(all sale quantities where status != 9)
+    and update product.quantity in one pass.
+    """
+    try:
+        print("🔄 Rebuilding product quantities...")
+
+        sql = text("""
+        WITH purchase_totals AS (
+            SELECT product_id, COALESCE(SUM(quantity), 0) AS total_purchased
+            FROM purchase_order_item
+            WHERE status != 9
+            GROUP BY product_id
+        ),
+        sale_totals AS (
+            SELECT product_id, COALESCE(SUM(quantity), 0) AS total_sold
+            FROM sale_item
+            WHERE status != 9
+            GROUP BY product_id
+        )
+        UPDATE product p
+        SET quantity = 
+            COALESCE(pur.total_purchased, 0) - COALESCE(sal.total_sold, 0)
+        FROM purchase_totals pur
+        FULL JOIN sale_totals sal ON pur.product_id = sal.product_id
+        WHERE p.id = COALESCE(pur.product_id, sal.product_id);
+        """)
+
+        db.session.execute(sql)
+        db.session.commit()
+        print("✅ Product quantities successfully rebuilt based on purchases and sales.")
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"❌ Failed to rebuild product quantities: {e}")
+
+def sync_missing_inventory_transactions():
+    """
+    Finds purchase and sale items that are not yet in InventoryTransaction
+    and inserts them with correct transaction numbers.
+    Fully SQLAlchemy 2.0 compliant.
+    """
+    try:
+        print("🔍 Scanning for missing inventory transactions...")
+
+        # --- 1️⃣ Missing Purchases ---
+        purchase_items = (
+            db.session.query(
+                PurchaseOrderItem.id,
+                PurchaseOrderItem.purchase_order_id,
+                PurchaseOrderItem.product_id,
+                PurchaseOrderItem.quantity,
+                PurchaseOrderItem.unit_price,
+                PurchaseOrderItem.total_price,
+                PurchaseOrder.purchase_date
+            )
+            .join(PurchaseOrder, PurchaseOrder.id == PurchaseOrderItem.purchase_order_id)
+            .outerjoin(
+                InventoryTransaction,
+                (InventoryTransaction.purchase_order_id == PurchaseOrderItem.purchase_order_id) &
+                (InventoryTransaction.product_id == PurchaseOrderItem.product_id) &
+                (InventoryTransaction.transaction_type == 'Purchase')
+            )
+            .filter(InventoryTransaction.id.is_(None))
+            .filter(PurchaseOrderItem.status != 9)
+            .all()
+        )
+
+        for row in purchase_items:
+            purchase_order = PurchaseOrder.query.get(row.purchase_order_id)
+            transaction_no = purchase_order.transaction_no if purchase_order else None
+
+            if transaction_no is None:
+                transaction_no, _ = generate_transaction_number_partone(
+                    prefix="PURCHASE",
+                    transaction_date=row.purchase_date
+                )
+
+            db.session.add(InventoryTransaction(
+                transaction_no=transaction_no,
+                purchase_order_id=row.purchase_order_id,
+                product_id=row.product_id,
+                quantity=row.quantity,
+                unit_price=row.unit_price,
+                total_price=row.total_price,
+                transaction_type="Purchase",
+                created_at=row.purchase_date
+            ))
+
+        # --- 2️⃣ Missing Sales ---
+        sale_items = (
+            db.session.query(
+                SaleItem.id,
+                SaleItem.sale_id,
+                SaleItem.product_id,
+                SaleItem.quantity,
+                SaleItem.unit_price,
+                SaleItem.total_price,
+                Sale.sale_date
+            )
+            .join(Sale, Sale.id == SaleItem.sale_id)
+            .outerjoin(
+                InventoryTransaction,
+                (InventoryTransaction.sale_id == SaleItem.sale_id) &
+                (InventoryTransaction.product_id == SaleItem.product_id) &
+                (InventoryTransaction.transaction_type == 'Sale')
+            )
+            .filter(InventoryTransaction.id.is_(None))
+            .filter(SaleItem.status != 9)
+            .all()
+        )
+
+        for row in sale_items:
+            sale = Sale.query.get(row.sale_id)
+            transaction_no = sale.transaction_no if sale else None
+
+            if transaction_no is None:
+                transaction_no, _ = generate_transaction_number_partone(
+                    prefix="SALE",
+                    transaction_date=row.sale_date
+                )
+
+            db.session.add(InventoryTransaction(
+                transaction_no=transaction_no,
+                sale_id=row.sale_id,
+                product_id=row.product_id,
+                quantity=row.quantity,
+                unit_price=row.unit_price,
+                total_price=row.total_price,
+                transaction_type="Sale",
+                created_at=row.sale_date
+            ))
+
+        db.session.commit()
+        print(f"✅ Synced {len(purchase_items)} purchases and {len(sale_items)} sales to InventoryTransaction.")
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"❌ Failed to sync missing inventory transactions: {e}")
+
+
+def repair_inventory():
+    """Rebuild quantities and sync missing transactions."""
+    print("🧰 Running inventory repair...")
+    rebuild_product_quantities()
+    sync_missing_inventory_transactions()
+    print("✅ Inventory repair completed.")
+       
+
+
+
 if __name__ == "__main__":
     with app.app_context():
         from app.models import Account, PurchaseOrder, User, Permission
         from app.utils.gl_utils import generate_transaction_number, post_to_ledger
+        repair_inventory()
         update_all_accounts()
         normalize_account_type_enum_uppercase()
         seed_permissions()
