@@ -12,7 +12,7 @@ from flask import Blueprint, request, jsonify
 # 2 = Partially Paid
 # 3 = Fully Paid
 from app import db
-from app.models import Account, Category, Product, Supplier, PurchaseOrder, PurchaseOrderItem, SupplierPayment
+from app.models import Account, Category, InventoryTransaction, Product, Supplier, PurchaseOrder, PurchaseOrderItem, SupplierPayment
 from app.utils.auth import token_required
 from app.utils.gl_utils import post_to_ledger, generate_transaction_number
 from datetime import datetime
@@ -218,7 +218,8 @@ def add_purchase_order():
     db.session.flush()  # to get PO id before committing
 
     total_amount = 0
-
+    txn_id, txn_str = generate_transaction_number('CREDIT-PAY',transaction_date=po.purchase_date)
+    po.transaction_no=txn_id
     # Add purchase order items
     for item_data in data['items']:
         item = PurchaseOrderItem(
@@ -237,6 +238,18 @@ def add_purchase_order():
         if product:
             product.quantity = (product.quantity or 0) + item.quantity
             db.session.add(product)
+                # ✅ Add InventoryTransaction entry
+        inv_txn = InventoryTransaction(
+            transaction_no=txn_id,
+            purchase_order_id=po.id,
+            product_id=item.product_id,
+            quantity=item.quantity,
+            unit_price=item.unit_price,
+            total_price=item.total_price,
+            transaction_type='Purchase',
+            status=1
+        )
+        db.session.add(inv_txn)
 
     # Update totals
     po.total_amount = total_amount
@@ -254,8 +267,7 @@ def add_purchase_order():
             "amount": total_amount
         }
     ]
-    txn_id, txn_str = generate_transaction_number('CREDIT-PAY',transaction_date=po.purchase_date)
-    po.transaction_no=txn_id
+
     post_to_ledger(
         entries,
         transaction_no_id=txn_id,
@@ -549,11 +561,148 @@ def pay_purchase_order(id):
 #     }), 200
 
 
+# @token_required
+# @suppliers_bp.route('/orders/<int:id>/edit', methods=['PUT'])
+# def edit_purchase_order(id):
+#     """
+#     Edit an existing purchase order, handle overpayments, and mark as fully paid if necessary.
+#     """
+#     po = PurchaseOrder.query.get_or_404(id)
+#     data = request.get_json()
+
+#     old_total = po.total_amount
+#     old_paid = po.total_paid
+
+#     # Update header
+#     po.supplier_id = data.get('supplier_id', po.supplier_id)
+#     po.invoice_number = data.get('invoice_number', po.invoice_number)
+#     po.memo = data.get('memo', po.memo)
+#     po.purchase_date = data.get('purchase_date', po.purchase_date)
+
+#     # ---- Update or Add Items ----
+#     if 'items' in data:
+#         existing_item_ids = [item.id for item in po.items]
+#         new_item_ids = [i.get('id') for i in data['items'] if i.get('id')]
+
+#         # Delete removed items
+#         for item in po.items:
+#             if item.id not in new_item_ids:
+#                 db.session.delete(item)
+
+#         # Update/add items
+#         for item_data in data['items']:
+#             if 'id' in item_data and item_data['id']:
+#                 item = PurchaseOrderItem.query.get(item_data['id'])
+#                 item.quantity = item_data.get('quantity', item.quantity)
+#                 item.unit_price = item_data.get('unit_price', item.unit_price)
+#                 item.calculate_total()
+#             else:
+#                 new_item = PurchaseOrderItem(
+#                     purchase_order_id=po.id,
+#                     product_id=item_data['product_id'],
+#                     quantity=item_data['quantity'],
+#                     unit_price=item_data['unit_price'],
+#                     status=1
+#                 )
+#                 new_item.calculate_total()
+#                 db.session.add(new_item)
+
+#     # ---- Recalculate Totals ----
+#     po.update_totals()
+#     new_total = po.total_amount
+
+#     # Get all existing payments
+#     payments = SupplierPayment.query.filter_by(purchase_order_id=po.id, status=1).all()
+#     total_paid = sum(p.amount for p in payments)
+
+#     # --- Handle overpayment scenario ---
+#     if total_paid >= new_total:
+#         # Total paid exceeds or equals new total -> mark as fully paid
+#         po.total_paid = new_total
+#         po.total_balance = 0
+#         po.status = 3  # fully paid
+
+#         # Calculate excess payment
+#         excess_payment = total_paid - new_total
+#         if excess_payment > 0:
+#             # Record refund in ledger
+#             txn_id, txn_str = generate_transaction_number('PO-REFUND', transaction_date=po.purchase_date)
+#             refund_entries = [
+#                 {"account_id": 2100, "transaction_type": "Debit", "amount": excess_payment},  # AP Debit
+#                 {"account_id": 1000, "transaction_type": "Credit", "amount": excess_payment}  # Cash/Bank/Refund
+#             ]
+#             post_to_ledger(refund_entries, transaction_no_id=txn_id,
+#                            description=f"Refund excess payment for PO #{po.id}",
+#                            transaction_date=po.purchase_date)
+
+#             # Optional: add refund record
+#             refund_payment = SupplierPayment(
+#                 purchase_order_id=po.id,
+#                 amount=-excess_payment,
+#                 payment_account_id=payments[0].payment_account_id if payments else None,
+#                 payment_type='Refund',
+#                 payment_date=po.purchase_date,
+#                 status=1
+#             )
+#             db.session.add(refund_payment)
+#     else:
+#         # Regular case: recalc balance
+#         po.total_paid = total_paid
+#         po.total_balance = new_total - total_paid
+#         po.status = 2 if po.total_balance > 0 else 3  # partially paid or fully paid
+
+#     # --- GL Handling for PO edit ---
+#     txn_id, txn_str = generate_transaction_number('PO-EDIT', transaction_date=po.purchase_date)
+#     diff = new_total - old_total
+
+#     if diff != 0:
+#         if diff > 0:
+#             entries = [
+#                 {"account_id": 1200, "transaction_type": "Debit", "amount": diff},
+#                 {"account_id": 2100, "transaction_type": "Credit", "amount": diff}
+#             ]
+#             desc = f"Adjustment for increased PO #{po.id} by {diff}"
+#         else:
+#             entries = [
+#                 {"account_id": 2100, "transaction_type": "Debit", "amount": abs(diff)},
+#                 {"account_id": 1200, "transaction_type": "Credit", "amount": abs(diff)}
+#             ]
+#             desc = f"Adjustment for reduced PO #{po.id} by {abs(diff)}"
+#         post_to_ledger(entries, transaction_no_id=txn_id,
+#                        description=desc, transaction_date=po.purchase_date)
+
+#     # Revalidate remaining payments
+#     for payment in payments:
+#         if payment.amount <= po.total_paid:  # skip refunded portion
+#             pay_entries = [
+#                 {"account_id": 2100, "transaction_type": "Debit", "amount": payment.amount},
+#                 {"account_id": Account.query.get(payment.payment_account_id).code,
+#                  "transaction_type": "Credit", "amount": payment.amount}
+#             ]
+#             post_to_ledger(pay_entries, transaction_no_id=txn_id,
+#                            description=f"Revalidate payment #{payment.id} for PO #{po.id}",
+#                            transaction_date=payment.payment_date)
+
+#     db.session.commit()
+
+#     return jsonify({
+#         "message": f"Purchase Order #{po.id} updated successfully",
+#         "old_total": old_total,
+#         "new_total": new_total,
+#         "total_paid": po.total_paid,
+#         "balance": po.total_balance,
+#         "status": po.status,
+#         "refund": total_paid - new_total if total_paid > new_total else 0,
+#         "gl_transaction_id": txn_id
+#     }), 200
+
+
 @token_required
 @suppliers_bp.route('/orders/<int:id>/edit', methods=['PUT'])
 def edit_purchase_order(id):
     """
-    Edit an existing purchase order, handle overpayments, and mark as fully paid if necessary.
+    Edit an existing purchase order, update stock & inventory transaction log,
+    handle overpayments, and mark as fully paid if necessary.
     """
     po = PurchaseOrder.query.get_or_404(id)
     data = request.get_json()
@@ -561,13 +710,16 @@ def edit_purchase_order(id):
     old_total = po.total_amount
     old_paid = po.total_paid
 
-    # Update header
+    # Update PO header
     po.supplier_id = data.get('supplier_id', po.supplier_id)
     po.invoice_number = data.get('invoice_number', po.invoice_number)
     po.memo = data.get('memo', po.memo)
     po.purchase_date = data.get('purchase_date', po.purchase_date)
 
-    # ---- Update or Add Items ----
+    # Prepare a new transaction number for this edit
+    txn_id, txn_str = generate_transaction_number('PO-EDIT', transaction_date=po.purchase_date)
+
+    # ---- Handle items ----
     if 'items' in data:
         existing_item_ids = [item.id for item in po.items]
         new_item_ids = [i.get('id') for i in data['items'] if i.get('id')]
@@ -575,16 +727,63 @@ def edit_purchase_order(id):
         # Delete removed items
         for item in po.items:
             if item.id not in new_item_ids:
+                # Reduce product stock accordingly
+                product = Product.query.get(item.product_id)
+                if product:
+                    product.quantity = max((product.quantity or 0) - item.quantity, 0)
+
+                # Remove old inventory transaction entries for that item
+                InventoryTransaction.query.filter_by(
+                    purchase_order_id=po.id,
+                    product_id=item.product_id
+                ).delete()
+
                 db.session.delete(item)
 
-        # Update/add items
+        # Update or add items
         for item_data in data['items']:
             if 'id' in item_data and item_data['id']:
+                # Existing item
                 item = PurchaseOrderItem.query.get(item_data['id'])
+                old_qty = item.quantity
                 item.quantity = item_data.get('quantity', item.quantity)
                 item.unit_price = item_data.get('unit_price', item.unit_price)
                 item.calculate_total()
+
+                # Adjust stock based on quantity change
+                qty_diff = item.quantity - old_qty
+                if qty_diff != 0:
+                    product = Product.query.get(item.product_id)
+                    if product:
+                        product.quantity = (product.quantity or 0) + qty_diff
+
+                # Update inventory transaction
+                inv_txn = InventoryTransaction.query.filter_by(
+                    purchase_order_id=po.id,
+                    product_id=item.product_id
+                ).first()
+
+                if inv_txn:
+                    inv_txn.quantity = item.quantity
+                    inv_txn.unit_price = item.unit_price
+                    inv_txn.total_price = item.total_price
+                    inv_txn.transaction_no = txn_id
+                    inv_txn.transaction_type = 'Purchase'
+                else:
+                    new_inv = InventoryTransaction(
+                        transaction_no=txn_id,
+                        purchase_order_id=po.id,
+                        product_id=item.product_id,
+                        quantity=item.quantity,
+                        unit_price=item.unit_price,
+                        total_price=item.total_price,
+                        transaction_type='Purchase',
+                        status=1
+                    )
+                    db.session.add(new_inv)
+
             else:
+                # New item
                 new_item = PurchaseOrderItem(
                     purchase_order_id=po.id,
                     product_id=item_data['product_id'],
@@ -595,7 +794,25 @@ def edit_purchase_order(id):
                 new_item.calculate_total()
                 db.session.add(new_item)
 
-    # ---- Recalculate Totals ----
+                # Increase product stock
+                product = Product.query.get(new_item.product_id)
+                if product:
+                    product.quantity = (product.quantity or 0) + new_item.quantity
+
+                # Add inventory transaction
+                inv_txn = InventoryTransaction(
+                    transaction_no=txn_id,
+                    purchase_order_id=po.id,
+                    product_id=new_item.product_id,
+                    quantity=new_item.quantity,
+                    unit_price=new_item.unit_price,
+                    total_price=new_item.total_price,
+                    transaction_type='Purchase',
+                    status=1
+                )
+                db.session.add(inv_txn)
+
+    # ---- Recalculate totals ----
     po.update_totals()
     new_total = po.total_amount
 
@@ -603,27 +820,24 @@ def edit_purchase_order(id):
     payments = SupplierPayment.query.filter_by(purchase_order_id=po.id, status=1).all()
     total_paid = sum(p.amount for p in payments)
 
-    # --- Handle overpayment scenario ---
+    # --- Handle overpayment ---
     if total_paid >= new_total:
-        # Total paid exceeds or equals new total -> mark as fully paid
         po.total_paid = new_total
         po.total_balance = 0
         po.status = 3  # fully paid
 
-        # Calculate excess payment
         excess_payment = total_paid - new_total
         if excess_payment > 0:
-            # Record refund in ledger
-            txn_id, txn_str = generate_transaction_number('PO-REFUND', transaction_date=po.purchase_date)
+            # Refund ledger entry
+            refund_txn_id, refund_txn_str = generate_transaction_number('PO-REFUND', transaction_date=po.purchase_date)
             refund_entries = [
-                {"account_id": 2100, "transaction_type": "Debit", "amount": excess_payment},  # AP Debit
-                {"account_id": 1000, "transaction_type": "Credit", "amount": excess_payment}  # Cash/Bank/Refund
+                {"account_id": 2100, "transaction_type": "Debit", "amount": excess_payment},  # AP
+                {"account_id": 1000, "transaction_type": "Credit", "amount": excess_payment}  # Cash/Bank
             ]
-            post_to_ledger(refund_entries, transaction_no_id=txn_id,
+            post_to_ledger(refund_entries, transaction_no_id=refund_txn_id,
                            description=f"Refund excess payment for PO #{po.id}",
                            transaction_date=po.purchase_date)
 
-            # Optional: add refund record
             refund_payment = SupplierPayment(
                 purchase_order_id=po.id,
                 amount=-excess_payment,
@@ -634,15 +848,12 @@ def edit_purchase_order(id):
             )
             db.session.add(refund_payment)
     else:
-        # Regular case: recalc balance
         po.total_paid = total_paid
         po.total_balance = new_total - total_paid
-        po.status = 2 if po.total_balance > 0 else 3  # partially paid or fully paid
+        po.status = 2 if po.total_balance > 0 else 3
 
-    # --- GL Handling for PO edit ---
-    txn_id, txn_str = generate_transaction_number('PO-EDIT', transaction_date=po.purchase_date)
+    # --- GL Adjustment for total difference ---
     diff = new_total - old_total
-
     if diff != 0:
         if diff > 0:
             entries = [
@@ -656,20 +867,8 @@ def edit_purchase_order(id):
                 {"account_id": 1200, "transaction_type": "Credit", "amount": abs(diff)}
             ]
             desc = f"Adjustment for reduced PO #{po.id} by {abs(diff)}"
-        post_to_ledger(entries, transaction_no_id=txn_id,
-                       description=desc, transaction_date=po.purchase_date)
 
-    # Revalidate remaining payments
-    for payment in payments:
-        if payment.amount <= po.total_paid:  # skip refunded portion
-            pay_entries = [
-                {"account_id": 2100, "transaction_type": "Debit", "amount": payment.amount},
-                {"account_id": Account.query.get(payment.payment_account_id).code,
-                 "transaction_type": "Credit", "amount": payment.amount}
-            ]
-            post_to_ledger(pay_entries, transaction_no_id=txn_id,
-                           description=f"Revalidate payment #{payment.id} for PO #{po.id}",
-                           transaction_date=payment.payment_date)
+        post_to_ledger(entries, transaction_no_id=txn_id, description=desc, transaction_date=po.purchase_date)
 
     db.session.commit()
 

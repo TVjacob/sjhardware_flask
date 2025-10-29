@@ -33,14 +33,55 @@ class Category(db.Model, StatusMixin):
     name = db.Column(db.String(50), unique=True, nullable=False)
     description = db.Column(db.String(200))
 
+# class Product(db.Model, StatusMixin):
+#     id = db.Column(db.Integer, primary_key=True)
+#     name = db.Column(db.String(100), nullable=False)
+#     sku = db.Column(db.String(50), unique=False, nullable=False)
+#     category_id = db.Column(db.Integer, db.ForeignKey('category.id'))
+#     quantity = db.Column(db.Integer, default=0)
+#     price = db.Column(db.Float, default=0)
+#     # created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
 class Product(db.Model, StatusMixin):
+    __tablename__ = 'product'
+
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
     sku = db.Column(db.String(50), unique=False, nullable=False)
     category_id = db.Column(db.Integer, db.ForeignKey('category.id'))
     quantity = db.Column(db.Integer, default=0)
-    price = db.Column(db.Float, default=0)
-    # created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    price = db.Column(db.Float, default=0)  # base/default retail price
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    # ✅ Relationship to ProductUnit
+    units = db.relationship(
+        "ProductUnit",
+        backref="product",
+        lazy=True,
+        cascade="all, delete-orphan"
+    )
+
+
+
+class ProductUnit(db.Model, StatusMixin):
+    __tablename__ = "product_unit"
+
+    id = db.Column(db.Integer, primary_key=True)
+    product_id = db.Column(db.Integer, db.ForeignKey("product.id"), nullable=False)  # ✅ foreign key
+    name = db.Column(db.String(50), nullable=False)          # e.g. "Bottle", "Crate", "Box"
+    quantity = db.Column(db.Integer, default=1)              # Number of items in that unit
+    retail_price = db.Column(db.Float, default=0)
+    whole_price = db.Column(db.Float, default=0)
+    is_returnable = db.Column(db.Boolean, default=False)      # ✅ returnable or not
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def __repr__(self):
+        return f"<ProductUnit {self.name} | Returnable={self.is_returnable}>"
+
+
+
+
 
 # ------------------ Suppliers & Purchase Orders ------------------
 class Supplier(db.Model, StatusMixin):
