@@ -2,7 +2,7 @@ from flask import Blueprint, request, jsonify
 from app import db
 from app.models import Product, Category
 from datetime import datetime
-from sqlalchemy import or_
+from sqlalchemy import or_, text
 from app.utils.auth import token_required
 
 inventory_bp = Blueprint('inventory', __name__, url_prefix='/inventory')
