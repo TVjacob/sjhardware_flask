@@ -7,6 +7,46 @@ from app.utils.auth import token_required
 
 inventory_bp = Blueprint('inventory', __name__, url_prefix='/inventory')
 
+
+def rebuild_product_quantities():
+    """
+    Recalculate and rebuild product quantities:
+    SUM(all purchase quantities where status != 9)
+    MINUS SUM(all sale quantities where status != 9)
+    and update product.quantity in one pass.
+    """
+    try:
+        print("🔄 Rebuilding product quantities...")
+
+        sql = text("""
+        WITH purchase_totals AS (
+            SELECT product_id, COALESCE(SUM(quantity), 0) AS total_purchased
+            FROM purchase_order_item
+            WHERE status != 9
+            GROUP BY product_id
+        ),
+        sale_totals AS (
+            SELECT product_id, COALESCE(SUM(quantity), 0) AS total_sold
+            FROM sale_item
+            WHERE status != 9
+            GROUP BY product_id
+        )
+        UPDATE product p
+        SET quantity = 
+            COALESCE(pur.total_purchased, 0) - COALESCE(sal.total_sold, 0)
+        FROM purchase_totals pur
+        FULL JOIN sale_totals sal ON pur.product_id = sal.product_id
+        WHERE p.id = COALESCE(pur.product_id, sal.product_id);
+        """)
+
+        db.session.execute(sql)
+        db.session.commit()
+        print("✅ Product quantities successfully rebuilt based on purchases and sales.")
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"❌ Failed to rebuild product quantities: {e}")
+
 # --- Add a product (quantity cannot be set manually) ---
 @token_required
 @inventory_bp.route('/products', methods=['POST'])
@@ -30,6 +70,7 @@ def add_product():
 @token_required
 @inventory_bp.route('/products', methods=['GET'])
 def list_products():
+    rebuild_product_quantities()
     products = Product.query.all()
     result = []
     for p in products:
@@ -53,6 +94,7 @@ def list_products():
 @token_required
 @inventory_bp.route('/products/<int:id>', methods=['GET'])
 def get_product(id):
+    rebuild_product_quantities()
     p = Product.query.get_or_404(id)
     category =db.session.query(Category).filter_by(id = p.category_id,status=1).first()
 
@@ -74,6 +116,7 @@ def get_product(id):
 @token_required
 @inventory_bp.route('/products/search', methods=['GET'])
 def search_product():
+    rebuild_product_quantities()
     name = request.args.get('name')
     query = Product.query
 
@@ -195,3 +238,5 @@ def delete_category(id):
     db.session.delete(c)
     db.session.commit()
     return jsonify({"message": "Category deleted", "category_id": id})
+
+
