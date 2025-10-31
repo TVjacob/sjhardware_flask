@@ -291,9 +291,7 @@ def update_all_accounts():
     """
     Update existing accounts or create missing ones based on account_updates mapping.
     Searches by ID, then by name, then by code.
-    Updates ID if name or code matches.
-    Uses provided account code if available; otherwise generates one.
-    Handles duplicate code safely and type mismatches.
+    Avoids modifying primary keys that are referenced elsewhere.
     """
     try:
         for acc in account_updates:
@@ -302,29 +300,24 @@ def update_all_accounts():
             subtype_enum = acc.get("account_subtype")
             parent_id = acc.get("parent_id")
             description = acc.get("description", "")
-            provided_code = str(acc.get("code")) if acc.get("code") else None  # ✅ Cast to string
+            provided_code = str(acc.get("code")) if acc.get("code") else None  # Always string
 
-            # Determine account_type from the Enum class name
             account_type = subtype_enum.__class__.__name__.replace("SubtypeEnum", "").upper()
 
-            # --- 1️⃣ Search by ID ---
+            # --- 1️⃣ Try to find account by ID ---
             account = Account.query.filter_by(id=account_id).first()
 
-            # --- 2️⃣ If not found, search by name ---
+            # --- 2️⃣ Then by name ---
             if not account:
                 account = Account.query.filter_by(name=account_name).first()
-                if account:
-                    account.id = account_id
 
-            # --- 3️⃣ If still not found, search by code ---
+            # --- 3️⃣ Then by code ---
             if not account and provided_code:
                 account = Account.query.filter_by(code=provided_code).first()
-                if account:
-                    account.id = account_id
 
             # --- 4️⃣ Update or Create ---
             if account:
-                # ✅ Update existing account
+                # ✅ Update existing account (don’t change ID)
                 account.name = account_name
                 account.account_subtype = subtype_enum.value
                 account.parent_id = parent_id
@@ -332,12 +325,11 @@ def update_all_accounts():
                 account.updated_at = datetime.now(timezone.utc)
 
                 if provided_code and account.code != provided_code:
-                    # ✅ Check if another account already uses this code
+                    # ✅ Check duplicate code
                     existing = Account.query.filter(
                         Account.code == provided_code,
                         Account.id != account.id
                     ).first()
-
                     if existing:
                         print(f"⚠️ Skipped updating code for {account_name}: code {provided_code} already in use by {existing.name}")
                     else:
@@ -357,9 +349,9 @@ def update_all_accounts():
                     new_code = generate_account_code(account_type, last_code)
 
                 new_acc = Account(
-                    id=account_id,
+                    id=account_id,  # ✅ Safe because it's a new record
                     name=account_name,
-                    code=str(new_code),  # ✅ Always store as string
+                    code=str(new_code),
                     account_type=account_type,
                     account_subtype=subtype_enum.value,
                     parent_id=parent_id,
