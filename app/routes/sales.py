@@ -48,7 +48,6 @@ def create_sale():
             sale_number=txn_str,
             customer_id=data.get('customer_id', 1),
             total_paid=amount_paid,
-            
             status=1,
             sale_date=sale_date
         )
