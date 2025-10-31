@@ -135,12 +135,32 @@ def create_expense_account():
     data = request.json
     name = data.get('name')
     subtype = data.get('account_subtype')
+
     if not name or not subtype:
         return jsonify({"error": "name and account_subtype are required"}), 400
 
-    last_account = Account.query.filter_by(account_type="EXPENSE").order_by(Account.code.desc()).first()
+    # ✅ Check for duplicate account name first
+    existing_account = Account.query.filter_by(name=name, account_type="EXPENSE").first()
+    if existing_account:
+        return jsonify({
+            "error": f"Expense account '{name}' already exists.",
+            "account_id": existing_account.id,
+            "code": existing_account.code
+        }), 409
+
+    # ✅ Get last account code and generate unique code
+    last_account = (
+        Account.query.filter_by(account_type="EXPENSE")
+        .order_by(Account.code.desc())
+        .first()
+    )
     code = generate_account_code("EXPENSE", last_account.code if last_account else None)
 
+    # ✅ Ensure generated code is unique — regenerate until it’s not taken
+    while Account.query.filter_by(code=code).first() is not None:
+        code = generate_account_code("EXPENSE", code)
+
+    # ✅ Create new account
     account = Account(
         name=name,
         code=code,
@@ -150,9 +170,16 @@ def create_expense_account():
         created_at=datetime.now(timezone.utc),
         updated_at=datetime.now(timezone.utc)
     )
+
     db.session.add(account)
     db.session.commit()
-    return jsonify({"message": "Expense account created", "account_id": account.id, "code": account.code}), 201
+
+    return jsonify({
+        "message": "Expense account created successfully",
+        "account_id": account.id,
+        "code": account.code
+    }), 201
+
 
 @accounts_bp.route('/cash-bank', methods=['GET'])
 @token_required

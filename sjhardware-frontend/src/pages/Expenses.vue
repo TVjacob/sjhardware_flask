@@ -297,6 +297,36 @@ export default {
       }
       return true;
     },
+    async closeItemModal(){
+      this.showItemModal = false
+      this.expenseItemForm.name =''
+    },
+    async submitExpenseItem() {
+      if (!this.expenseItemForm.name.trim() || !this.expenseItemForm.account_subtype) {
+        alert("Please fill in both name and account subtype.");
+        return;
+      }
+
+      try {
+        const res = await api.post("/accounts/expense-items", {
+          name: this.expenseItemForm.name.trim(),
+          account_subtype: this.expenseItemForm.account_subtype,
+        });
+
+        alert(`✅ ${res.data.message} (Code: ${res.data.code})`);
+
+        // Refresh expense accounts list so new one appears in datalist
+        await this.fetchExpenseAccounts();
+
+        // Reset and close modal
+        this.expenseItemForm = { name: "", account_subtype: "" };
+        this.showItemModal = false;
+      } catch (err) {
+        console.error("❌ Error adding expense item:", err);
+        alert("Failed to add expense item. " + (err.response?.data?.error || err.message));
+      }
+    },
+
     async submitExpense() {
       const paymentAcc = this.cashBankAccounts.find(a => a.name === this.expenseForm.payment_account_name);
       if (!paymentAcc) {
