@@ -295,8 +295,8 @@ def update_all_accounts():
     try:
         print("🔄 Starting account synchronization...")
 
-        # 1️⃣ Sort accounts so parents come before children
         sorted_accounts = sorted(account_updates, key=lambda a: a.get("parent_id") or 0)
+        retry_accounts = []  # store skipped ones
 
         for acc in sorted_accounts:
             account_id = acc.get("id")
@@ -308,7 +308,7 @@ def update_all_accounts():
 
             account_type = subtype_enum.__class__.__name__.replace("SubtypeEnum", "").upper()
 
-            # --- 🧭 Find existing account ---
+            # --- Find existing ---
             account = (
                 Account.query.filter_by(id=account_id).first()
                 or Account.query.filter_by(name=account_name).first()
@@ -316,7 +316,7 @@ def update_all_accounts():
             )
 
             if account:
-                # --- ✏️ Update existing ---
+                # --- Update ---
                 account.name = account_name
                 account.account_subtype = subtype_enum.value
                 account.parent_id = parent_id
@@ -335,17 +335,15 @@ def update_all_accounts():
                 print(f"✅ Updated account: {account_name}")
 
             else:
-                # --- 🧱 Create new ---
-                # Ensure parent exists first
+                # --- Create new ---
                 if parent_id:
                     parent_exists = Account.query.filter_by(id=parent_id).first()
                     if not parent_exists:
-                        print(f"⏳ Skipping {account_name} for now — parent ID {parent_id} not found.")
-                        # Add to retry list for later
-                        sorted_accounts.append(acc)
+                        print(f"⏳ Skipping {account_name} — parent ID {parent_id} not found.")
+                        retry_accounts.append(acc)
                         continue
 
-                # Generate or use provided code
+                # Generate or use code
                 if provided_code:
                     new_code = provided_code
                 else:
@@ -369,9 +367,31 @@ def update_all_accounts():
                     created_at=datetime.now(timezone.utc),
                     updated_at=datetime.now(timezone.utc)
                 )
-
                 db.session.add(new_acc)
                 print(f"🆕 Created new account: {account_name}")
+
+        # Retry skipped ones (once)
+        if retry_accounts:
+            print(f"🔁 Retrying {len(retry_accounts)} previously skipped accounts...")
+            for acc in retry_accounts:
+                parent_exists = Account.query.filter_by(id=acc.get("parent_id")).first()
+                if not parent_exists:
+                    print(f"❌ Still missing parent for {acc.get('name')} — skipping permanently.")
+                    continue
+                new_acc = Account(
+                    id=acc.get("id"),
+                    name=acc.get("name"),
+                    code=str(acc.get("code")),
+                    account_type=acc.get("account_subtype").__class__.__name__.replace("SubtypeEnum", "").upper(),
+                    account_subtype=acc.get("account_subtype").value,
+                    parent_id=acc.get("parent_id"),
+                    description=acc.get("description", ""),
+                    status=1,
+                    created_at=datetime.now(timezone.utc),
+                    updated_at=datetime.now(timezone.utc)
+                )
+                db.session.add(new_acc)
+                print(f"✅ Created (on retry): {acc.get('name')}")
 
         db.session.commit()
         print("✅ All accounts updated or created successfully.")
