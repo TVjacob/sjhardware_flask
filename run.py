@@ -286,38 +286,37 @@ def seed_permissions():
 #     except Exception as e:
 #         db.session.rollback()
 #         print(f"❌ Failed to update or create accounts: {e}")
-
 def update_all_accounts():
     """
-    Update existing accounts or create missing ones based on account_updates mapping.
-    Searches by ID, then by name, then by code.
-    Avoids modifying primary keys that are referenced elsewhere.
+    Update or create all accounts safely.
+    Ensures parent accounts exist before children.
+    Searches by ID, name, or code. Never updates primary keys.
     """
     try:
-        for acc in account_updates:
+        print("🔄 Starting account synchronization...")
+
+        # 1️⃣ Sort accounts so parents come before children
+        sorted_accounts = sorted(account_updates, key=lambda a: a.get("parent_id") or 0)
+
+        for acc in sorted_accounts:
             account_id = acc.get("id")
             account_name = acc.get("name")
             subtype_enum = acc.get("account_subtype")
             parent_id = acc.get("parent_id")
             description = acc.get("description", "")
-            provided_code = str(acc.get("code")) if acc.get("code") else None  # Always string
+            provided_code = str(acc.get("code")) if acc.get("code") else None
 
             account_type = subtype_enum.__class__.__name__.replace("SubtypeEnum", "").upper()
 
-            # --- 1️⃣ Try to find account by ID ---
-            account = Account.query.filter_by(id=account_id).first()
+            # --- 🧭 Find existing account ---
+            account = (
+                Account.query.filter_by(id=account_id).first()
+                or Account.query.filter_by(name=account_name).first()
+                or (Account.query.filter_by(code=provided_code).first() if provided_code else None)
+            )
 
-            # --- 2️⃣ Then by name ---
-            if not account:
-                account = Account.query.filter_by(name=account_name).first()
-
-            # --- 3️⃣ Then by code ---
-            if not account and provided_code:
-                account = Account.query.filter_by(code=provided_code).first()
-
-            # --- 4️⃣ Update or Create ---
             if account:
-                # ✅ Update existing account (don’t change ID)
+                # --- ✏️ Update existing ---
                 account.name = account_name
                 account.account_subtype = subtype_enum.value
                 account.parent_id = parent_id
@@ -325,18 +324,28 @@ def update_all_accounts():
                 account.updated_at = datetime.now(timezone.utc)
 
                 if provided_code and account.code != provided_code:
-                    # ✅ Check duplicate code
                     existing = Account.query.filter(
-                        Account.code == provided_code,
-                        Account.id != account.id
+                        Account.code == provided_code, Account.id != account.id
                     ).first()
                     if existing:
-                        print(f"⚠️ Skipped updating code for {account_name}: code {provided_code} already in use by {existing.name}")
+                        print(f"⚠️ Skipped updating code for {account_name}: code {provided_code} already used by {existing.name}")
                     else:
                         account.code = provided_code
 
+                print(f"✅ Updated account: {account_name}")
+
             else:
-                # ✅ Create new account
+                # --- 🧱 Create new ---
+                # Ensure parent exists first
+                if parent_id:
+                    parent_exists = Account.query.filter_by(id=parent_id).first()
+                    if not parent_exists:
+                        print(f"⏳ Skipping {account_name} for now — parent ID {parent_id} not found.")
+                        # Add to retry list for later
+                        sorted_accounts.append(acc)
+                        continue
+
+                # Generate or use provided code
                 if provided_code:
                     new_code = provided_code
                 else:
@@ -349,7 +358,7 @@ def update_all_accounts():
                     new_code = generate_account_code(account_type, last_code)
 
                 new_acc = Account(
-                    id=account_id,  # ✅ Safe because it's a new record
+                    id=account_id,
                     name=account_name,
                     code=str(new_code),
                     account_type=account_type,
@@ -360,7 +369,9 @@ def update_all_accounts():
                     created_at=datetime.now(timezone.utc),
                     updated_at=datetime.now(timezone.utc)
                 )
+
                 db.session.add(new_acc)
+                print(f"🆕 Created new account: {account_name}")
 
         db.session.commit()
         print("✅ All accounts updated or created successfully.")
@@ -368,7 +379,6 @@ def update_all_accounts():
     except Exception as e:
         db.session.rollback()
         print(f"❌ Failed to update or create accounts: {e}")
-
 
 # def update_all_accounts():
 #     """
