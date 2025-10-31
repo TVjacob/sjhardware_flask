@@ -206,11 +206,11 @@ def seed_permissions():
 
 
 
-
 def update_all_accounts():
     """
     Update existing accounts or create missing ones based on account_updates mapping.
-    Searches first by ID, then by name. Updates ID if name matches.
+    Searches by ID, then by name, then by code.
+    Updates ID if name or code matches.
     Uses provided account code if available; otherwise generates one.
     """
     try:
@@ -232,25 +232,29 @@ def update_all_accounts():
             if not account:
                 account = Account.query.filter_by(name=account_name).first()
                 if account:
-                    # Update ID to match mapping
                     account.id = account_id
 
-            # --- 3️⃣ Update or Create ---
+            # --- 3️⃣ If still not found, search by code ---
+            if not account and provided_code:
+                account = Account.query.filter_by(code=provided_code).first()
+                if account:
+                    account.id = account_id  # Update ID to sync with mapping
+
+            # --- 4️⃣ Update or Create ---
             if account:
-                # Update existing account
+                # ✅ Update existing account
                 account.name = account_name
                 account.account_subtype = subtype_enum.value
                 account.parent_id = parent_id
                 account.description = description
                 account.updated_at = datetime.now(timezone.utc)
 
-                # ✅ If provided_code exists and account.code is empty or different, update it
-                if provided_code and (not account.code or account.code != provided_code):
+                # Update code if different (but preserve if same)
+                if provided_code and account.code != provided_code:
                     account.code = provided_code
 
             else:
-                # Create new account
-                # ✅ Use provided code if given, otherwise auto-generate
+                # ✅ Create new account
                 if provided_code:
                     new_code = provided_code
                 else:
@@ -282,6 +286,82 @@ def update_all_accounts():
     except Exception as e:
         db.session.rollback()
         print(f"❌ Failed to update or create accounts: {e}")
+
+# def update_all_accounts():
+#     """
+#     Update existing accounts or create missing ones based on account_updates mapping.
+#     Searches first by ID, then by name. Updates ID if name matches.
+#     Uses provided account code if available; otherwise generates one.
+#     """
+#     try:
+#         for acc in account_updates:
+#             account_id = acc.get("id")
+#             account_name = acc.get("name")
+#             subtype_enum = acc.get("account_subtype")
+#             parent_id = acc.get("parent_id")
+#             description = acc.get("description", "")
+#             provided_code = acc.get("code")  # ✅ Optional predefined code
+
+#             # Determine account_type from the Enum class name
+#             account_type = subtype_enum.__class__.__name__.replace("SubtypeEnum", "").upper()
+
+#             # --- 1️⃣ Search by ID ---
+#             account = Account.query.filter_by(id=account_id).first()
+
+#             # --- 2️⃣ If not found, search by name ---
+#             if not account:
+#                 account = Account.query.filter_by(name=account_name).first()
+#                 if account:
+#                     # Update ID to match mapping
+#                     account.id = account_id
+
+#             # --- 3️⃣ Update or Create ---
+#             if account:
+#                 # Update existing account
+#                 account.name = account_name
+#                 account.account_subtype = subtype_enum.value
+#                 account.parent_id = parent_id
+#                 account.description = description
+#                 account.updated_at = datetime.now(timezone.utc)
+
+#                 # ✅ If provided_code exists and account.code is empty or different, update it
+#                 if provided_code and (not account.code or account.code != provided_code):
+#                     account.code = provided_code
+
+#             else:
+#                 # Create new account
+#                 # ✅ Use provided code if given, otherwise auto-generate
+#                 if provided_code:
+#                     new_code = provided_code
+#                 else:
+#                     last_account = (
+#                         Account.query.filter(Account.account_type == account_type)
+#                         .order_by(Account.code.desc())
+#                         .first()
+#                     )
+#                     last_code = last_account.code if last_account else None
+#                     new_code = generate_account_code(account_type, last_code)
+
+#                 new_acc = Account(
+#                     id=account_id,
+#                     name=account_name,
+#                     code=new_code,
+#                     account_type=account_type,
+#                     account_subtype=subtype_enum.value,
+#                     parent_id=parent_id,
+#                     description=description,
+#                     status=1,
+#                     created_at=datetime.now(timezone.utc),
+#                     updated_at=datetime.now(timezone.utc)
+#                 )
+#                 db.session.add(new_acc)
+
+#         db.session.commit()
+#         print("✅ All accounts updated or created successfully.")
+
+#     except Exception as e:
+#         db.session.rollback()
+#         print(f"❌ Failed to update or create accounts: {e}")
 
 
 
