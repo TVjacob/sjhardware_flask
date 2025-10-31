@@ -1,11 +1,27 @@
 from flask import Blueprint, request, jsonify
 from app import db
-from app.models import Product, Category
+from app.models import Product, Category, PurchaseOrderItem
 from datetime import datetime
 from sqlalchemy import or_, text
 from app.utils.auth import token_required
 
 inventory_bp = Blueprint('inventory', __name__, url_prefix='/inventory')
+
+
+
+def get_latest_cost_price(product_id):
+    """
+    Returns the latest purchase price of a product, ignoring status=9 items.
+    """
+    latest_po_item = (
+        PurchaseOrderItem.query
+        .filter_by(product_id=product_id)
+        .filter(PurchaseOrderItem.status != 9)
+        .order_by(PurchaseOrderItem.id.desc())
+        .first()
+    )
+    return latest_po_item.unit_price if latest_po_item else 0
+
 
 
 def rebuild_product_quantities():
@@ -71,15 +87,19 @@ def add_product():
 @inventory_bp.route('/products', methods=['GET'])
 def list_products():
     rebuild_product_quantities()
-    products = Product.query.all()
+    products = Product.query.filter(Product.status ==1).all()
+    # cost_price = get_latest_cost_price(p.id)  # <-- latest cost
+
     result = []
     for p in products:
         category =db.session.query(Category).filter_by(id = p.category_id,status=1).first()
+        cost_price = get_latest_cost_price(p.id)  # <-- latest cost
         result.append({
             "id": p.id,
             "name": p.name,
             "sku": p.sku,
             "category_id": p.category_id,
+            "cost_price": cost_price,
             "category_name": category.name if category else None,
             "quantity": p.quantity,
             "price": p.price,
@@ -97,6 +117,7 @@ def get_product(id):
     rebuild_product_quantities()
     p = Product.query.get_or_404(id)
     category =db.session.query(Category).filter_by(id = p.category_id,status=1).first()
+    cost_price = get_latest_cost_price(p.id)  # <-- latest cost
 
     return jsonify({
         "id": p.id,
@@ -106,6 +127,8 @@ def get_product(id):
         "category_name": category.name if category else None,
         "quantity": p.quantity,
         "price": p.price,
+        "cost_price": cost_price,
+
         "status": p.status,
         "created_at": p.created_at,
         "updated_at": p.updated_at
@@ -135,6 +158,8 @@ def search_product():
     
     for p in products:
         category = db.session.query(Category).filter_by(id=p.category_id, status=1).first()
+        cost_price = get_latest_cost_price(p.id)  # <-- latest cost
+
 
         result.append({
             "id": p.id,
@@ -144,6 +169,7 @@ def search_product():
             "category_name": category.name if category else None,
             "quantity": p.quantity,
             "price": p.price,
+            "cost_price": cost_price,
             "status": p.status,
             "created_at": p.created_at,
             "updated_at": p.updated_at

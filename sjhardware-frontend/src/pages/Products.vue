@@ -53,7 +53,7 @@
         <table class="min-w-full border-collapse text-sm">
           <thead>
             <tr class="bg-gray-100 text-gray-700">
-              <th v-for="h in ['ID','Name','SKU','Price','Category','Stock Qty','Actions']" :key="h" class="th">{{ h }}</th>
+              <th v-for="h in ['ID','Name','SKU','Price','Cost Price','Category','Stock Qty','Actions']" :key="h" class="th">{{ h }}</th>
             </tr>
           </thead>
           <tbody>
@@ -66,6 +66,7 @@
               <td class="td font-medium">{{ product.name }}</td>
               <td class="td">{{ product.sku }}</td>
               <td class="td">{{ formatPrice(product.price) }}</td>
+              <td class="td">{{ formatPrice(product.cost_price) }}</td>
               <td class="td">{{ getCategoryName(product.category_id) }}</td>
               <td class="td text-center">{{ product.quantity ?? 0 }}</td>
               <td class="td text-center">
