@@ -8,6 +8,7 @@ from app.models import AssetSubtypeEnum, EquitySubtypeEnum, ExpenseSubtypeEnum, 
 from datetime import datetime, timezone
 from sqlalchemy import text
 
+from app.routes.accounts import generate_account_code
 from app.utils.gl_utils import generate_transaction_number_partone
 
 app = create_app()
@@ -15,58 +16,63 @@ app = create_app()
 
 # Mapping of accounts with proper enum subtypes and parent_id
 account_updates = [
-    {"id": 1, "account_subtype": AssetSubtypeEnum.CASH, "parent_id": None},   # Cash on Hand
-    {"id": 2, "account_subtype": AssetSubtypeEnum.CASH, "parent_id": 1},      # Petty Cash
-    {"id": 3, "account_subtype": AssetSubtypeEnum.CASH, "parent_id": 1},      # MTN Mobile Money
-    {"id": 4, "account_subtype": AssetSubtypeEnum.CASH, "parent_id": 1},      # Airtel Money
-    {"id": 5, "account_subtype": AssetSubtypeEnum.CASH, "parent_id": 1},      # Other Mobile Wallets
-    {"id": 6, "account_subtype": AssetSubtypeEnum.BANK, "parent_id": None}, # Stanbic Bank Account
-    {"id": 7, "account_subtype": AssetSubtypeEnum.BANK, "parent_id": None}, # Equity Bank Account
-    {"id": 8, "account_subtype": AssetSubtypeEnum.BANK, "parent_id": None}, # Centenary Bank Account
-    {"id": 9, "account_subtype": AssetSubtypeEnum.BANK, "parent_id": None}, # Other Bank Accounts
-    {"id": 10, "account_subtype": AssetSubtypeEnum.ACCOUNTS_RECEIVABLE, "parent_id": None}, # Accounts Receivable
-    {"id": 11, "account_subtype": AssetSubtypeEnum.PREPAID_EXPENSES, "parent_id": None},     # Employee Advances
-    {"id": 12, "account_subtype": AssetSubtypeEnum.INVENTORY, "parent_id": None}, # Inventory
-    {"id": 13, "account_subtype": AssetSubtypeEnum.PREPAID_EXPENSES, "parent_id": None}, # Prepaid Expenses
-    {"id": 14, "account_subtype": AssetSubtypeEnum.FIXED_ASSET, "parent_id": None}, # Fixed Assets
-    {"id": 15, "account_subtype": LiabilitySubtypeEnum.ACCOUNTS_PAYABLE, "parent_id": None}, # Accounts Payable
-    {"id": 16, "account_subtype": LiabilitySubtypeEnum.ACCRUED_LIABILITIES, "parent_id": None}, # Accrued Expenses
-    {"id": 17, "account_subtype": LiabilitySubtypeEnum.ACCRUED_LIABILITIES, "parent_id": None}, # Taxes Payable
-    {"id": 18, "account_subtype": LiabilitySubtypeEnum.ACCRUED_LIABILITIES, "parent_id": None}, # Wages Payable
-    {"id": 19, "account_subtype": LiabilitySubtypeEnum.LONG_TERM_DEBT, "parent_id": None}, # Loan Payable
-    {"id": 20, "account_subtype": LiabilitySubtypeEnum.ACCOUNTS_PAYABLE, "parent_id": None}, # Mobile Money Payable
-    {"id": 21, "account_subtype": LiabilitySubtypeEnum.ACCOUNTS_PAYABLE, "parent_id": None}, # Credit Card Payable
-    {"id": 22, "account_subtype": EquitySubtypeEnum.OWNERS_EQUITY, "parent_id": None}, # Owner's Equity
-    {"id": 23, "account_subtype": EquitySubtypeEnum.RETAINED_EARNINGS, "parent_id": None}, # Retained Earnings
-    {"id": 24, "account_subtype": EquitySubtypeEnum.OWNERS_EQUITY, "parent_id": None}, # Drawings
-    {"id": 25, "account_subtype": RevenueSubtypeEnum.SALES, "parent_id": None}, # Sales Revenue
-    {"id": 26, "account_subtype": RevenueSubtypeEnum.SERVICE, "parent_id": 25}, # Service Revenue
-    {"id": 27, "account_subtype": RevenueSubtypeEnum.SERVICE, "parent_id": 25}, # Mobile Money Income
-    {"id": 28, "account_subtype": RevenueSubtypeEnum.SERVICE, "parent_id": 25}, # Bank Transfer Income
-    {"id": 29, "account_subtype": RevenueSubtypeEnum.SERVICE, "parent_id": 25}, # Other Income
-    {"id": 30, "account_subtype": ExpenseSubtypeEnum.COGS, "parent_id": None}, # Cost of Goods Sold
-    {"id": 31, "account_subtype": ExpenseSubtypeEnum.RENT, "parent_id": None}, # Rent Expense
-    {"id": 32, "account_subtype": ExpenseSubtypeEnum.SALARIES, "parent_id": None}, # Salaries & Wages Expense
-    {"id": 33, "account_subtype": ExpenseSubtypeEnum.SALARIES, "parent_id": 32}, # Overtime Expense
-    {"id": 34, "account_subtype": ExpenseSubtypeEnum.SALARIES, "parent_id": 32}, # Employee Benefits Expense
-    {"id": 35, "account_subtype": ExpenseSubtypeEnum.UTILITIES, "parent_id": None}, # Utilities Expense
-    {"id": 36, "account_subtype": ExpenseSubtypeEnum.UTILITIES, "parent_id": None}, # Office Supplies Expense
-    {"id": 37, "account_subtype": ExpenseSubtypeEnum.UTILITIES, "parent_id": 36},   # Cleaning Supplies Expense
-    {"id": 38, "account_subtype": ExpenseSubtypeEnum.UTILITIES, "parent_id": None}, # Waste Management Expense
-    {"id": 39, "account_subtype": ExpenseSubtypeEnum.UTILITIES, "parent_id": None}, # Repairs & Maintenance Expense
-    {"id": 40, "account_subtype": ExpenseSubtypeEnum.UTILITIES, "parent_id": None}, # IT Maintenance Expense
-    {"id": 41, "account_subtype": ExpenseSubtypeEnum.UTILITIES, "parent_id": None}, # Depreciation Expense
-    {"id": 42, "account_subtype": ExpenseSubtypeEnum.UTILITIES, "parent_id": None}, # Insurance Expense
-    {"id": 43, "account_subtype": ExpenseSubtypeEnum.UTILITIES, "parent_id": None}, # Bank Charges Expense
-    {"id": 44, "account_subtype": ExpenseSubtypeEnum.UTILITIES, "parent_id": None}, # Mobile Money Charges Expense
-    {"id": 45, "account_subtype": ExpenseSubtypeEnum.UTILITIES, "parent_id": None}, # Credit Card Fees Expense
-    {"id": 46, "account_subtype": ExpenseSubtypeEnum.UTILITIES, "parent_id": None}, # Advertising Expense
-    {"id": 47, "account_subtype": ExpenseSubtypeEnum.UTILITIES, "parent_id": 46},   # Promotional Expense
-    {"id": 48, "account_subtype": ExpenseSubtypeEnum.UTILITIES, "parent_id": None}, # Travel Expense
-    {"id": 49, "account_subtype": ExpenseSubtypeEnum.UTILITIES, "parent_id": None}, # Training Expense
-    {"id": 50, "account_subtype": ExpenseSubtypeEnum.UTILITIES, "parent_id": None}, # Miscellaneous Expense
+    {"id": 1, "name": "Cash on Hand", "account_subtype": AssetSubtypeEnum.CASH, "parent_id": None, "description": "Cash on Hand"},
+    {"id": 2, "name": "Petty Cash", "account_subtype": AssetSubtypeEnum.CASH, "parent_id": 1, "description": "Petty Cash"},
+    {"id": 3, "name": "MTN Mobile Money", "account_subtype": AssetSubtypeEnum.CASH, "parent_id": 1, "description": "MTN Mobile Money"},
+    {"id": 4, "name": "Airtel Money", "account_subtype": AssetSubtypeEnum.CASH, "parent_id": 1, "description": "Airtel Money"},
+    {"id": 5, "name": "Other Mobile Wallets", "account_subtype": AssetSubtypeEnum.CASH, "parent_id": 1, "description": "Other Mobile Wallets"},
+    {"id": 6, "name": "Stanbic Bank Account", "account_subtype": AssetSubtypeEnum.BANK, "parent_id": None, "description": "Stanbic Bank Account"},
+    {"id": 7, "name": "Equity Bank Account", "account_subtype": AssetSubtypeEnum.BANK, "parent_id": None, "description": "Equity Bank Account"},
+    {"id": 8, "name": "Centenary Bank Account", "account_subtype": AssetSubtypeEnum.BANK, "parent_id": None, "description": "Centenary Bank Account"},
+    {"id": 9, "name": "Other Bank Accounts", "account_subtype": AssetSubtypeEnum.BANK, "parent_id": None, "description": "Other Bank Accounts"},
+    {"id": 10, "name": "Accounts Receivable", "account_subtype": AssetSubtypeEnum.ACCOUNTS_RECEIVABLE, "parent_id": None, "description": "Accounts Receivable" ,"code":1100},
+    {"id": 11, "name": "Employee Advances", "account_subtype": AssetSubtypeEnum.PREPAID_EXPENSES, "parent_id": None, "description": "Employee Advances"},
+    {"id": 12, "name": "Inventory", "account_subtype": AssetSubtypeEnum.INVENTORY, "parent_id": None, "description": "Inventory","code":1200},
+    {"id": 13, "name": "Prepaid Expenses", "account_subtype": AssetSubtypeEnum.PREPAID_EXPENSES, "parent_id": None, "description": "Prepaid Expenses"},
+    {"id": 14, "name": "Fixed Assets", "account_subtype": AssetSubtypeEnum.FIXED_ASSET, "parent_id": None, "description": "Fixed Assets"},
+    {"id": 15, "name": "Accounts Payable", "account_subtype": LiabilitySubtypeEnum.ACCOUNTS_PAYABLE, "parent_id": None, "description": "Accounts Payable"},
+    {"id": 16, "name": "Accrued Expenses", "account_subtype": LiabilitySubtypeEnum.ACCRUED_LIABILITIES, "parent_id": None, "description": "Accrued Expenses","code":2100},
+    {"id": 17, "name": "Taxes Payable", "account_subtype": LiabilitySubtypeEnum.ACCRUED_LIABILITIES, "parent_id": None, "description": "Taxes Payable"},
+    {"id": 18, "name": "Wages Payable", "account_subtype": LiabilitySubtypeEnum.ACCRUED_LIABILITIES, "parent_id": None, "description": "Wages Payable"},
+    {"id": 19, "name": "Loan Payable", "account_subtype": LiabilitySubtypeEnum.LONG_TERM_DEBT, "parent_id": None, "description": "Loan Payable"},
+    {"id": 20, "name": "Mobile Money Payable", "account_subtype": LiabilitySubtypeEnum.ACCOUNTS_PAYABLE, "parent_id": None, "description": "Mobile Money Payable"},
+    {"id": 21, "name": "Credit Card Payable", "account_subtype": LiabilitySubtypeEnum.ACCOUNTS_PAYABLE, "parent_id": None, "description": "Credit Card Payable"},
+    {"id": 22, "name": "Owner's Equity", "account_subtype": EquitySubtypeEnum.OWNERS_EQUITY, "parent_id": None, "description": "Owner's Equity"},
+    {"id": 23, "name": "Retained Earnings", "account_subtype": EquitySubtypeEnum.RETAINED_EARNINGS, "parent_id": None, "description": "Retained Earnings"},
+    {"id": 24, "name": "Drawings", "account_subtype": EquitySubtypeEnum.OWNERS_EQUITY, "parent_id": None, "description": "Drawings"},
+    {"id": 25, "name": "Sales Revenue", "account_subtype": RevenueSubtypeEnum.SALES, "parent_id": None, "description": "Sales Revenue","code":4000},
+    {"id": 26, "name": "Service Revenue", "account_subtype": RevenueSubtypeEnum.SERVICE, "parent_id": 25, "description": "Service Revenue"},
+    {"id": 27, "name": "Mobile Money Income", "account_subtype": RevenueSubtypeEnum.SERVICE, "parent_id": 25, "description": "Mobile Money Income"},
+    {"id": 28, "name": "Bank Transfer Income", "account_subtype": RevenueSubtypeEnum.SERVICE, "parent_id": 25, "description": "Bank Transfer Income"},
+    {"id": 29, "name": "Other Income", "account_subtype": RevenueSubtypeEnum.SERVICE, "parent_id": 25, "description": "Other Income"},
+    {"id": 30, "name": "Cost of Goods Sold", "account_subtype": ExpenseSubtypeEnum.COGS, "parent_id": None, "description": "Cost of Goods Sold" ,"code":5000},
+    {"id": 31, "name": "Rent Expense", "account_subtype": ExpenseSubtypeEnum.RENT, "parent_id": None, "description": "Rent Expense"},
+    {"id": 32, "name": "Salaries & Wages Expense", "account_subtype": ExpenseSubtypeEnum.SALARIES, "parent_id": None, "description": "Salaries & Wages Expense"},
+    {"id": 33, "name": "Overtime Expense", "account_subtype": ExpenseSubtypeEnum.SALARIES, "parent_id": 32, "description": "Overtime Expense"},
+    {"id": 34, "name": "Employee Benefits Expense", "account_subtype": ExpenseSubtypeEnum.SALARIES, "parent_id": 32, "description": "Employee Benefits Expense"},
+    {"id": 35, "name": "Utilities Expense", "account_subtype": ExpenseSubtypeEnum.UTILITIES, "parent_id": None, "description": "Utilities Expense"},
+    {"id": 36, "name": "Office Supplies Expense", "account_subtype": ExpenseSubtypeEnum.OFFICE_SUPPLIES, "parent_id": None, "description": "Office Supplies Expense"},
+    {"id": 37, "name": "Cleaning Supplies Expense", "account_subtype": ExpenseSubtypeEnum.OFFICE_SUPPLIES, "parent_id": 36, "description": "Cleaning Supplies Expense"},
+    {"id": 38, "name": "Waste Management Expense", "account_subtype": ExpenseSubtypeEnum.OTHER_EXPENSES, "parent_id": None, "description": "Waste Management Expense"},
+    {"id": 39, "name": "Repairs & Maintenance Expense", "account_subtype": ExpenseSubtypeEnum.OTHER_EXPENSES, "parent_id": None, "description": "Repairs & Maintenance Expense"},
+    {"id": 40, "name": "IT Maintenance Expense", "account_subtype": ExpenseSubtypeEnum.OTHER_EXPENSES, "parent_id": None, "description": "IT Maintenance Expense"},
+    {"id": 41, "name": "Depreciation Expense", "account_subtype": ExpenseSubtypeEnum.OTHER_EXPENSES, "parent_id": None, "description": "Depreciation Expense"},
+    {"id": 42, "name": "Insurance Expense", "account_subtype": ExpenseSubtypeEnum.OTHER_EXPENSES, "parent_id": None, "description": "Insurance Expense"},
+    {"id": 43, "name": "Bank Charges Expense", "account_subtype": ExpenseSubtypeEnum.BANK_FEES, "parent_id": None, "description": "Bank Charges Expense"},
+    {"id": 44, "name": "Mobile Money Charges Expense", "account_subtype": ExpenseSubtypeEnum.BANK_FEES, "parent_id": None, "description": "Mobile Money Charges Expense"},
+    {"id": 45, "name": "Credit Card Fees Expense", "account_subtype": ExpenseSubtypeEnum.BANK_FEES, "parent_id": None, "description": "Credit Card Fees Expense"},
+    {"id": 46, "name": "Advertising Expense", "account_subtype": ExpenseSubtypeEnum.ADVERTISING, "parent_id": None, "description": "Advertising Expense"},
+    {"id": 47, "name": "Promotional Expense", "account_subtype": ExpenseSubtypeEnum.ADVERTISING, "parent_id": 46, "description": "Promotional Expense"},
+    {"id": 48, "name": "Travel Expense", "account_subtype": ExpenseSubtypeEnum.TRAVEL, "parent_id": None, "description": "Travel Expense"},
+    {"id": 49, "name": "Training Expense", "account_subtype": ExpenseSubtypeEnum.TRAINING, "parent_id": None, "description": "Training Expense"},
+    {"id": 50, "name": "Miscellaneous Expense", "account_subtype": ExpenseSubtypeEnum.OTHER_EXPENSES, "parent_id": None, "description": "Miscellaneous Expense"},
+    {"id": 51, "name": "Interest Expense", "account_subtype": ExpenseSubtypeEnum.INTEREST, "parent_id": None, "description": "Interest Expense"},
+    {"id": 52, "name": "Bank Loan Interest", "account_subtype": ExpenseSubtypeEnum.INTEREST, "parent_id": 51, "description": "Bank Loan Interest"},
+    {"id": 53, "name": "Overdraft Interest", "account_subtype": ExpenseSubtypeEnum.INTEREST, "parent_id": 51, "description": "Overdraft Interest"},
+    {"id": 54, "name": "Taxes Expense", "account_subtype": ExpenseSubtypeEnum.TAXES, "parent_id": None, "description": "Taxes Expense"},
+    {"id": 55, "name": "VAT Payable", "account_subtype": ExpenseSubtypeEnum.TAXES, "parent_id": 54, "description": "VAT Payable"},
+    {"id": 56, "name": "Income Tax Expense", "account_subtype": ExpenseSubtypeEnum.TAXES, "parent_id": 54, "description": "Income Tax Expense"},
 ]
-
 permissions = [
     # --- User & Access Management ---
     ("view_users", "View list of users"),
@@ -202,21 +208,81 @@ def seed_permissions():
 
 
 def update_all_accounts():
+    """
+    Update existing accounts or create missing ones based on account_updates mapping.
+    Searches first by ID, then by name. Updates ID if name matches.
+    Uses provided account code if available; otherwise generates one.
+    """
     try:
         for acc in account_updates:
-            account = Account.query.filter_by(id=acc["id"]).first()
+            account_id = acc.get("id")
+            account_name = acc.get("name")
+            subtype_enum = acc.get("account_subtype")
+            parent_id = acc.get("parent_id")
+            description = acc.get("description", "")
+            provided_code = acc.get("code")  # ✅ Optional predefined code
+
+            # Determine account_type from the Enum class name
+            account_type = subtype_enum.__class__.__name__.replace("SubtypeEnum", "").upper()
+
+            # --- 1️⃣ Search by ID ---
+            account = Account.query.filter_by(id=account_id).first()
+
+            # --- 2️⃣ If not found, search by name ---
+            if not account:
+                account = Account.query.filter_by(name=account_name).first()
+                if account:
+                    # Update ID to match mapping
+                    account.id = account_id
+
+            # --- 3️⃣ Update or Create ---
             if account:
-                # Convert enum to string
-                subtype = acc.get("account_subtype")
-                if subtype:
-                    account.account_subtype = subtype.value  # <-- key change
-                account.parent_id = acc.get("parent_id")
-                account.updated_at = datetime.now(timezone.utc)  # timezone-aware
+                # Update existing account
+                account.name = account_name
+                account.account_subtype = subtype_enum.value
+                account.parent_id = parent_id
+                account.description = description
+                account.updated_at = datetime.now(timezone.utc)
+
+                # ✅ If provided_code exists and account.code is empty or different, update it
+                if provided_code and (not account.code or account.code != provided_code):
+                    account.code = provided_code
+
+            else:
+                # Create new account
+                # ✅ Use provided code if given, otherwise auto-generate
+                if provided_code:
+                    new_code = provided_code
+                else:
+                    last_account = (
+                        Account.query.filter(Account.account_type == account_type)
+                        .order_by(Account.code.desc())
+                        .first()
+                    )
+                    last_code = last_account.code if last_account else None
+                    new_code = generate_account_code(account_type, last_code)
+
+                new_acc = Account(
+                    id=account_id,
+                    name=account_name,
+                    code=new_code,
+                    account_type=account_type,
+                    account_subtype=subtype_enum.value,
+                    parent_id=parent_id,
+                    description=description,
+                    status=1,
+                    created_at=datetime.now(timezone.utc),
+                    updated_at=datetime.now(timezone.utc)
+                )
+                db.session.add(new_acc)
+
         db.session.commit()
-        print("✅ All 50 accounts updated successfully with ENUM subtypes and parent_id references.")
+        print("✅ All accounts updated or created successfully.")
+
     except Exception as e:
         db.session.rollback()
-        print(f"❌ Failed to update accounts: {e}")
+        print(f"❌ Failed to update or create accounts: {e}")
+
 
 
 
@@ -627,8 +693,9 @@ if __name__ == "__main__":
     with app.app_context():
         from app.models import Account, PurchaseOrder, User, Permission
         from app.utils.gl_utils import generate_transaction_number, post_to_ledger
-        repair_inventory()
         update_all_accounts()
+        repair_inventory()
+        # update_all_accounts()
         normalize_account_type_enum_uppercase()
         seed_permissions()
         seed_chart_of_accounts()

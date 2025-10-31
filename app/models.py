@@ -441,6 +441,15 @@ class ExpenseSubtypeEnum(enum.Enum):
     RENT = "Rent Expense"
     SALARIES = "Salaries Expense"
     UTILITIES = "Utilities Expense"
+    OFFICE_SUPPLIES ="Office Supplies Expense"
+    OTHER_EXPENSES="Other Expenses"
+    BANK_FEES ="Banks fees Expense"
+    ADVERTISING="Advertising Expense"
+    TRAINING ="Training Expense"
+    INTEREST ="Interest Expense"
+    TRAVEL ="Travel Expense"
+    TAXES= "Taxes Expense"
+
 
 
 # -------------------------------
