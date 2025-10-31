@@ -293,107 +293,82 @@ def update_all_accounts():
     Searches by ID, then by name, then by code.
     Updates ID if name or code matches.
     Uses provided account code if available; otherwise generates one.
-    Handles duplicate account codes safely.
+    Handles duplicate code safely and type mismatches.
     """
     try:
-        with db.session.no_autoflush:  # ✅ Prevent premature autoflush
-            for acc in account_updates:
-                account_id = acc.get("id")
-                account_name = acc.get("name")
-                subtype_enum = acc.get("account_subtype")
-                parent_id = acc.get("parent_id")
-                description = acc.get("description", "")
-                provided_code = acc.get("code")  # ✅ Optional predefined code
+        for acc in account_updates:
+            account_id = acc.get("id")
+            account_name = acc.get("name")
+            subtype_enum = acc.get("account_subtype")
+            parent_id = acc.get("parent_id")
+            description = acc.get("description", "")
+            provided_code = str(acc.get("code")) if acc.get("code") else None  # ✅ Cast to string
 
-                # Determine account_type from the Enum class name
-                account_type = subtype_enum.__class__.__name__.replace("SubtypeEnum", "").upper()
+            # Determine account_type from the Enum class name
+            account_type = subtype_enum.__class__.__name__.replace("SubtypeEnum", "").upper()
 
-                # --- 1️⃣ Search by ID ---
-                account = Account.query.filter_by(id=account_id).first()
+            # --- 1️⃣ Search by ID ---
+            account = Account.query.filter_by(id=account_id).first()
 
-                # --- 2️⃣ If not found, search by name ---
-                if not account:
-                    account = Account.query.filter_by(name=account_name).first()
-                    if account:
-                        account.id = account_id
-
-                # --- 3️⃣ If still not found, search by code ---
-                if not account and provided_code:
-                    account = Account.query.filter_by(code=provided_code).first()
-                    if account:
-                        account.id = account_id  # Update ID to sync with mapping
-
-                # --- 4️⃣ Update or Create ---
+            # --- 2️⃣ If not found, search by name ---
+            if not account:
+                account = Account.query.filter_by(name=account_name).first()
                 if account:
-                    # ✅ Update existing account
-                    account.name = account_name
-                    account.account_subtype = subtype_enum.value
-                    account.parent_id = parent_id
-                    account.description = description
-                    account.updated_at = datetime.now(timezone.utc)
+                    account.id = account_id
 
-                    # ✅ Check for duplicate codes before updating
-                    if provided_code and account.code != provided_code:
-                        existing_with_code = Account.query.filter(
-                            Account.code == provided_code,
-                            Account.id != account.id
-                        ).first()
-                        if existing_with_code:
-                            print(
-                                f"⚠️ Code {provided_code} already exists "
-                                f"(used by '{existing_with_code.name}'). Generating a new one for '{account_name}'."
-                            )
-                            last_account = (
-                                Account.query.filter(Account.account_type == account_type)
-                                .order_by(Account.code.desc())
-                                .first()
-                            )
-                            last_code = last_account.code if last_account else None
-                            new_code = generate_account_code(account_type, last_code)
-                            account.code = new_code
-                        else:
-                            account.code = provided_code
+            # --- 3️⃣ If still not found, search by code ---
+            if not account and provided_code:
+                account = Account.query.filter_by(code=provided_code).first()
+                if account:
+                    account.id = account_id
 
-                else:
-                    # ✅ Create new account
-                    if provided_code:
-                        # Check if the provided code already exists
-                        existing_with_code = Account.query.filter_by(code=provided_code).first()
-                        if existing_with_code:
-                            print(
-                                f"⚠️ Code {provided_code} already exists. Generating a new one for '{account_name}'."
-                            )
-                            last_account = (
-                                Account.query.filter(Account.account_type == account_type)
-                                .order_by(Account.code.desc())
-                                .first()
-                            )
-                            last_code = last_account.code if last_account else None
-                            new_code = generate_account_code(account_type, last_code)
-                        else:
-                            new_code = provided_code
+            # --- 4️⃣ Update or Create ---
+            if account:
+                # ✅ Update existing account
+                account.name = account_name
+                account.account_subtype = subtype_enum.value
+                account.parent_id = parent_id
+                account.description = description
+                account.updated_at = datetime.now(timezone.utc)
+
+                if provided_code and account.code != provided_code:
+                    # ✅ Check if another account already uses this code
+                    existing = Account.query.filter(
+                        Account.code == provided_code,
+                        Account.id != account.id
+                    ).first()
+
+                    if existing:
+                        print(f"⚠️ Skipped updating code for {account_name}: code {provided_code} already in use by {existing.name}")
                     else:
-                        last_account = (
-                            Account.query.filter(Account.account_type == account_type)
-                            .order_by(Account.code.desc())
-                            .first()
-                        )
-                        last_code = last_account.code if last_account else None
-                        new_code = generate_account_code(account_type, last_code)
+                        account.code = provided_code
 
-                    new_acc = Account(
-                        id=account_id,
-                        name=account_name,
-                        code=new_code,
-                        account_type=account_type,
-                        account_subtype=subtype_enum.value,
-                        parent_id=parent_id,
-                        description=description,
-                        status=1,
-                        created_at=datetime.now(timezone.utc),
-                        updated_at=datetime.now(timezone.utc)
+            else:
+                # ✅ Create new account
+                if provided_code:
+                    new_code = provided_code
+                else:
+                    last_account = (
+                        Account.query.filter(Account.account_type == account_type)
+                        .order_by(Account.code.desc())
+                        .first()
                     )
-                    db.session.add(new_acc)
+                    last_code = last_account.code if last_account else None
+                    new_code = generate_account_code(account_type, last_code)
+
+                new_acc = Account(
+                    id=account_id,
+                    name=account_name,
+                    code=str(new_code),  # ✅ Always store as string
+                    account_type=account_type,
+                    account_subtype=subtype_enum.value,
+                    parent_id=parent_id,
+                    description=description,
+                    status=1,
+                    created_at=datetime.now(timezone.utc),
+                    updated_at=datetime.now(timezone.utc)
+                )
+                db.session.add(new_acc)
 
         db.session.commit()
         print("✅ All accounts updated or created successfully.")
