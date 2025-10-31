@@ -694,7 +694,7 @@ if __name__ == "__main__":
         from app.models import Account, PurchaseOrder, User, Permission
         from app.utils.gl_utils import generate_transaction_number, post_to_ledger
         repair_inventory()
-        # update_all_accounts()
+        update_all_accounts()
         normalize_account_type_enum_uppercase()
         seed_permissions()
         seed_chart_of_accounts()
