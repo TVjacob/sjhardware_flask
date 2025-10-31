@@ -79,6 +79,12 @@
               >
                 View Report
               </button>
+              <button
+                @click="deleteSale(sale.sale_id)"
+                class="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded-lg transition"
+              >
+                Delete
+              </button>
             </td>
           </tr>
           <tr v-if="filteredSales.length === 0">
@@ -144,6 +150,22 @@ const fetchAccounts = async () => {
   }
 };
 
+// Delete sale
+const deleteSale = async (saleId) => {
+  if (!confirm('Are you sure you want to delete this sale? This action cannot be undone.')) return;
+
+  try {
+    await api.delete(`/sales/${saleId}`);
+    sales.value = sales.value.filter(s => s.id !== saleId);
+    alert('Sale deleted successfully.');
+    fetchSales()
+
+  } catch (err) {
+    console.error('Delete failed:', err);
+    alert('Failed to delete sale. Please try again.');
+  }
+};
+
 // Filtered sales + search
 const filteredSales = computed(() => {
   return sales.value
@@ -158,11 +180,8 @@ const filteredSales = computed(() => {
 const formatDate = dateStr => new Date(dateStr).toLocaleDateString();
 const formatCurrency = val => Number(val).toLocaleString(undefined, { style: 'currency', currency: 'UGX' });
 
-
-
 // Modals
 const openPaymentModal = sale => {
-  console.log("sale ",sale.balance)
   selectedSale.value = sale;
   showPaymentModal.value = true;
 };
