@@ -12,7 +12,7 @@ from flask import Blueprint, request, jsonify
 # 2 = Partially Paid
 # 3 = Fully Paid
 from app import db
-from app.models import Account, Category, InventoryTransaction, Product, Supplier, PurchaseOrder, PurchaseOrderItem, SupplierPayment
+from app.models import Account, Category, GeneralLedger, InventoryTransaction, Product, Supplier, PurchaseOrder, PurchaseOrderItem, SupplierPayment
 from app.utils.auth import token_required
 from app.utils.gl_utils import post_to_ledger, generate_transaction_number
 from datetime import datetime
@@ -322,15 +322,15 @@ def update_purchase_order(id):
     return jsonify({'message': 'Purchase Order updated successfully', 'id': po.id})
 
 
-@token_required
-# Delete purchase order
-@suppliers_bp.route('/orders/<int:id>', methods=['DELETE'])
+# @token_required
+# # Delete purchase order
+# @suppliers_bp.route('/orders/<int:id>', methods=['DELETE'])
 
-def delete_purchase_order(id):
-    po = PurchaseOrder.query.get_or_404(id)
-    db.session.delete(po)
-    db.session.commit()
-    return jsonify({'message': 'Purchase Order deleted successfully', 'id': id})
+# def delete_purchase_order(id):
+#     po = PurchaseOrder.query.get_or_404(id)
+#     db.session.delete(po)
+#     db.session.commit()
+#     return jsonify({'message': 'Purchase Order deleted successfully', 'id': id})
 
 
 @token_required
@@ -426,6 +426,68 @@ def pay_purchase_order(id):
 
 
 
+@token_required
+@suppliers_bp.route('/orders/<int:id>/delete', methods=['PUT'])
+def delete_purchase_order(id):
+    """
+    Soft delete a purchase order (status=9) and reverse its GL entries.
+    """
+    po = PurchaseOrder.query.get_or_404(id)
+
+    # Prevent double deletion
+    if po.status == 9:
+        return jsonify({'error': f'Purchase Order #{po.id} is already deleted'}), 400
+
+    # ---------- Reverse General Ledger Entries ----------
+    gl_entries = GeneralLedger.query.filter(
+        GeneralLedger.description.in_([
+            f"Credit for PO #{po.id}",
+            f"Payment for PO #{po.id}"
+        ])
+    ).all()
+
+    if gl_entries:
+        reversal_date = datetime.utcnow()
+        reversal_description = f"Reversal of PO #{po.id} deletion"
+
+        for entry in gl_entries:
+            reversed_entry = GeneralLedger(
+                account_id=entry.account_id,
+                transaction_type="Credit" if entry.transaction_type == "Debit" else "Debit",
+                amount=entry.amount,
+                description=reversal_description,
+                transaction_date=reversal_date,
+                transaction_no=entry.transaction_no,
+                status=1
+            )
+            db.session.add(reversed_entry)
+
+    # ---------- Soft Delete Purchase Order and Related Records ----------
+    po.status = 9
+
+    # Mark purchase order items as deleted
+    for item in po.items:
+        item.status = 9
+
+    # Mark supplier payments related to this PO as deleted
+    SupplierPayment.query.filter_by(purchase_order_id=po.id).update({'status': 9})
+
+    # Optionally rollback stock (inventory transactions)
+    inv_txns = InventoryTransaction.query.filter_by(purchase_order_id=po.id, status=1).all()
+    for txn in inv_txns:
+        txn.status = 9
+        product = Product.query.get(txn.product_id)
+        if product:
+            # Decrease the stock that was previously added
+            product.quantity = (product.quantity or 0) - txn.quantity
+            db.session.add(product)
+
+    db.session.commit()
+
+    return jsonify({
+        'message': f'Purchase Order #{po.id} deleted successfully (soft delete)',
+        'reversed_entries': len(gl_entries)
+    }), 200
 
 
 
