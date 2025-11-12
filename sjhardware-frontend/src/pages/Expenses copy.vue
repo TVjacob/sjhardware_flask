@@ -1,6 +1,5 @@
 <template>
-  <!-- Make the entire page scrollable -->
-  <div class="p-6 max-w-7xl mx-auto overflow-y-auto h-[calc(100vh-1rem)]">
+  <div class="p-6 max-w-7xl mx-auto">
     <h1 class="text-3xl font-bold mb-6 text-gray-800 animate-fadeIn">Expenses Management</h1>
 
     <!-- Add Expense Button -->
@@ -14,8 +13,7 @@
     <!-- Grand Total -->
     <div class="mb-4 p-4 bg-gray-100 rounded shadow hover:shadow-lg transition transform hover:scale-[1.01]">
       <h2 class="text-lg font-bold">
-        Grand Total Paid:
-        <span class="text-green-600">{{ grandTotal.toFixed(2) }}</span>
+        Grand Total Paid: <span class="text-green-600">{{ grandTotal.toFixed(2) }}</span>
       </h2>
     </div>
 
@@ -26,30 +24,10 @@
         placeholder="Search description or reference"
         class="border p-2 rounded shadow-sm focus:ring-2 focus:ring-indigo-400 transition"
       />
-      <button
-        @click="searchExpenses"
-        class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded shadow transition transform hover:scale-105"
-      >
-        Search
-      </button>
-      <button
-        @click="fetchExpenses"
-        class="bg-gray-300 hover:bg-gray-400 px-4 py-2 rounded shadow transition transform hover:scale-105"
-      >
-        Reset
-      </button>
-      <button
-        @click="exportExcel"
-        class="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded shadow transition transform hover:scale-105"
-      >
-        Export Excel
-      </button>
-      <button
-        @click="exportPDF"
-        class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded shadow transition transform hover:scale-105"
-      >
-        Export PDF
-      </button>
+      <button @click="searchExpenses" class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded shadow transition transform hover:scale-105">Search</button>
+      <button @click="fetchExpenses" class="bg-gray-300 hover:bg-gray-400 px-4 py-2 rounded shadow transition transform hover:scale-105">Reset</button>
+      <button @click="exportExcel" class="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded shadow transition transform hover:scale-105">Export Excel</button>
+      <button @click="exportPDF" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded shadow transition transform hover:scale-105">Export PDF</button>
 
       <!-- Add Expense Item Button -->
       <button
@@ -61,9 +39,11 @@
     </div>
 
     <!-- Expenses Table -->
-    <div class="overflow-x-auto border rounded-lg shadow-lg max-h-[70vh] overflow-y-auto">
+    <!-- <div class="overflow-x-auto border rounded-lg shadow-lg"> -->
+      <div class="overflow-x-auto border rounded-lg shadow-lg max-h-[600px] overflow-y-auto">
+        <!-- <table class="min-w-full border-collapse"> -->
       <table class="min-w-full border-collapse">
-        <thead class="bg-gray-100 sticky top-0 z-10">
+        <thead class="bg-gray-100">
           <tr>
             <th class="p-3 border-b text-center"></th>
             <th class="p-3 border-b text-left">ID</th>
@@ -81,10 +61,7 @@
               class="transition-all duration-300 hover:bg-gray-50 hover:shadow-sm cursor-pointer transform hover:scale-[1.01]"
             >
               <td class="p-3 text-center">
-                <button
-                  @click="toggleExpand(expense.id, index)"
-                  class="text-blue-600 font-bold transition transform hover:scale-110"
-                >
+                <button @click="toggleExpand(expense.id, index)" class="text-blue-600 font-bold transition transform hover:scale-110">
                   {{ expandedRows.includes(expense.id) ? '-' : '+' }}
                 </button>
               </td>
@@ -95,28 +72,15 @@
               <td class="p-3">{{ formatDate(expense.expense_date) }}</td>
               <td class="p-3">{{ expense.transaction_no }}</td>
               <td class="p-3 text-center flex flex-wrap gap-1 justify-center">
-                <button
-                  @click="editExpense(expense)"
-                  class="bg-blue-400 hover:bg-blue-500 text-white px-2 py-1 rounded shadow transition transform hover:scale-105"
-                >
-                  Edit
-                </button>
-                <button
-                  @click="deleteExpense(expense.id)"
-                  class="bg-red-500 hover:bg-red-600 text-white px-2 py-1 rounded shadow transition transform hover:scale-105"
-                >
-                  Delete
-                </button>
-                <router-link
-                  :to="`/reports/expenses/${expense.id}`"
-                  class="text-indigo-600 underline hover:text-indigo-800 transition"
-                >
+                <button @click="editExpense(expense)" class="bg-blue-400 hover:bg-blue-500 text-white px-2 py-1 rounded shadow transition transform hover:scale-105">Edit</button>
+                <button @click="deleteExpense(expense.id)" class="bg-red-500 hover:bg-red-600 text-white px-2 py-1 rounded shadow transition transform hover:scale-105">Delete</button>
+                <router-link :to="`/reports/expenses/${expense.id}`" class="text-indigo-600 underline hover:text-indigo-800 transition">
                   View
                 </router-link>
               </td>
             </tr>
 
-            <!-- Expanded Details -->
+            <!-- Expanded Details with accordion animation -->
             <tr>
               <td colspan="8" class="p-0 border">
                 <div
@@ -136,11 +100,7 @@
                         </tr>
                       </thead>
                       <tbody>
-                        <tr
-                          v-for="item in expense.items"
-                          :key="`item-${item.id}`"
-                          class="hover:bg-gray-100 transition"
-                        >
+                        <tr v-for="item in expense.items" :key="`item-${item.id}`" class="hover:bg-gray-100 transition">
                           <td class="p-2 border">{{ getAccountName(item.account_id) }}</td>
                           <td class="p-2 border">{{ item.item_name }}</td>
                           <td class="p-2 border">{{ item.description }}</td>
@@ -158,119 +118,46 @@
     </div>
 
     <!-- Expense Modal -->
-    <div
-      v-if="showModal"
-      class="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50 animate-fadeInModal overflow-y-auto"
-    >
-      <div
-        class="bg-white rounded-lg p-6 w-full max-w-[806px] relative shadow-xl transform transition-all scale-95 animate-scaleUp overflow-y-auto max-h-[90vh]"
-      >
-        <h2 class="text-xl font-bold mb-4">
-          {{ editingExpense ? 'Edit Expense' : 'Add Expense' }}
-        </h2>
-        <button
-          @click="closeModal"
-          class="absolute top-2 right-2 text-gray-600 hover:text-gray-800 transition transform hover:scale-110"
-        >
-          ✖
-        </button>
+    <div v-if="showModal" class="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50 animate-fadeInModal">
+      <div class="bg-white rounded-lg p-6 w-full max-w-[806px] relative shadow-xl transform transition-all scale-95 animate-scaleUp">
+        <h2 class="text-xl font-bold mb-4">{{ editingExpense ? 'Edit Expense' : 'Add Expense' }}</h2>
+        <button @click="closeModal" class="absolute top-2 right-2 text-gray-600 hover:text-gray-800 transition transform hover:scale-110">✖</button>
 
         <!-- Expense Header -->
         <div class="grid grid-cols-2 gap-4 mb-4">
-          <input
-            v-model="expenseForm.description"
-            placeholder="Expense Description"
-            class="border p-2 rounded shadow-sm focus:ring-2 focus:ring-indigo-400 transition"
-          />
-          <input
-            v-model="expenseForm.reference"
-            placeholder="Reference"
-            class="border p-2 rounded shadow-sm focus:ring-2 focus:ring-indigo-400 transition"
-          />
-          <input
-            list="paymentAccounts"
-            v-model="expenseForm.payment_account_name"
-            placeholder="Payment Account (Cash/Bank)"
-            class="border p-2 rounded shadow-sm focus:ring-2 focus:ring-indigo-400 transition"
-            @focus="fetchCashBankAccounts('')"
-          />
+          <input v-model="expenseForm.description" placeholder="Expense Description" class="border p-2 rounded shadow-sm focus:ring-2 focus:ring-indigo-400 transition" />
+          <input v-model="expenseForm.reference" placeholder="Reference" class="border p-2 rounded shadow-sm focus:ring-2 focus:ring-indigo-400 transition" />
+          <input list="paymentAccounts" v-model="expenseForm.payment_account_name" placeholder="Payment Account (Cash/Bank)" class="border p-2 rounded shadow-sm focus:ring-2 focus:ring-indigo-400 transition" @focus="fetchCashBankAccounts('')"/>
           <datalist id="paymentAccounts">
             <option v-for="acc in cashBankAccounts" :key="acc.id" :value="acc.name"></option>
           </datalist>
-          <input
-            v-model="expenseForm.expense_date"
-            type="date"
-            class="border p-2 rounded shadow-sm focus:ring-2 focus:ring-indigo-400 transition"
-          />
+          <input v-model="expenseForm.expense_date" type="date" class="border p-2 rounded shadow-sm focus:ring-2 focus:ring-indigo-400 transition" />
         </div>
 
         <!-- Expense Items -->
         <h3 class="font-bold mb-2">Expense Items</h3>
-        <div
-          v-for="(item, index) in expenseForm.items"
-          :key="`item-${index}`"
-          class="grid grid-cols-5 gap-2 mb-2"
-        >
-          <input
-            list="expenseAccounts"
-            v-model="item.account_name"
-            placeholder="Select Expense Account"
-            class="border p-2 rounded shadow-sm focus:ring-2 focus:ring-indigo-400 transition"
-            @focus="fetchExpenseAccounts('')"
-          />
+        <div v-for="(item, index) in expenseForm.items" :key="`item-${index}`" class="grid grid-cols-5 gap-2 mb-2">
+          <input list="expenseAccounts" v-model="item.account_name" placeholder="Select Expense Account" class="border p-2 rounded shadow-sm focus:ring-2 focus:ring-indigo-400 transition" @focus="fetchExpenseAccounts('')"/>
           <datalist id="expenseAccounts">
             <option v-for="acc in expenseAccounts" :key="acc.id" :value="acc.name"></option>
           </datalist>
-          <input
-            v-model="item.item_name"
-            placeholder="Item Name"
-            class="border p-2 rounded shadow-sm focus:ring-2 focus:ring-indigo-400 transition"
-          />
-          <input
-            v-model="item.description"
-            placeholder="Item Description"
-            class="border p-2 rounded shadow-sm focus:ring-2 focus:ring-indigo-400 transition"
-          />
-          <input
-            v-model.number="item.amount"
-            type="number"
-            placeholder="Amount"
-            class="border p-2 rounded shadow-sm focus:ring-2 focus:ring-indigo-400 transition"
-          />
-          <button
-            type="button"
-            @click="removeItem(index)"
-            class="bg-red-500 hover:bg-red-600 text-white px-2 py-1 rounded shadow transition transform hover:scale-105"
-          >
-            ✖
-          </button>
+          <input v-model="item.item_name" placeholder="Item Name" class="border p-2 rounded shadow-sm focus:ring-2 focus:ring-indigo-400 transition" />
+          <input v-model="item.description" placeholder="Item Description" class="border p-2 rounded shadow-sm focus:ring-2 focus:ring-indigo-400 transition" />
+          <input v-model.number="item.amount" type="number" placeholder="Amount" class="border p-2 rounded shadow-sm focus:ring-2 focus:ring-indigo-400 transition" />
+          <button type="button" @click="removeItem(index)" class="bg-red-500 hover:bg-red-600 text-white px-2 py-1 rounded shadow transition transform hover:scale-105">✖</button>
         </div>
 
-        <button
-          type="button"
-          @click="addItem"
-          class="bg-gray-300 hover:bg-gray-400 px-4 py-2 rounded shadow transition transform hover:scale-105 mb-4"
-        >
-          + Add Item
-        </button>
+        <button type="button" @click="addItem" class="bg-gray-300 hover:bg-gray-400 px-4 py-2 rounded shadow transition transform hover:scale-105 mb-4">+ Add Item</button>
 
         <!-- Amount Paid -->
         <div class="mb-4">
           <label class="block text-sm font-bold mb-1">Amount Paid</label>
-          <input
-            type="number"
-            :value="amountPaid.toFixed(2)"
-            class="border p-2 rounded w-full bg-gray-100"
-            disabled
-          />
+          <input type="number" :value="amountPaid.toFixed(2)" class="border p-2 rounded w-full bg-gray-100" disabled />
         </div>
 
         <!-- Submit -->
         <div class="flex justify-end">
-          <button
-            @click="submitExpense"
-            class="bg-indigo-500 hover:bg-indigo-600 text-white px-6 py-2 rounded shadow transition transform hover:scale-105"
-          >
+          <button @click="submitExpense" class="bg-indigo-500 hover:bg-indigo-600 text-white px-6 py-2 rounded shadow transition transform hover:scale-105">
             {{ editingExpense ? 'Update Expense' : 'Create Expense' }}
           </button>
         </div>
@@ -278,41 +165,22 @@
     </div>
 
     <!-- Add Expense Item Modal -->
-    <div
-      v-if="showItemModal"
-      class="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50 animate-fadeInModal overflow-y-auto"
-    >
-      <div
-        class="bg-white rounded-lg p-6 w-full max-w-md relative shadow-xl transform transition-all scale-95 animate-scaleUp overflow-y-auto max-h-[90vh]"
-      >
+    <div v-if="showItemModal" class="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50 animate-fadeInModal">
+      <div class="bg-white rounded-lg p-6 w-full max-w-md relative shadow-xl transform transition-all scale-95 animate-scaleUp">
         <h2 class="text-xl font-bold mb-4">Add Expense Item</h2>
-        <button
-          @click="closeItemModal"
-          class="absolute top-2 right-2 text-gray-600 hover:text-gray-800 transition transform hover:scale-110"
-        >
-          ✖
-        </button>
+        <button @click="closeItemModal" class="absolute top-2 right-2 text-gray-600 hover:text-gray-800 transition transform hover:scale-110">✖</button>
 
         <div class="grid gap-4 mb-4">
-          <input
-            v-model="expenseItemForm.name"
-            placeholder="Expense Item Name"
-            class="border p-2 rounded shadow-sm focus:ring-2 focus:ring-indigo-400 transition"
-          />
-          <select
-            v-model="expenseItemForm.account_subtype"
-            class="border p-2 rounded shadow-sm focus:ring-2 focus:ring-indigo-400 transition"
-          >
+          <input v-model="expenseItemForm.name" placeholder="Expense Item Name" class="border p-2 rounded shadow-sm focus:ring-2 focus:ring-indigo-400 transition" />
+
+          <select v-model="expenseItemForm.account_subtype" class="border p-2 rounded shadow-sm focus:ring-2 focus:ring-indigo-400 transition">
             <option value="" disabled>Select Expense Type</option>
             <option v-for="acc in expenseSubtypes" :key="acc" :value="acc">{{ acc }}</option>
           </select>
         </div>
 
         <div class="flex justify-end">
-          <button
-            @click="submitExpenseItem"
-            class="bg-indigo-500 hover:bg-indigo-600 text-white px-6 py-2 rounded shadow transition transform hover:scale-105"
-          >
+          <button @click="submitExpenseItem" class="bg-indigo-500 hover:bg-indigo-600 text-white px-6 py-2 rounded shadow transition transform hover:scale-105">
             Save Item
           </button>
         </div>
@@ -640,15 +508,4 @@ export default {
   to { opacity: 1; transform: translateY(0);}
 }
 .animate-fadeIn { animation: fadeIn 0.5s ease-in-out forwards; }
-
-/* Smooth scrollbars everywhere */
-:host, html, body {
-  height: 100%;
-  overflow: hidden;
-}
-.p-6 {
-  overflow-y: auto;
-  scrollbar-width: thin;
-  scrollbar-color: #cbd5e1 transparent;
-}
 </style>
