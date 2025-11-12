@@ -162,53 +162,197 @@ def get_expense(id):
     })
 
 
-# --- Update expense with GL reversal ---
+# # --- Update expense with GL reversal ---
+# @token_required
+# @expenses_bp.route('/<int:id>', methods=['PUT'])
+# def update_expense(id):
+#     expense = Expense.query.get_or_404(id)
+#     data = request.json
+#     new_amount = data.get('amount', expense.total_amount)
+#     new_description = data.get('description', expense.description)
+#     new_category = data.get('category', expense.category)
+#     new_date = data.get('expense_date', expense.expense_date)
+
+#     # Reverse previous GL entries
+#     if expense.transaction_no:
+#         original_entries = GeneralLedger.query.filter_by(transaction_no=expense.transaction_no).all()
+#         for entry in original_entries:
+#             reverse_type = 'Credit' if entry.transaction_type == 'Debit' else 'Debit'
+#             reverse_entry = GeneralLedger(
+#                 account_id=entry.account_id,
+#                 transaction_type=reverse_type,
+#                 amount=entry.amount,
+#                 description=f"Reversal of {entry.description} before update",
+#                 transaction_date=datetime.utcnow(),
+#                 transaction_no=entry.transaction_no
+#             )
+#             db.session.add(reverse_entry)
+
+#     # Update expense fields
+#     expense.amount = new_amount
+#     expense.description = new_description
+#     expense.category = new_category
+#     expense.expense_date = new_date
+#     expense.updated_at = datetime.utcnow()
+#     expense.status = 1
+#     db.session.add(expense)
+#     db.session.flush()
+
+#     # Post new GL entries
+#     txn_id, txn_no_str = generate_transaction_number('EXP')
+#     expense.transaction_no = txn_id
+#     entries = [
+#         {"account_id": 600, "transaction_type": "Debit", "amount": new_amount},
+#         {"account_id": 1, "transaction_type": "Credit", "amount": new_amount}
+#     ]
+#     post_to_ledger(entries, transaction_no_id=txn_id, description=f"Updated Expense #{expense.id}: {expense.description}")
+
+#     db.session.commit()
+#     return jsonify({"message": "Expense updated with GL entries", "expense_id": expense.id})
+
+
+
+
 @token_required
 @expenses_bp.route('/<int:id>', methods=['PUT'])
 def update_expense(id):
-    expense = Expense.query.get_or_404(id)
-    data = request.json
-    new_amount = data.get('amount', expense.amount)
-    new_description = data.get('description', expense.description)
-    new_category = data.get('category', expense.category)
-    new_date = data.get('expense_date', expense.expense_date)
+    """
+    Soft-delete the old expense (with GL reversal) 
+    and create a new expense with the updated data.
+    """
+    try:
+        data = request.json
+        old_expense = Expense.query.get_or_404(id)
 
-    # Reverse previous GL entries
-    if expense.transaction_no:
-        original_entries = GeneralLedger.query.filter_by(transaction_no=expense.transaction_no).all()
-        for entry in original_entries:
-            reverse_type = 'Credit' if entry.transaction_type == 'Debit' else 'Debit'
-            reverse_entry = GeneralLedger(
-                account_id=entry.account_id,
-                transaction_type=reverse_type,
-                amount=entry.amount,
-                description=f"Reversal of {entry.description} before update",
-                transaction_date=datetime.utcnow(),
-                transaction_no=entry.transaction_no
+        # ----------------------------------------
+        # 1️⃣ Reverse Old GL Entries
+        # ----------------------------------------
+        if old_expense.transaction_no:
+            old_entries = GeneralLedger.query.filter_by(transaction_no=old_expense.transaction_no).all()
+            for entry in old_entries:
+                reverse_type = 'Credit' if entry.transaction_type == 'Debit' else 'Debit'
+                reversal = GeneralLedger(
+                    account_id=entry.account_id,
+                    transaction_type=reverse_type,
+                    amount=entry.amount,
+                    description=f"Reversal of {entry.description} on expense update",
+                    transaction_date=datetime.utcnow(),
+                    transaction_no=old_expense.transaction_no
+                )
+                db.session.add(reversal)
+
+        # ----------------------------------------
+        # 2️⃣ Soft Delete Old Expense
+        # ----------------------------------------
+        old_expense.status = 9
+        old_expense.updated_at = datetime.utcnow()
+        db.session.flush()
+
+        # ----------------------------------------
+        # 3️⃣ Create a New Expense (like in create_expense)
+        # ----------------------------------------
+        description = data.get('description')
+        payment_account_id = data.get('payment_account_id')
+        expense_date = data.get('expense_date', datetime.utcnow().strftime('%Y-%m-%d'))
+        reference = data.get('reference')
+        items_data = data.get('items', [])
+
+        if not description or not payment_account_id or not items_data:
+            return jsonify({"error": "Missing required fields: description, payment_account_id, and items"}), 400
+
+        expense_date_obj = datetime.strptime(expense_date, '%Y-%m-%d')
+
+        # Create new expense header
+        new_expense = Expense(
+            description=description,
+            expense_date=expense_date_obj,
+            payment_account_id=payment_account_id,
+            reference=reference,
+            status=1
+        )
+        db.session.add(new_expense)
+        db.session.flush()  # to get ID
+
+        # Create new transaction number for GL
+        txn_id, txn_no_str = generate_transaction_number('EXP', transaction_date=expense_date_obj)
+        new_expense.transaction_no = txn_id
+
+        # ----------------------------------------
+        # 4️⃣ Add Items
+        # ----------------------------------------
+        total_amount = 0
+        for item in items_data:
+            account_id = item.get('account_id')
+            item_name = item.get('item_name')
+            description = item.get('description', '')
+            amount = float(item.get('amount', 0))
+
+            if not account_id or not item_name or amount <= 0:
+                return jsonify({"error": "Each item must have account_id, item_name, and amount > 0"}), 400
+
+            total_amount += amount
+
+            expense_item = ExpenseItem(
+                expense_id=new_expense.id,
+                account_id=account_id,
+                item_name=item_name,
+                description=description,
+                amount=amount
             )
-            db.session.add(reverse_entry)
+            db.session.add(expense_item)
 
-    # Update expense fields
-    expense.amount = new_amount
-    expense.description = new_description
-    expense.category = new_category
-    expense.expense_date = new_date
-    expense.updated_at = datetime.utcnow()
-    expense.status = 1
-    db.session.add(expense)
-    db.session.flush()
+        new_expense.total_amount = total_amount
 
-    # Post new GL entries
-    txn_id, txn_no_str = generate_transaction_number('EXP')
-    expense.transaction_no = txn_id
-    entries = [
-        {"account_id": 600, "transaction_type": "Debit", "amount": new_amount},
-        {"account_id": 1, "transaction_type": "Credit", "amount": new_amount}
-    ]
-    post_to_ledger(entries, transaction_no_id=txn_id, description=f"Updated Expense #{expense.id}: {expense.description}")
+        # ----------------------------------------
+        # 5️⃣ Post New GL Entries
+        # ----------------------------------------
+        gl_entries = []
 
-    db.session.commit()
-    return jsonify({"message": "Expense updated with GL entries", "expense_id": expense.id})
+        # Debit each expense item account
+        for item in new_expense.items:
+            account = db.session.query(Account).filter_by(id=item.account_id).first()
+            if not account:
+                return jsonify({"error": f"Account {item.account_id} not found"}), 400
+            gl_entries.append({
+                "account_id": account.code,
+                "transaction_type": "Debit",
+                "amount": item.amount
+            })
+
+        # Credit payment account
+        payment_account = db.session.query(Account).filter_by(id=payment_account_id).first()
+        if not payment_account:
+            return jsonify({"error": f"Payment account {payment_account_id} not found"}), 400
+
+        gl_entries.append({
+            "account_id": payment_account.code,
+            "transaction_type": "Credit",
+            "amount": total_amount
+        })
+
+        post_to_ledger(
+            gl_entries,
+            transaction_no_id=txn_id,
+            description=f"Updated (new) Expense #{new_expense.id}: {new_expense.description}",
+            transaction_date=expense_date_obj
+        )
+
+        # ----------------------------------------
+        # 6️⃣ Commit Everything
+        # ----------------------------------------
+        db.session.commit()
+
+        return jsonify({
+            "message": "Expense updated by soft-deleting old one and creating new entry",
+            "old_expense_id": old_expense.id,
+            "new_expense_id": new_expense.id,
+            "transaction_no": txn_no_str,
+            "total_amount": total_amount
+        }), 200
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500
 
 
 # # --- Delete expense with GL reversal ---
