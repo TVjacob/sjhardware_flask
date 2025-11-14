@@ -1,5 +1,4 @@
 <template>
-  <!-- Make the entire page scrollable -->
   <div class="p-6 max-w-7xl mx-auto overflow-y-auto h-[calc(100vh-1rem)]">
     <h1 class="text-3xl font-bold mb-6 text-gray-800 animate-fadeIn">Expenses Management</h1>
 
@@ -19,11 +18,21 @@
       </h2>
     </div>
 
-    <!-- Search & Export -->
-    <div class="mb-4 flex flex-wrap gap-2">
+    <!-- Search & Filters -->
+    <div class="mb-4 flex flex-wrap gap-2 items-center">
       <input
         v-model="searchQuery"
         placeholder="Search description or reference"
+        class="border p-2 rounded shadow-sm focus:ring-2 focus:ring-indigo-400 transition"
+      />
+      <input
+        v-model="startDate"
+        type="date"
+        class="border p-2 rounded shadow-sm focus:ring-2 focus:ring-indigo-400 transition"
+      />
+      <input
+        v-model="endDate"
+        type="date"
         class="border p-2 rounded shadow-sm focus:ring-2 focus:ring-indigo-400 transition"
       />
       <button
@@ -33,7 +42,7 @@
         Search
       </button>
       <button
-        @click="fetchExpenses"
+        @click="resetFilters"
         class="bg-gray-300 hover:bg-gray-400 px-4 py-2 rounded shadow transition transform hover:scale-105"
       >
         Reset
@@ -329,9 +338,12 @@ import "jspdf-autotable";
 
 export default {
   data() {
+    const today = new Date().toISOString().split("T")[0];
     return {
       expenses: [],
       searchQuery: "",
+      startDate: today,
+      endDate: today,
       showModal: false,
       editingExpense: false,
       expandedRows: [],
@@ -341,7 +353,7 @@ export default {
         description: "",
         payment_account_name: "",
         payment_account_id: null,
-        expense_date: "",
+        expense_date: today,
         reference: "",
         items: [{ account_name: "", account_id: null, item_name: "", description: "", amount: 0 }],
       },
@@ -431,28 +443,22 @@ export default {
       }
       return true;
     },
-    async closeItemModal(){
-      this.showItemModal = false
-      this.expenseItemForm.name =''
+    async closeItemModal() {
+      this.showItemModal = false;
+      this.expenseItemForm.name = "";
     },
     async submitExpenseItem() {
       if (!this.expenseItemForm.name.trim() || !this.expenseItemForm.account_subtype) {
         alert("Please fill in both name and account subtype.");
         return;
       }
-
       try {
         const res = await api.post("/accounts/expense-items", {
           name: this.expenseItemForm.name.trim(),
           account_subtype: this.expenseItemForm.account_subtype,
         });
-
         alert(`✅ ${res.data.message} (Code: ${res.data.code})`);
-
-        // Refresh expense accounts list so new one appears in datalist
         await this.fetchExpenseAccounts();
-
-        // Reset and close modal
         this.expenseItemForm = { name: "", account_subtype: "" };
         this.showItemModal = false;
       } catch (err) {
@@ -460,7 +466,6 @@ export default {
         alert("Failed to add expense item. " + (err.response?.data?.error || err.message));
       }
     },
-
     async submitExpense() {
       const paymentAcc = this.cashBankAccounts.find(a => a.name === this.expenseForm.payment_account_name);
       if (!paymentAcc) {
@@ -517,12 +522,13 @@ export default {
       this.showModal = false;
     },
     resetForm() {
+      const today = new Date().toISOString().split("T")[0];
       this.expenseForm = {
         id: null,
         description: "",
         payment_account_name: "",
         payment_account_id: null,
-        expense_date: "",
+        expense_date: today,
         reference: "",
         items: [{ account_name: "", account_id: null, item_name: "", description: "", amount: 0 }],
       };
@@ -530,7 +536,13 @@ export default {
     },
     async fetchExpenses() {
       try {
-        const res = await api.get("/expenses/");
+        const res = await api.get("/expenses/", {
+          params: {
+            start_date: this.startDate,
+            end_date: this.endDate,
+            search: this.searchQuery
+          }
+        });
         this.expenses = res.data;
         this.$nextTick(() => this.updateExpandedHeights());
       } catch (err) {
@@ -551,17 +563,14 @@ export default {
       }
     },
     async searchExpenses() {
-      try {
-        const res = await api.get("/expenses/");
-        this.expenses = res.data.filter(
-          e => e.description.toLowerCase().includes(this.searchQuery.toLowerCase()) ||
-               (e.reference && e.reference.toLowerCase().includes(this.searchQuery.toLowerCase()))
-        );
-        this.$nextTick(() => this.updateExpandedHeights());
-      } catch (err) {
-        console.error("❌ Error searching expenses:", err);
-        alert("Search failed. Please try again.");
-      }
+      this.fetchExpenses();
+    },
+    resetFilters() {
+      const today = new Date().toISOString().split("T")[0];
+      this.searchQuery = "";
+      this.startDate = today;
+      this.endDate = today;
+      this.fetchExpenses();
     },
     formatDate(dateStr) {
       if (!dateStr) return "";
@@ -570,20 +579,15 @@ export default {
     },
     toggleExpand(id, index) {
       const i = this.expandedRows.indexOf(id);
-      if (i > -1) {
-        this.expandedRows.splice(i, 1);
-      } else {
-        this.expandedRows.push(id);
-      }
+      if (i > -1) this.expandedRows.splice(i, 1);
+      else this.expandedRows.push(id);
       this.$nextTick(() => this.updateExpandedHeights());
     },
     updateExpandedHeights() {
       if (!this.$refs.expandedRowsRefs) return;
       this.expenses.forEach((exp, idx) => {
         const el = this.$refs.expandedRowsRefs[idx];
-        if (el) {
-          this.expandedRowHeights[exp.id] = el.scrollHeight;
-        }
+        if (el) this.expandedRowHeights[exp.id] = el.scrollHeight;
       });
     },
     exportExcel() {
@@ -623,32 +627,13 @@ export default {
 </script>
 
 <style scoped>
-@keyframes fadeInModal {
-  0% { opacity: 0; }
-  100% { opacity: 1; }
-}
+/* Animations and scroll */
 .animate-fadeInModal { animation: fadeInModal 0.3s ease-in-out forwards; }
-
-@keyframes scaleUp {
-  0% { transform: scale(0.95); opacity: 0; }
-  100% { transform: scale(1); opacity: 1; }
-}
 .animate-scaleUp { animation: scaleUp 0.3s ease-out forwards; }
-
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(-10px);}
-  to { opacity: 1; transform: translateY(0);}
-}
 .animate-fadeIn { animation: fadeIn 0.5s ease-in-out forwards; }
-
-/* Smooth scrollbars everywhere */
-:host, html, body {
-  height: 100%;
-  overflow: hidden;
-}
-.p-6 {
-  overflow-y: auto;
-  scrollbar-width: thin;
-  scrollbar-color: #cbd5e1 transparent;
-}
+@keyframes fadeInModal { 0% { opacity: 0; } 100% { opacity: 1; } }
+@keyframes scaleUp { 0% { transform: scale(0.95); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(-10px);} to { opacity: 1; transform: translateY(0);} }
+:host, html, body { height: 100%; overflow: hidden; }
+.p-6 { overflow-y: auto; scrollbar-width: thin; scrollbar-color: #cbd5e1 transparent; }
 </style>

@@ -115,14 +115,73 @@ def create_expense():
         return jsonify({"error": str(e)}), 500
 
 # --- Get all expenses ---
+# @token_required
+# @expenses_bp.route('/', methods=['GET'])
+# def get_expenses():
+#     expenses = Expense.query.filter_by( status=1).all()
+#     data = [{
+#         "id": e.id,
+#         "description": e.description,
+#         "total_amount": e.total_amount,  # FIXED: replaced 'amount' with 'total_amount'
+#         "payment_account_id": e.payment_account_id,
+#         "expense_date": e.expense_date.strftime('%Y-%m-%d') if e.expense_date else None,
+#         "reference": e.reference,
+#         "status": e.status,
+#         "transaction_no": e.transaction_no,
+#         "items": [
+#             {
+#                 "id": item.id,
+#                 "account_id": item.account_id,
+#                 "item_name": item.item_name,
+#                 "description": item.description,
+#                 "amount": item.amount
+#             }
+#             for item in e.items
+#         ]
+#     } for e in expenses]
+    
+#     return jsonify(data)
+# --- Get all expenses with optional search and date filter ---
 @token_required
 @expenses_bp.route('/', methods=['GET'])
 def get_expenses():
-    expenses = Expense.query.filter_by( status=1).all()
+    # Get query parameters
+    start_date = request.args.get('start_date')  # expected format: YYYY-MM-DD
+    end_date = request.args.get('end_date')      # expected format: YYYY-MM-DD
+    search = request.args.get('search', '').strip().lower()
+
+    query = Expense.query.filter_by(status=1)
+
+    # Filter by date range if provided
+    if start_date:
+        try:
+            start_dt = datetime.strptime(start_date, '%Y-%m-%d')
+            query = query.filter(Expense.expense_date >= start_dt)
+        except ValueError:
+            return jsonify({"error": "Invalid start_date format. Use YYYY-MM-DD"}), 400
+
+    if end_date:
+        try:
+            end_dt = datetime.strptime(end_date, '%Y-%m-%d')
+            query = query.filter(Expense.expense_date <= end_dt)
+        except ValueError:
+            return jsonify({"error": "Invalid end_date format. Use YYYY-MM-DD"}), 400
+
+    # Fetch all filtered expenses
+    expenses = query.all()
+
+    # Filter by search term in description or reference
+    if search:
+        expenses = [
+            e for e in expenses
+            if search in e.description.lower() or (e.reference and search in e.reference.lower())
+        ]
+
+    # Serialize response
     data = [{
         "id": e.id,
         "description": e.description,
-        "total_amount": e.total_amount,  # FIXED: replaced 'amount' with 'total_amount'
+        "total_amount": e.total_amount,
         "payment_account_id": e.payment_account_id,
         "expense_date": e.expense_date.strftime('%Y-%m-%d') if e.expense_date else None,
         "reference": e.reference,
@@ -139,7 +198,7 @@ def get_expenses():
             for item in e.items
         ]
     } for e in expenses]
-    
+
     return jsonify(data)
 
 
