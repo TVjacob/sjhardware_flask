@@ -15,8 +15,10 @@ import Purchaselist from '@/pages/PurchaseList.vue';
 import SalesList from '../pages/SalesList.vue';
 
 // Reports
-import OutOfStock from '@/pages/reports/OutOfStock.vue';
-import StockList from '@/pages/reports/StockList.vue';
+// import OutOfStock from '@/pages/reports/OutOfStock.vue';
+// import StockList from '@/pages/reports/StockList.vue';
+import OutOfStock from '@/pages/reports/Outofstock.vue';
+import StockList from '@/pages/reports/Stocklist.vue';
 import Consumption from '@/pages/reports/ConsumptionList.vue';
 import Performance from '@/pages/reports/Performance.vue';
 import PurchaseReport from '@/pages/reports/PurchaseReport.vue';
@@ -35,6 +37,8 @@ import Acoa from '@/pages/reports/Acoa.vue';
 import Accounts from '@/pages/Accounts.vue';
 import BalanceSheet from '@/pages/reports/BalanceSheet.vue';
 import UserProfile from '@/pages/UserProfile.vue';
+import PurchaseProduct from '@/pages/reports/PurchaseProduct.vue';
+import SalesProfit from '@/pages/reports/SalesProfit.vue';
 
 const routes = [
   {
@@ -65,6 +69,11 @@ const routes = [
 
       // Reports Dashboard
       { path: 'reports', component: Report, meta: { showGreeting: false, pageName: 'Reports',requiresAuth: true, } },
+      
+      { path: 'reports/purchased-products', component: PurchaseProduct, meta: { showGreeting: false, pageName: 'Purchased Product',requiresAuth: true, } },
+
+      // { path: 'reports/sales-profit', component: SalesProfit, meta: { showGreeting: false, pageName: 'Sales Profit',requiresAuth: true, } },
+
 
       // Individual Reports
       { path: 'reports/general-ledger', component: GeneralLedger, meta: { showGreeting: false, pageName: 'General Ledger',requiresAuth: true, } },
@@ -82,6 +91,7 @@ const routes = [
       { path: 'reports/consumption-list', component: Consumption, meta: { showGreeting: false, pageName: 'Consumption Report',requiresAuth: true, } },
       { path: 'reports/stock-list', component: StockList, meta: { showGreeting: false, pageName: 'Stock List',requiresAuth: true, } },
       { path: 'reports/out-of-stock', component: OutOfStock, meta: { showGreeting: false, pageName: 'Out Of Stock',requiresAuth: true, } },
+      { path: 'reports/sales-profit', component: SalesProfit, meta: { showGreeting: false, pageName: 'Sales Profit',requiresAuth: true, } },
       {
         path: '/purchase-orders/:id',
         name: 'PurchaseOrderDetails',

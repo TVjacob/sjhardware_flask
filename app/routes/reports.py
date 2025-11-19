@@ -1,5 +1,5 @@
 from flask import Blueprint, jsonify
-from app.models import AccountTypeEnum, Category, GeneralLedger, SaleItem, PurchaseOrder, Expense,Customer, Supplier, Sale, PurchaseOrder, Product, Account
+from app.models import AccountTypeEnum, Category, GeneralLedger, PurchaseOrderItem, SaleItem, PurchaseOrder, Expense,Customer, Supplier, Sale, PurchaseOrder, Product, Account
 from app import db
 from sqlalchemy import func
 from datetime import datetime, timedelta
@@ -1868,3 +1868,209 @@ def balance_sheet_report():
         }
     })
 
+
+
+@reports_bp.route("/purchased-product", methods=["GET"])
+@token_required
+def purchase_report():
+    page = int(request.args.get("page", 1))
+    per_page = 100
+
+    search = request.args.get("search", "").strip()
+    start_date = request.args.get("start_date", None)
+    end_date = request.args.get("end_date", None)
+
+    query = (
+        db.session.query(
+            PurchaseOrder.id.label("purchase_id"),
+            PurchaseOrder.invoice_number,
+            PurchaseOrder.purchase_date,
+            PurchaseOrder.memo,
+            Supplier.name.label("supplier_name"),
+            Product.name.label("product_name"),
+            Category.name.label("category_name"),
+            PurchaseOrderItem.quantity,
+            PurchaseOrderItem.unit_price,
+            PurchaseOrderItem.total_price
+        )
+        .join(PurchaseOrderItem, PurchaseOrder.id == PurchaseOrderItem.purchase_order_id)
+        .join(Product, Product.id == PurchaseOrderItem.product_id)
+        .outerjoin(Category, Category.id == Product.category_id)
+        .outerjoin(Supplier, Supplier.id == PurchaseOrder.supplier_id)
+        .filter(PurchaseOrder.status != 9)
+    )
+
+    # Search filter
+    if search:
+        query = query.filter(
+            or_(
+                Product.name.ilike(f"%{search}%"),
+                PurchaseOrder.invoice_number.ilike(f"%{search}%")
+            )
+        )
+
+    # Date filter
+    if start_date:
+        query = query.filter(
+            cast(PurchaseOrder.purchase_date, String) >= start_date
+        )
+    if end_date:
+        query = query.filter(
+            cast(PurchaseOrder.purchase_date, String) <= end_date
+        )
+
+    total_records = query.count()
+    results = query.order_by(PurchaseOrder.purchase_date.desc()) \
+                   .paginate(page=page, per_page=per_page, error_out=False)
+
+    data = []
+    total_qty = 0
+    total_amount = 0
+
+    for row in results.items:
+        total_qty += row.quantity
+        total_amount += row.total_price
+
+        data.append({
+            "purchase_id": row.purchase_id,
+            "invoice_number": row.invoice_number,
+            "purchase_date": row.purchase_date,
+            "memo": row.memo,
+            "supplier": row.supplier_name,
+            "product": row.product_name,
+            "category": row.category_name,
+            "qty": row.quantity,
+            "unit_price": row.unit_price,
+            "total_price": row.total_price
+        })
+
+    return jsonify({
+        "page": page,
+        "per_page": per_page,
+        "total_records": total_records,
+        "totals": {
+            "total_quantity": total_qty,
+            "total_amount": total_amount
+        },
+        "data": data
+    }), 200
+
+
+@reports_bp.route("/sales-profit", methods=["GET"])
+@token_required
+def sales_profit_report():
+    page = int(request.args.get("page", 1))
+    per_page = 100
+
+    search = request.args.get("search", "").strip()
+    start_date = request.args.get("start_date", None)
+    end_date = request.args.get("end_date", None)
+
+    # Latest purchase price subquery
+    last_purchase = (
+        db.session.query(
+            PurchaseOrderItem.product_id,
+            func.max(PurchaseOrder.purchase_date).label("last_date")
+        )
+        .join(PurchaseOrder, PurchaseOrder.id == PurchaseOrderItem.purchase_order_id)
+        .filter(PurchaseOrder.status != 9)
+        .group_by(PurchaseOrderItem.product_id)
+        .subquery()
+    )
+
+    final_purchase_price = (
+        db.session.query(
+            PurchaseOrderItem.product_id,
+            PurchaseOrderItem.unit_price
+        )
+        .join(PurchaseOrder, PurchaseOrder.id == PurchaseOrderItem.purchase_order_id)
+        .join(
+            last_purchase,
+            and_(
+                last_purchase.c.product_id == PurchaseOrderItem.product_id,
+                PurchaseOrder.purchase_date == last_purchase.c.last_date
+            )
+        )
+    ).subquery()
+
+    # Main query
+    query = (
+        db.session.query(
+            Sale.id,
+            Sale.sale_number,
+            Sale.sale_date,
+            Product.name.label("product_name"),
+            Category.name.label("category_name"),
+            SaleItem.quantity,
+            SaleItem.unit_price,
+            final_purchase_price.c.unit_price.label("purchase_unit_price")
+        )
+        .join(SaleItem, Sale.id == SaleItem.sale_id)
+        .join(Product, Product.id == SaleItem.product_id)
+        .outerjoin(Category, Category.id == Product.category_id)
+        .outerjoin(final_purchase_price, Product.id == final_purchase_price.c.product_id)
+        .filter(Sale.status != 9)
+    )
+
+    # Search
+    if search:
+        query = query.filter(
+            or_(
+                Product.name.ilike(f"%{search}%"),
+                Sale.sale_number.ilike(f"%{search}%")
+            )
+        )
+
+    # Date filter
+    if start_date:
+        query = query.filter(
+            cast(Sale.sale_date, String) >= start_date
+        )
+    if end_date:
+        query = query.filter(
+            cast(Sale.sale_date, String) <= end_date
+        )
+
+    total_records = query.count()
+    results = query.order_by(Sale.sale_date.desc()) \
+                   .paginate(page=page, per_page=per_page, error_out=False)
+
+    data = []
+    total_sales = 0
+    total_cost = 0
+    total_profit = 0
+
+    for row in results.items:
+        cost = (row.purchase_unit_price or 0) * row.quantity
+        sales_amount = row.unit_price * row.quantity
+        profit = sales_amount - cost
+
+        total_sales += sales_amount
+        total_cost += cost
+        total_profit += profit
+
+        data.append({
+            "sale_id": row.id,
+            "invoice_number": row.sale_number,
+            "sale_date": row.sale_date,
+            "product": row.product_name,
+            "category": row.category_name,
+            "qty": row.quantity,
+            "selling_price": row.unit_price,
+            "purchase_price": row.purchase_unit_price or 0,
+            "total_sales": sales_amount,
+            "total_cost": cost,
+            "profit": profit
+        })
+
+    return jsonify({
+        "page": page,
+        "per_page": per_page,
+        "total_records": total_records,
+        "totals": {
+            "sales": total_sales,
+            "cost": total_cost,
+            "profit": total_profit
+        },
+        "data": data
+    }), 200
