@@ -1,10 +1,10 @@
 from flask import Blueprint, request, jsonify
 from app import db
-from app.models import Account, InventoryTransaction, Payment, Product, PurchaseOrderItem, Sale, SaleItem, GeneralLedger
+from app.models import Account, Customer, InventoryTransaction, Payment, Product, PurchaseOrderItem, Sale, SaleItem, GeneralLedger
 from app.utils.auth import token_required
 from app.utils.gl_utils import post_to_ledger, generate_transaction_number_partone,generate_transaction_number
 from datetime import datetime
-from sqlalchemy import or_
+from sqlalchemy import or_,cast ,String
 
 
 sales_bp = Blueprint('sales', __name__, url_prefix='/sales')
@@ -199,7 +199,30 @@ def create_sale():
 @token_required
 @sales_bp.route('/', methods=['GET'])
 def get_sales():
-    sales = Sale.query.filter(Sale.status.in_([1, 2, 3,4])).order_by(Sale.id.desc()).all()  # Only active
+    search = request.args.get("search", "").strip()
+    start_date = request.args.get("start_date")
+    end_date = request.args.get("end_date")
+
+    # Always inner join Customer
+    query = Sale.query.join(Customer).filter(Sale.status.in_([1, 2, 3, 4]))
+
+    # Search by sale number or customer name
+    if search:
+        query = query.filter(
+            or_(
+                Sale.sale_number.ilike(f"%{search}%"),
+                Customer.name.ilike(f"%{search}%")
+            )
+        )
+
+    # Date filters
+    if start_date:
+        query = query.filter(cast(Sale.sale_date, String) >= start_date)
+    if end_date:
+        query = query.filter(cast(Sale.sale_date, String) <= end_date)
+
+    sales = query.order_by(Sale.id.desc()).all()  # Only active/filtered sales
+
     data = []
     for s in sales:
         sale_items = SaleItem.query.filter_by(sale_id=s.id, status=1).all()
@@ -219,11 +242,14 @@ def get_sales():
             "sale_date": s.sale_date,
             "created_at": s.created_at,
             "updated_at": s.updated_at,
+            "customer_name": s.customer.name,  # always present due to inner join
             "items": items,
-            "balance":s.balance,
-            "total_paid":s.total_paid,
+            "balance": s.balance,
+            "total_paid": s.total_paid,
         })
+
     return jsonify(data)
+
 
 
 # ------------------ Get Single Sale ------------------ #
