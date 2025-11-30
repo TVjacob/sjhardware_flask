@@ -26,8 +26,8 @@ services:
       FLASK_ENV: development
     ports:
       - "5000:5000"
-    depends_on:
-      - db
+    # depends_on:
+    #   - db
     restart: unless-stopped
     command: >
       sh -c "
