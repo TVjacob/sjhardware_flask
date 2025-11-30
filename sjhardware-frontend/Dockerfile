@@ -13,6 +13,7 @@ RUN npm install
 # Copy frontend source
 COPY sjhardware-frontend/ ./
 
+
 # Expose port for dev server
 EXPOSE 5173
 
