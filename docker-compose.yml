@@ -15,7 +15,7 @@ services:
     restart: unless-stopped
 
   backend:
-    build: ./sjhardware_flask
+    build: .
     container_name: sj-backend
     environment:
       DATABASE_URL: postgresql://postgres:password1@db:5432/sjhardware
