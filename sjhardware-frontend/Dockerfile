@@ -5,14 +5,13 @@ FROM node:20-alpine
 WORKDIR /app
 
 # Copy package.json & package-lock.json
-COPY sjhardware-frontend/package*.json ./
+COPY package*.json ./
 
 # Install dependencies
 RUN npm install
 
 # Copy frontend source
-COPY sjhardware-frontend/ ./
-
+COPY . ./
 
 # Expose port for dev server
 EXPOSE 5173
