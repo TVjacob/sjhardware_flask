@@ -1,19 +1,19 @@
 version: '3.9'
 
 services:
-  # Postgres service (existing container)
-  db:
-    image: postgres:15
-    container_name: postgres-db
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: password1
-      POSTGRES_DB: sjhardware
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
-    restart: unless-stopped
+  # # Postgres service (existing container)
+  # db:
+  #   image: postgres:15
+  #   container_name: postgres-db
+  #   environment:
+  #     POSTGRES_USER: postgres
+  #     POSTGRES_PASSWORD: password1
+  #     POSTGRES_DB: sjhardware
+  #   volumes:
+  #     - pgdata:/var/lib/postgresql/data
+  #   ports:
+  #     - "5432:5432"
+  #   restart: unless-stopped
 
   # Backend service
   backend:
@@ -54,5 +54,5 @@ services:
       npm run dev -- --host 0.0.0.0
       "
 
-volumes:
-  pgdata:
+# volumes:
+#   pgdata:
