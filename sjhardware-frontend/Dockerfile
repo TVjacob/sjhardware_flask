@@ -1,14 +1,20 @@
-# Use node image for building frontend
-FROM node:20-alpine as build
+# Use Node.js image for frontend dev
+FROM node:20-alpine
 
+# Set working directory
 WORKDIR /app
-COPY sjhardware-frontend/package*.json ./
-RUN npm install
-COPY sjhardware-frontend/ ./
-RUN npm run build
 
-# Use nginx to serve frontend
-FROM nginx:alpine
-COPY --from=build /app/dist /usr/share/nginx/html
-EXPOSE 80
-CMD ["nginx", "-g", "daemon off;"]
+# Copy package.json & package-lock.json
+COPY sjhardware-frontend/package*.json ./
+
+# Install dependencies
+RUN npm install
+
+# Copy frontend source
+COPY sjhardware-frontend/ ./
+
+# Expose port for dev server
+EXPOSE 5173
+
+# Run frontend in development mode
+CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]

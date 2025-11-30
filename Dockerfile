@@ -10,7 +10,7 @@ COPY requirements.txt .
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Install PostgreSQL client for psql debugging
+# Install PostgreSQL client for debugging / migrations
 RUN apt-get update && \
     apt-get install -y postgresql-client && \
     rm -rf /var/lib/apt/lists/*
@@ -18,12 +18,12 @@ RUN apt-get update && \
 # Copy the rest of the application
 COPY . .
 
-# Set environment variables (optional)
+# Set environment variables
 ENV FLASK_APP=run.py
-ENV FLASK_ENV=production
+ENV FLASK_ENV=development
 
 # Expose the port your Flask app runs on
 EXPOSE 5000
 
-# Command to run the app with a longer timeout (e.g., 120s)
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--timeout", "120", "run:app"]
+# Command to run the app directly (no Gunicorn)
+CMD ["python", "run.py"]
