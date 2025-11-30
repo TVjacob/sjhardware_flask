@@ -1,6 +1,7 @@
 version: '3.9'
 
 services:
+  # Postgres service (existing container)
   db:
     image: postgres:15
     container_name: postgres-db
@@ -14,11 +15,12 @@ services:
       - "5432:5432"
     restart: unless-stopped
 
+  # Backend service
   backend:
-    build: .
+    build: ./sjhardware_flask
     container_name: sj-backend
     environment:
-      DATABASE_URL: postgresql://postgres:password1@db:5432/sjhardware
+      DATABASE_URL: postgresql://postgres:password1@postgres-db:5432/sjhardware
       SECRET_KEY: supersecretkey
       FLASK_APP: run.py
       FLASK_ENV: development
@@ -37,6 +39,7 @@ services:
       python run.py
       "
 
+  # Frontend service
   frontend:
     build: ./sjhardware-frontend
     container_name: sj-frontend
