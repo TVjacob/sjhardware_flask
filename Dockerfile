@@ -1,29 +1,34 @@
-# Use an official Python runtime as a parent image
-FROM python:3.13-slim
+# ===== STAGE 1: Build Vue frontend =====
+FROM node:20-alpine as frontend-build
+WORKDIR /frontend
+COPY sjhardware-frontend/package*.json ./
+RUN npm install
+COPY sjhardware-frontend/ ./
+RUN npm run build
 
-# Set working directory inside container
+# ===== STAGE 2: Python + Flask backend =====
+FROM python:3.11-slim
+
 WORKDIR /app
 
-# Copy requirements first for caching
-COPY requirements.txt .
-
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Install PostgreSQL client for debugging / migrations
-RUN apt-get update && \
-    apt-get install -y postgresql-client && \
+# Install system deps + gunicorn
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential gcc libpq-dev && \
     rm -rf /var/lib/apt/lists/*
 
-# Copy the rest of the application
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt gunicorn
+
+# Copy backend
 COPY . .
 
-# Set environment variables
-ENV FLASK_APP=run.py
-ENV FLASK_ENV=development
+# Copy built Vue files into Flask static folder
+COPY --from=frontend-build /frontend/dist ./app/static
 
-# Expose the port your Flask app runs on
+# Use gunicorn in production
+ENV FLASK_ENV=production
+ENV PYTHONUNBUFFERED=1
+
 EXPOSE 5000
 
-# Command to run the app directly (no Gunicorn)
-CMD ["python", "run.py"]
+CMD ["gunicorn", "--bind", "0.0.0.0:5000", "run:app"]
