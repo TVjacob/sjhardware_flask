@@ -1,20 +1,34 @@
-# Use Node.js image for frontend dev
-FROM node:20-alpine
+# ----------- BUILD STAGE -----------
+    FROM node:18-alpine AS build
 
-# Set working directory
-WORKDIR /app
-
-# Copy package.json & package-lock.json
-COPY package*.json ./
-
-# Install dependencies
-RUN npm install
-
-# Copy frontend source
-COPY . ./
-
-# Expose port for dev server
-EXPOSE 5173
-
-# Run frontend in development mode
-CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
+    WORKDIR /app
+    
+    # Copy dependency files
+    COPY package*.json ./
+    
+    # Install dependencies
+    RUN npm install
+    
+    # Copy source
+    COPY . .
+    
+    # Build for production
+    RUN npm run build
+    
+    
+    # ----------- PRODUCTION STAGE -----------
+    FROM node:18-alpine
+    
+    WORKDIR /app
+    
+    # Install a simple static server
+    RUN npm install -g serve
+    
+    # Copy only the production build
+    COPY --from=build /app/dist ./dist
+    
+    EXPOSE 5173
+    
+    # Start the optimized, built app
+    CMD ["serve", "-s", "dist", "-l", "5173"]
+    

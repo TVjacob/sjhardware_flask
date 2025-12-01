@@ -1,21 +1,7 @@
 version: '3.9'
 
 services:
-  # # Postgres service (existing container)
-  # db:
-  #   image: postgres:15
-  #   container_name: postgres-db
-  #   environment:
-  #     POSTGRES_USER: postgres
-  #     POSTGRES_PASSWORD: password1
-  #     POSTGRES_DB: sjhardware
-  #   volumes:
-  #     - pgdata:/var/lib/postgresql/data
-  #   ports:
-  #     - "5432:5432"
-  #   restart: unless-stopped
 
-  # Backend service
   backend:
     build: .
     container_name: sj-backend
@@ -23,23 +9,20 @@ services:
       DATABASE_URL: postgresql://postgres:password1@postgres-db:5432/sjhardware
       SECRET_KEY: supersecretkey
       FLASK_APP: run.py
-      FLASK_ENV: development
+      FLASK_ENV: production
     ports:
       - "5000:5000"
-    # depends_on:
-    #   - db
     restart: unless-stopped
     command: >
       sh -c "
-      until psql $DATABASE_URL -c '\q'; do
+      until pg_isready -h postgres-db -p 5432; do
         echo 'Waiting for Postgres...';
         sleep 2;
       done;
-      flask db upgrade &&
+      flask db upgrade || true &&
       python run.py
       "
 
-  # Frontend service
   frontend:
     build: ./sjhardware-frontend
     container_name: sj-frontend
@@ -48,11 +31,3 @@ services:
     depends_on:
       - backend
     restart: unless-stopped
-    command: >
-      sh -c "
-      npm install &&
-      npm run dev -- --host 0.0.0.0
-      "
-
-# volumes:
-#   pgdata:
