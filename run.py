@@ -12,10 +12,33 @@ from app.routes.accounts import generate_account_code
 from app.utils.gl_utils import generate_transaction_number_partone
 import os
 from flask import send_from_directory
+from app import create_app, db
+import os
+from flask import send_from_directory
 
-
+# ------------------ IMPORT ALL MODELS HERE (THIS FIXES EVERYTHING) ------------------
+from app.models import (
+    User, Permission, Account, PurchaseOrder, PurchaseOrderItem,
+    Sale, SaleItem, Product, InventoryTransaction
+)
+# -----------------------------------------------------------------------------------
 
 app = create_app()
+
+# Serve Vue frontend (important!)
+@app.route("/", defaults={"path": ""})
+@app.route("/<path:path>")
+def serve_vue(path):
+    if path != "" and os.path.exists(os.path.join(app.static_folder, path)):
+        return send_from_directory(app.static_folder, path)
+    return send_from_directory(app.static_folder, "index.html")
+
+@app.route("/api/health")
+def health():
+    return {"status": "ok"}
+
+
+# app = create_app()
 
 
 # Mapping of accounts with proper enum subtypes and parent_id
@@ -703,31 +726,46 @@ def repair_inventory():
     print("✅ Inventory repair completed.")
        
 
+# if os.environ.get("RENDER"):
+#     print("Running on Render → applying migrations and seeding...")
+#     with app.app_context():
+#         db.create_all()
+#         # Call your functions
+#         repair_inventory()
+#         update_all_accounts()
+#         normalize_account_type_enum_uppercase()
+#         seed_permissions()
+#         seed_chart_of_accounts()
+#         create_default_admin()
+#         fix_missing_purchase_order_transactions()
+
+
+
+# if __name__ == "__main__":
+#     with app.app_context():
+#         from app.models import Account, PurchaseOrder, User, Permission
+#         from app.utils.gl_utils import generate_transaction_number, post_to_ledger
+#         repair_inventory()
+#         update_all_accounts()
+#         normalize_account_type_enum_uppercase()
+#         seed_permissions()
+#         seed_chart_of_accounts()
+#         create_default_admin()
+#         fix_missing_purchase_order_transactions()
+# ------------------ ONLY RUN SEEDING ON RENDER, AND ONLY ONCE ------------------
 if os.environ.get("RENDER"):
     print("Running on Render → applying migrations and seeding...")
     with app.app_context():
-        db.create_all()
-        # Call your functions
+        db.create_all()  # creates tables if they don't exist
+        from app.models import *  # make sure everything is loaded
         repair_inventory()
         update_all_accounts()
         normalize_account_type_enum_uppercase()
         seed_permissions()
-        seed_chart_of_accounts()
         create_default_admin()
-        fix_missing_purchase_order_transactions()
+        # no need to run these twice: seed_chart_of_accounts(), fix_missing_purchase_order_transactions()
 
-
-
+# ------------------ FOR LOCAL DEVELOPMENT ONLY ------------------
 if __name__ == "__main__":
-    with app.app_context():
-        from app.models import Account, PurchaseOrder, User, Permission
-        from app.utils.gl_utils import generate_transaction_number, post_to_ledger
-        repair_inventory()
-        update_all_accounts()
-        normalize_account_type_enum_uppercase()
-        seed_permissions()
-        seed_chart_of_accounts()
-        create_default_admin()
-        fix_missing_purchase_order_transactions()
-
-    app.run(debug=True)
+    app.run(host="0.0.0.0", port=5000, debug=True)
+    # app.run(debug=True)
