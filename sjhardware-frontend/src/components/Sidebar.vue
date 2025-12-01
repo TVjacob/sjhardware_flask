@@ -79,7 +79,7 @@ export default {
 
     // --- Full menu with associated permissions ---
     const menuItems = [
-      { name: 'Dashboard', path: '/', icon: '🏠', permission: null },
+      { name: 'Dashboard', path: '/', icon: '🏠', permission: 'view_dashboard' },
       { name: 'Accounts', path: '/accounts', icon: '🏦', permission: 'view_ledger' },
       { name: 'Products', path: '/products', icon: '📦', permission: 'view_inventory' },
       { name: 'Customers', path: '/customers', icon: '👥', permission: 'view_customers' },

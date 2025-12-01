@@ -110,6 +110,8 @@ permissions = [
     ("manage_roles", "Create or edit roles"),
     ("view_permissions", "View permission list"),
     ("assign_permissions", "Assign or remove user permissions"),
+    ("view_dashboard","Enables user see the dashboard"),
+
 
     # --- Sales / Invoicing ---
     ("view_invoices", "View all sales invoices"),
