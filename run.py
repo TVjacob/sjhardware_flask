@@ -15,6 +15,9 @@ from flask import send_from_directory
 from app import create_app, db
 import os
 from flask import send_from_directory
+import os
+from flask import send_from_directory
+
 
 # ------------------ IMPORT ALL MODELS HERE (THIS FIXES EVERYTHING) ------------------
 from app.models import (
@@ -192,14 +195,17 @@ permissions = [
 
 ]
 
-
-# Serve Vue frontend in production
+# Serve Vue frontend (important!)
 @app.route("/", defaults={"path": ""})
 @app.route("/<path:path>")
 def serve_vue(path):
     if path != "" and os.path.exists(os.path.join(app.static_folder, path)):
         return send_from_directory(app.static_folder, path)
     return send_from_directory(app.static_folder, "index.html")
+
+@app.route("/api/health")
+def health():
+    return {"status": "ok"}
 
 def seed_permissions():
     """Insert permissions if they don’t already exist and assign all to admin."""
