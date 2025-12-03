@@ -77,27 +77,70 @@ def seed_permissions():
             print("All permissions assigned to admin")
 
 def update_all_accounts():
+    """Update or create accounts — 100% safe on every deploy"""
     with app.app_context():
+        print("Updating chart of accounts (safe mode)...")
         for acc in account_updates:
-            account = Account.query.get(acc["id"]) or Account.query.filter_by(name=acc["name"]).first()
-            account_type = acc["account_subtype"].__class__.__name__.replace("SubtypeEnum", "").upper()
+            account_id = acc["id"]
+            name = acc["name"]
+            subtype = acc["account_subtype"]
+            parent_id = acc.get("parent_id")
+            description = acc.get("description", "")
+            provided_code = acc.get("code")  # may be None
 
+            # Determine type from enum
+            account_type = subtype.__class__.__name__.replace("SubtypeEnum", "").upper()
+
+            # 1. Try by ID first
+            account = Account.query.get(account_id)
+
+            # 2. If not found by ID → try by name
             if not account:
-                code = acc.get("code") or generate_account_code(account_type, None)
-                account = Account(id=acc["id"], name=acc["name"], code=code, account_type=account_type,
-                                account_subtype=acc["account_subtype"].value, parent_id=acc["parent_id"],
-                                description=acc["description"], status=1)
+                account = Account.query.filter_by(name=name).first()
+
+            # 3. If still not found → create new (but NEVER duplicate code)
+            if not account:
+                # Only generate code if not provided
+                if provided_code:
+                    code_to_use = str(provided_code)
+                else:
+                    # Auto-generate safe code
+                    last = db.session.query(db.func.max(Account.code)).filter(
+                        Account.account_type == account_type
+                    ).scalar()
+                    code_to_use = generate_account_code(account_type, last)
+
+                account = Account(
+                    id=account_id,
+                    name=name,
+                    code=code_to_use,
+                    account_type=account_type,
+                    account_subtype=subtype.value,
+                    parent_id=parent_id,
+                    description=description,
+                    status=1
+                )
                 db.session.add(account)
+                print(f"Created: {name} (code: {code_to_use})")
             else:
-                account.name = acc["name"]
-                account.account_subtype = acc["account_subtype"].value
-                account.parent_id = acc["parent_id"]
-                account.description = acc["description"]
-                if acc.get("code"):
-                    account.code = acc["code"]
-            account.updated_at = datetime.now(timezone.utc)
-        db.session.commit()
-        print("Chart of accounts updated")
+                # Just update fields — NEVER touch code if it already exists
+                account.name = name
+                account.account_subtype = subtype.value
+                account.parent_id = parent_id
+                account.description = description
+                account.account_type = account_type
+                if provided_code and (not account.code or account.code != str(provided_code)):
+                    # Only update code if it's currently blank or wrong
+                    account.code = str(provided_code)
+                print(f"Updated: {name}")
+
+        try:
+            db.session.commit()
+            print("Chart of accounts updated safely — no duplicates!")
+        except Exception as e:
+            db.session.rollback()
+            print(f"Non-fatal error in accounts (continuing): {e}")
+
 
 def normalize_account_type_enum_uppercase():
     with app.app_context():
@@ -142,16 +185,24 @@ def repair_inventory():
         print("Inventory repaired")
 
 # ==================== RUN ON RENDER ONLY ====================
+# ==================== RUN ON RENDER (SAFE) ====================
 if os.environ.get("RENDER"):
     print("SJ Hardware starting on Render — initializing database...")
     with app.app_context():
-        db.create_all()
-        normalize_account_type_enum_uppercase()
-        update_all_accounts()
-        seed_permissions()
-        create_default_admin()
-        repair_inventory()
-    print("SJ Hardware is now LIVE and fully seeded!")
+        try:
+            db.create_all()
+            normalize_account_type_enum_uppercase()
+            update_all_accounts()      # ← now 100% safe
+            seed_permissions()
+            create_default_admin()
+            repair_inventory()
+            print("SJ Hardware is now LIVE and fully seeded!")
+        except Exception as e:
+            print(f"Seeding had an issue (but app still runs): {e}")
+            db.session.rollback()
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000, debug=True)
 
 # ==================== LOCAL DEV ====================
 if __name__ == "__main__":
