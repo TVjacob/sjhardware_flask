@@ -15,8 +15,7 @@ from flask import send_from_directory
 from app import create_app, db
 import os
 from flask import send_from_directory
-import os
-from flask import send_from_directory
+
 
 
 # ------------------ IMPORT ALL MODELS HERE (THIS FIXES EVERYTHING) ------------------
@@ -26,19 +25,22 @@ from app.models import (
 )
 # -----------------------------------------------------------------------------------
 
+# app = create_app()
+
+# # Serve Vue frontend (important!)
+# @app.route("/", defaults={"path": ""})
+# @app.route("/<path:path>")
+# def serve_vue(path):
+#     if path != "" and os.path.exists(os.path.join(app.static_folder, path)):
+#         return send_from_directory(app.static_folder, path)
+#     return send_from_directory(app.static_folder, "index.html")
+
 app = create_app()
 
-# Serve Vue frontend (important!)
-@app.route("/", defaults={"path": ""})
-@app.route("/<path:path>")
-def serve_vue(path):
-    if path != "" and os.path.exists(os.path.join(app.static_folder, path)):
-        return send_from_directory(app.static_folder, path)
-    return send_from_directory(app.static_folder, "index.html")
-
+# Health check — keep this
 @app.route("/api/health")
 def health():
-    return {"status": "ok"}
+    return {"status": "ok", "message": "SJ Hardware is running!"}
 
 
 # app = create_app()
@@ -203,9 +205,9 @@ def serve_vue(path):
         return send_from_directory(app.static_folder, path)
     return send_from_directory(app.static_folder, "index.html")
 
-@app.route("/api/health")
-def health():
-    return {"status": "ok"}
+# @app.route("/api/health")
+# def health():
+#     return {"status": "ok"}
 
 def seed_permissions():
     """Insert permissions if they don’t already exist and assign all to admin."""
@@ -758,20 +760,36 @@ def repair_inventory():
 #         seed_chart_of_accounts()
 #         create_default_admin()
 #         fix_missing_purchase_order_transactions()
-# ------------------ ONLY RUN SEEDING ON RENDER, AND ONLY ONCE ------------------
+# # ------------------ ONLY RUN SEEDING ON RENDER, AND ONLY ONCE ------------------
+# if os.environ.get("RENDER"):
+#     print("Running on Render → applying migrations and seeding...")
+#     with app.app_context():
+#         db.create_all()  # creates tables if they don't exist
+#         from app.models import *  # make sure everything is loaded
+#         repair_inventory()
+#         update_all_accounts()
+#         normalize_account_type_enum_uppercase()
+#         seed_permissions()
+#         create_default_admin()
+#         # no need to run these twice: seed_chart_of_accounts(), fix_missing_purchase_order_transactions()
+
+# # ------------------ FOR LOCAL DEVELOPMENT ONLY ------------------
+# if __name__ == "__main__":
+#     app.run(host="0.0.0.0", port=5000, debug=True)
+    # app.run(debug=True)
+
+
 if os.environ.get("RENDER"):
     print("Running on Render → applying migrations and seeding...")
     with app.app_context():
-        db.create_all()  # creates tables if they don't exist
-        from app.models import *  # make sure everything is loaded
+        db.create_all()  # Create tables if missing
         repair_inventory()
         update_all_accounts()
         normalize_account_type_enum_uppercase()
         seed_permissions()
         create_default_admin()
-        # no need to run these twice: seed_chart_of_accounts(), fix_missing_purchase_order_transactions()
+    print("SJ Hardware fully seeded and ready!")
 
-# ------------------ FOR LOCAL DEVELOPMENT ONLY ------------------
+# ==================== LOCAL DEVELOPMENT ====================
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
-    # app.run(debug=True)
