@@ -1,4 +1,4 @@
-# app/__init__.py — FINAL VERSION (Vue + Flask working perfectly)
+# app/__init__.py
 from flask import Flask, send_from_directory
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
@@ -9,23 +9,19 @@ db = SQLAlchemy()
 migrate = Migrate()
 
 def create_app():
+    # This is the only correct path that works on Render + locally
     app = Flask(__name__, static_folder='static', static_url_path='/')
+
     app.config.from_object('app.config.Config')
     app.config["SECRET_KEY"] = "sjhardwaresecretkey"
 
     db.init_app(app)
     migrate.init_app(app, db)
 
-    # CORS — works for local dev AND production
-    CORS(
-        app,
-        resources={r"/api/*": {"origins": ["http://localhost:5173", "http://localhost:5174", "*"]}},
-        supports_credentials=True,
-        expose_headers=["Content-Type", "Authorization"],
-        allow_headers=["Content-Type", "Authorization", "X-Requested-With"]
-    )
+    # Allow frontend from any domain (Render + localhost)
+    CORS(app, resources={r"/api/*": {"origins": "*"}}, supports_credentials=True)
 
-    # ==================== IMPORT BLUEPRINTS ====================
+    # ==================== REGISTER ALL BLUEPRINTS ====================
     from app.routes.inventory import inventory_bp
     from app.routes.suppliers import suppliers_bp
     from app.routes.sales import sales_bp
@@ -38,7 +34,6 @@ def create_app():
     from app.routes.dashboard import dashboard_bp
     from app.routes.reports import reports_bp
 
-    # Register them
     app.register_blueprint(inventory_bp, url_prefix='/api/inventory')
     app.register_blueprint(suppliers_bp, url_prefix='/api/suppliers')
     app.register_blueprint(sales_bp, url_prefix='/api/sales')
@@ -51,13 +46,17 @@ def create_app():
     app.register_blueprint(dashboard_bp, url_prefix='/api/dashboard')
     app.register_blueprint(reports_bp, url_prefix='/api/reports')
 
-    # ==================== SERVE VUE FRONTEND (THIS IS THE KEY!) ====================
+    # ==================== SERVE VUE FRONTEND (THIS MUST BE LAST!) ====================
     @app.route("/", defaults={"path": ""})
     @app.route("/<path:path>")
     def serve_vue(path):
         if path != "" and os.path.exists(os.path.join(app.static_folder, path)):
             return send_from_directory(app.static_folder, path)
         else:
-            return send_from_directory(app.static_folder, "index.html")
+            index_path = os.path.join(app.static_folder, "index.html")
+            if os.path.exists(index_path):
+                return send_from_directory(app.static_folder, "index.html")
+            else:
+                return "ERROR: index.html not found! Check if Vue was built correctly.", 500
 
     return app

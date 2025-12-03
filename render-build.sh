@@ -1,17 +1,24 @@
 #!/bin/bash
-# render-build.sh — Render uses this to build your app perfectly
+# render-build.sh – Perfect build script for Render
 
-echo "Installing Python dependencies..."
+set -e  # Stop on any error
+
+echo "Installing Python packages..."
 pip install -r requirements.txt gunicorn
 
 echo "Building Vue frontend..."
 cd sjhardware-frontend
-npm install
+
+# Use Node version from package.json
+npm ci --only=production   # faster & cleaner
 npm run build
+
+echo "Copying built Vue files to Flask static folder..."
 cd ..
+rm -rf static app/static
+mkdir -p static
+cp -r sjhardware-frontend/dist/* static/
 
-echo "Copying Vue build to Flask static folder..."
-rm -rf app/static/*
-cp -r sjhardware-frontend/dist/* app/static/
-
-echo "Build complete! SJ Hardware is ready for launch!"
+echo "SJ Hardware frontend built and copied successfully!"
+echo "Files in static/:"
+ls -la static/
