@@ -1,5 +1,5 @@
-# !/bin/bash
-# render-build.sh — Render uses this instead of guessing
+#!/bin/bash
+# render-build.sh — Render uses this to build your app perfectly
 
 echo "Installing Python dependencies..."
 pip install -r requirements.txt gunicorn
@@ -14,4 +14,4 @@ echo "Copying Vue build to Flask static folder..."
 rm -rf app/static/*
 cp -r sjhardware-frontend/dist/* app/static/
 
-echo "Build complete! SJ Hardware ready for launch."
+echo "Build complete! SJ Hardware is ready for launch!"
