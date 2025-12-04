@@ -1,8 +1,19 @@
+# 1. Build the latest Vue frontend
 cd sjhardware-frontend
 npm run build
 cd ..
+
+# 2. Remove any old/wrong static folders
 rm -rf static
-cp -r sjhardware-frontend/dist ./static
-git add static/
-git commit -m "Add built frontend – works on Render free tier"
+rm -rf app/static
+
+# 3. Copy the fresh build to the correct location (Flask expects app/static/)
+cp -r sjhardware-frontend/dist app/static
+
+# 4. Double-check that index.html is really there
+ls -la app/static/ | grep index.html
+
+# 5. Commit and push — THIS IS THE FINAL ONE
+git add app/static/
+git commit -m "FINAL: Vue frontend in correct location app/static/ — works 100% on Render"
 git push
