@@ -23,7 +23,7 @@ services:
     build: .
     container_name: hmis-backend
     ports:
-      - "8000:8000"
+      - "8000:5000"
     depends_on:
       postgres-db:
         condition: service_healthy   # much better than just sleeping
