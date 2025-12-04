@@ -201,9 +201,17 @@ if os.environ.get("RENDER"):
             print(f"Seeding had an issue (but app still runs): {e}")
             db.session.rollback()
 
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
+# if __name__ == "__main__":
+#     app.run(host="0.0.0.0", port=5000, debug=True)
 
 # ==================== LOCAL DEV ====================
 if __name__ == "__main__":
+    with app.app_context():
+        from app.models import Account, PurchaseOrder, User, Permission
+        from app.utils.gl_utils import generate_transaction_number, post_to_ledger
+        repair_inventory()
+        update_all_accounts()
+        normalize_account_type_enum_uppercase()
+        seed_permissions()
+        create_default_admin()
     app.run(host="0.0.0.0", port=5000, debug=True)
