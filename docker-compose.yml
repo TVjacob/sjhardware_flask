@@ -1,0 +1,43 @@
+version: "3.9"
+
+services:
+  postgres-db:
+    image: postgres:15-alpine   # alpine is smaller and just as good for most cases
+    container_name: my_postgres
+    environment:
+      POSTGRES_USER: postgres      # fixed the typo: was "postgress"
+      POSTGRES_PASSWORD: password1
+      POSTGRES_DB: production_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    restart: always
+    healthcheck:                 # optional but nice to have
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build: .
+    container_name: hmis-backend
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres-db:
+        condition: service_healthy   # much better than just sleeping
+    restart: always
+    volumes:
+      - ./env.json:/app/env.json
+    # environment:
+      # If you need to override anything from env.json at runtime, do it here
+      # FLASK_ENV: production
+    command: >
+      sh -c "
+        flask db upgrade || true &&
+        python run.py
+      "
+
+volumes:
+  pgdata:
