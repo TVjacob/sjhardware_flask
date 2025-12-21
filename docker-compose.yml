@@ -18,8 +18,8 @@ services:
       retries: 5
 
   backend:
-    image: 198.38.82.197:5000/retail-backend:latest   # use the image you just pushed
-    container_name: retail-backend
+    image: 198.38.82.197:5000/hmis-backend:latest   # use the image you just pushed
+    container_name: hmis-backend
     ports:
       - "8000:5000"                                   # ← correct mapping
     depends_on:

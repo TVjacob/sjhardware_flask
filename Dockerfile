@@ -1,9 +1,9 @@
 # ===== STAGE 1: Build Vue frontend =====
 FROM node:20-alpine as frontend-build
 WORKDIR /frontend
-COPY retail-service-shop-frontend/package*.json ./
+COPY sjhardware-frontend/package*.json ./
 RUN npm install
-COPY retail-service-shop-frontend/ ./
+COPY sjhardware-frontend/ ./
 RUN npm run build
 
 # ===== STAGE 2: Python + Flask backend =====
