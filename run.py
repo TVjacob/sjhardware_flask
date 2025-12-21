@@ -186,20 +186,20 @@ def repair_inventory():
 
 # ==================== RUN ON RENDER ONLY ====================
 # ==================== RUN ON RENDER (SAFE) ====================
-if os.environ.get("RENDER"):
-    print("SJ Hardware starting on Render — initializing database...")
-    with app.app_context():
-        try:
-            db.create_all()
-            normalize_account_type_enum_uppercase()
-            update_all_accounts()      # ← now 100% safe
-            seed_permissions()
-            create_default_admin()
-            repair_inventory()
-            print("SJ Hardware is now LIVE and fully seeded!")
-        except Exception as e:
-            print(f"Seeding had an issue (but app still runs): {e}")
-            db.session.rollback()
+# if os.environ.get("RENDER"):
+#     print("SJ Hardware starting on Render — initializing database...")
+#     with app.app_context():
+#         try:
+#             db.create_all()
+#             normalize_account_type_enum_uppercase()
+#             update_all_accounts()      # ← now 100% safe
+#             seed_permissions()
+#             create_default_admin()
+#             repair_inventory()
+#             print("SJ Hardware is now LIVE and fully seeded!")
+#         except Exception as e:
+#             print(f"Seeding had an issue (but app still runs): {e}")
+#             db.session.rollback()
 
 # if __name__ == "__main__":
     # app.run(host="0.0.0.0", port=5000, debug=True)
