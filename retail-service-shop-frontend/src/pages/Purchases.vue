@@ -54,7 +54,7 @@
           <th class="p-2 border">Product</th>
           <th class="p-2 border">Stock</th>
           <th class="p-2 border">Cost Price</th>
-          <th class="p-2 border">Unit</th>
+          <th class="p-2 border">Details</th>
 
           <th class="p-2 border">Quantity</th>
           <th class="p-2 border">Total</th>

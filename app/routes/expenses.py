@@ -6,6 +6,8 @@ from app.utils.gl_utils import post_to_ledger, generate_transaction_number
 from datetime import datetime
 # from flask import Blueprint, jsonify
 from sqlalchemy.orm import joinedload
+from sqlalchemy import func, and_, cast, String,or_,case
+from sqlalchemy.orm import aliased
 
 
 expenses_bp = Blueprint('expenses', __name__, url_prefix='/expenses')
@@ -142,62 +144,72 @@ def create_expense():
     
 #     return jsonify(data)
 # --- Get all expenses with optional search and date filter ---
+# from sqlalchemy.orm import aliased
+# from sqlalchemy import or_
+
 @token_required
 @expenses_bp.route('/', methods=['GET'])
 def get_expenses():
-    # Get query parameters
-    start_date = request.args.get('start_date')  # expected format: YYYY-MM-DD
-    end_date = request.args.get('end_date')      # expected format: YYYY-MM-DD
-    search = request.args.get('search', '').strip().lower()
+    search = request.args.get("search", "").strip()
+    start_date = request.args.get("start_date")
+    end_date = request.args.get("end_date")
 
-    query = Expense.query.filter_by(status=1)
+    # Aliases
+    PaymentAccount = aliased(Account)
+    ItemAccount = aliased(Account)
 
-    # Filter by date range if provided
+    query = (
+        Expense.query
+        .join(PaymentAccount, PaymentAccount.id == Expense.payment_account_id)
+        .outerjoin(ExpenseItem, ExpenseItem.expense_id == Expense.id)
+        .outerjoin(ItemAccount, ItemAccount.id == ExpenseItem.account_id)
+        .filter(Expense.status == 1)
+    )
+
+    # Date filters
     if start_date:
-        try:
-            start_dt = datetime.strptime(start_date, '%Y-%m-%d')
-            query = query.filter(Expense.expense_date >= start_dt)
-        except ValueError:
-            return jsonify({"error": "Invalid start_date format. Use YYYY-MM-DD"}), 400
-
+        query = query.filter(Expense.expense_date >= start_date)
     if end_date:
-        try:
-            end_dt = datetime.strptime(end_date, '%Y-%m-%d')
-            query = query.filter(Expense.expense_date <= end_dt)
-        except ValueError:
-            return jsonify({"error": "Invalid end_date format. Use YYYY-MM-DD"}), 400
+        query = query.filter(Expense.expense_date <= end_date)
 
-    # Fetch all filtered expenses
-    expenses = query.all()
-
-    # Filter by search term in description or reference
+    # Search filters (NOW SEARCHES BOTH ACCOUNT TYPES)
     if search:
-        expenses = [
-            e for e in expenses
-            if search in e.description.lower() or (e.reference and search in e.reference.lower())
-        ]
+        query = query.filter(
+            or_(
+                Expense.description.ilike(f"%{search}%"),
+                Expense.reference.ilike(f"%{search}%"),
+                ExpenseItem.item_name.ilike(f"%{search}%"),
+                ExpenseItem.description.ilike(f"%{search}%"),
+                PaymentAccount.name.ilike(f"%{search}%"),
+                ItemAccount.name.ilike(f"%{search}%"),
+            )
+        )
 
-    # Serialize response
-    data = [{
-        "id": e.id,
-        "description": e.description,
-        "total_amount": e.total_amount,
-        "payment_account_id": e.payment_account_id,
-        "expense_date": e.expense_date.strftime('%Y-%m-%d') if e.expense_date else None,
-        "reference": e.reference,
-        "status": e.status,
-        "transaction_no": e.transaction_no,
-        "items": [
-            {
-                "id": item.id,
-                "account_id": item.account_id,
+    expenses = query.order_by(Expense.id.desc()).all()
+
+    # Build response
+    data = []
+    for exp in expenses:
+        items = []
+        for item in exp.items:
+            items.append({
+                "item_id": item.id,
                 "item_name": item.item_name,
                 "description": item.description,
-                "amount": item.amount
-            }
-            for item in e.items
-        ]
-    } for e in expenses]
+                "amount": item.amount,
+                "account_name": item.account.name if item.account else None
+            })
+
+        data.append({
+            "expense_id": exp.id,
+            "description": exp.description,
+            "expense_date": exp.expense_date,
+            "reference": exp.reference,
+            "transaction_no": exp.transaction_no,
+            "total_amount": exp.total_amount,
+            "payment_account": exp.payment_account.name if exp.payment_account else None,
+            "items": items
+        })
 
     return jsonify(data)
 

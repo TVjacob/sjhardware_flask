@@ -1,7 +1,7 @@
 <template>
     <div class="flex items-center justify-center h-screen bg-gray-100">
-      <div class="bg-white p-8 rounded shadow-md w-96">
-        <h2 class="text-2xl font-bold mb-6 text-center">SJ Hardware Login</h2>
+      <div class="bg-blue p-8 rounded shadow-md w-96">
+        <h2 class="text-2xl font-bold mb-6 text-center">Retail Service Shop Login || Accessories </h2>
         <form @submit.prevent="loginUser">
           <div class="mb-4">
             <label class="block mb-1 font-medium">Username</label>

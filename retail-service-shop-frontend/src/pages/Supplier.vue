@@ -11,11 +11,13 @@
         v-model="supplierForm.name"
         placeholder="Supplier Name"
         class="form-input"
+        style = "background-color:bisque;"
         required
       />
       <input
         v-model="supplierForm.contact"
         placeholder="Contact"
+        style = "background-color:bisque;"
         class="form-input"
       />
       <input
@@ -23,6 +25,7 @@
         placeholder="Email"
         type="email"
         class="form-input"
+        style = "background-color:bisque;"
       />
 
       <button

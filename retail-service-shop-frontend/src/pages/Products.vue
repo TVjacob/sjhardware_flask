@@ -12,10 +12,10 @@
     <div v-if="activeTab==='products'" class="animate-fadeIn">
       <!-- Add/Edit Product Form -->
       <form @submit.prevent="submitProduct" class="mb-6 flex flex-wrap gap-3 items-center bg-white p-4 rounded-xl shadow">
-        <input v-model="productForm.name" placeholder="Product Name" class="input" required />
-        <input v-model="productForm.sku" placeholder="SKU" class="input" required />
-        <input v-model.number="productForm.price" type="number" min="1" placeholder="Price" class="input" />
-        <select v-model="productForm.category_id" class="input">
+        <input v-model="productForm.name" placeholder="Product Name" class="input" style = "background-color:gainsboro;" required   />
+        <input v-model="productForm.sku" placeholder="Details" class="input" style = "background-color:gainsboro;"  required />
+        <input v-model.number="productForm.price" type="number" min="1" placeholder="Price" class="input" style = "background-color:gainsboro;"  />
+        <select v-model="productForm.category_id" class="input" style = "background-color:gainsboro;" >
           <option disabled value="">Select Category</option>
           <option v-for="cat in categories" :key="cat.id" :value="cat.id">{{ cat.name }}</option>
         </select>
@@ -53,7 +53,7 @@
         <table class="min-w-full border-collapse text-sm">
           <thead>
             <tr class="bg-gray-100 text-gray-700">
-              <th v-for="h in ['ID','Name','SKU','Price','Cost Price','Category','Stock Qty','Actions']" :key="h" class="th">{{ h }}</th>
+              <th v-for="h in ['ID','Name','Details','Price','Cost Price','Category','Stock Qty','Actions']" :key="h" class="th">{{ h }}</th>
             </tr>
           </thead>
           <tbody>
@@ -83,7 +83,7 @@
     <div v-if="activeTab==='categories'" class="animate-fadeIn">
       <!-- Add/Edit Category Form -->
       <form @submit.prevent="submitCategory" class="flex gap-3 flex-wrap mb-4 bg-white p-4 rounded-xl shadow">
-        <input v-model="categoryForm.name" placeholder="Category Name" class="input" required />
+        <input v-model="categoryForm.name" placeholder="Category Name" class="input" style = "background-color:gainsboro;"  required />
         <button :disabled="loading" class="btn-primary">
           {{ editingCategory ? 'Update' : 'Add' }} Category
         </button>
