@@ -194,12 +194,12 @@ permissions = [
 
 
 # Serve Vue frontend in production
-@app.route("/", defaults={"path": ""})
-@app.route("/<path:path>")
-def serve_vue(path):
-    if path != "" and os.path.exists(os.path.join(app.static_folder, path)):
-        return send_from_directory(app.static_folder, path)
-    return send_from_directory(app.static_folder, "index.html")
+#s @app.route("/", defaults={"path": ""})
+# @app.route("/<path:path>")
+# def serve_vue(path):
+#     if path != "" and os.path.exists(os.path.join(app.static_folder, path)):
+#         return send_from_directory(app.static_folder, path)
+#     return send_from_directory(app.static_folder, "index.html")
 
 def seed_permissions():
     """Insert permissions if they don’t already exist and assign all to admin."""
@@ -486,9 +486,9 @@ def seed_chart_of_accounts():
         print(f"❌ Failed to seed accounts: {e}")
 
 
-@app.route("/api/health")
-def health():
-    return {"status": "ok", "db": "connected"}
+# @app.route("/api/health")
+# def health():
+#     return {"status": "ok", "db": "connected"}
 
 def update_inventory_from_purchases():
     """Add product quantities from received purchase orders."""
