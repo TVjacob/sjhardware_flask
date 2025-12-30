@@ -6,6 +6,10 @@ from werkzeug.security import generate_password_hash
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy import text, select
 
+from app import db
+from app.models import Product, ProductUnit, PurchaseOrderItem, SaleItem, StockAdjustment, InventoryTransaction
+from datetime import datetime
+
 # ==================== IMPORT ALL MODELS & ENUMS ====================
 from app.models import (
     User, Permission, Account, PurchaseOrder, PurchaseOrderItem,
@@ -184,31 +188,88 @@ def repair_inventory():
         rebuild_product_quantities()
         print("Inventory repaired")
 
-# ==================== RUN ON RENDER ONLY ====================
-# ==================== RUN ON RENDER (SAFE) ====================
-# if os.environ.get("RENDER"):
-#     print("SJ Hardware starting on Render — initializing database...")
-#     with app.app_context():
-#         try:
-#             db.create_all()
-#             normalize_account_type_enum_uppercase()
-#             update_all_accounts()      # ← now 100% safe
-#             seed_permissions()
-#             create_default_admin()
-#             repair_inventory()
-#             print("SJ Hardware is now LIVE and fully seeded!")
-#         except Exception as e:
-#             print(f"Seeding had an issue (but app still runs): {e}")
-#             db.session.rollback()
 
-# if __name__ == "__main__":
-    # app.run(host="0.0.0.0", port=5000, debug=True)
+
+
+def create_default_piece_unit_for_products():
+    """
+    Creates a default "Piece" unit for all products without units.
+    - Conversion rate: 1
+    - Status: 1
+    - Uses product.price as retail_price
+    - Uses product.wholesale_price as wholesale_price
+    - Cost price: 0 (can change)
+    
+    Then updates all related transactions to link to this new unit.
+    """
+    
+    # Find products with no units
+    products_without_units = db.session.query(Product).filter(~Product.units.any()).all()
+    
+    for product in products_without_units:
+        # Create default Piece unit
+        default_unit = ProductUnit(
+            product_id=product.id,
+            unit_name="Piece",
+            conversion_quantity=1,
+            retail_price=product.price or 0.0,
+            wholesale_price=product.wholesale_price or 0.0,
+            cost_price=0.0,  # Default cost
+            is_returnable=False,
+            unit_code="PC",
+            status=1,
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow()
+        )
+        
+        db.session.add(default_unit)
+        db.session.flush()  # Get ID before commit
+        
+        # Update PurchaseOrderItems (link null units to new one)
+        purchase_items = PurchaseOrderItem.query.filter_by(
+            product_id=product.id,
+            unit_id=None
+        ).all()
+        
+        for pi in purchase_items:
+            pi.unit_id = default_unit.id
+        
+        # Update SaleItems
+        sale_items = SaleItem.query.filter_by(
+            product_id=product.id,
+            unit_id=None
+        ).all()
+        
+        for si in sale_items:
+            si.unit_id = default_unit.id
+        
+        # Update StockAdjustments
+        adjustments = StockAdjustment.query.filter_by(
+            product_id=product.id,
+            unit_id=None
+        ).all()
+        
+        for adj in adjustments:
+            adj.unit_id = default_unit.id
+        
+        # Update InventoryTransactions
+        inv_trans = InventoryTransaction.query.filter_by(
+            product_id=product.id,
+            unit_id=None
+        ).all()
+        
+        for trans in inv_trans:
+            trans.unit_id = default_unit.id
+    
+    db.session.commit()
+    print(f"Created default units for {len(products_without_units)} products and updated transactions!")
 
 # ==================== LOCAL DEV ====================
 if __name__ == "__main__":
     with app.app_context():
         from app.models import Account, PurchaseOrder, User, Permission
         from app.utils.gl_utils import generate_transaction_number, post_to_ledger
+        create_default_piece_unit_for_products()
         repair_inventory()
         update_all_accounts()
         normalize_account_type_enum_uppercase()

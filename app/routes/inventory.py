@@ -476,20 +476,35 @@ def update_product(id):
     # ProductUnit.query.filter_by(product_id=id).update()
 
     for u in incoming_units:
-        product_details=ProductUnit.query.filter_by(id=u['id']).first()
-        print(" the value of u ",u )
-        unit =dict(u)
-        print("unit['unit_name'] ",unit['unit_name'] )
-        print("unit['retail_price'] ",unit['retail_price'] )
-        print("unit['conversion_quantity'] ",unit['conversion_quantity'] )
+        unit_data = dict(u)  # Make a copy for easier access
+        if u.get('id'):
+            product_details=ProductUnit.query.filter_by(id=u['id']).first()
+            print(" the value of u ",u )
+            unit =dict(u)
+            print("unit['unit_name'] ",unit['unit_name'] )
+            print("unit['retail_price'] ",unit['retail_price'] )
+            print("unit['conversion_quantity'] ",unit['conversion_quantity'] )
 
-        # product_details.product_id=id,
-        product_details.unit_name=unit['unit_name']
-        product_details.conversion_quantity=unit['conversion_quantity'] or  1.0
-        product_details.retail_price=unit['retail_price'] or 0
-        product_details.wholesale_price=unit['wholesale_price'] or 0
-        product_details.is_returnable=unit['is_returnable'] or False
-        product_details.unit_code=unit['unit_code']
+            # product_details.product_id=id,
+            product_details.unit_name=unit['unit_name']
+            product_details.conversion_quantity=unit['conversion_quantity'] or  1.0
+            product_details.retail_price=unit['retail_price'] or 0
+            product_details.wholesale_price=unit['wholesale_price'] or 0
+            product_details.is_returnable=unit['is_returnable'] or False
+            product_details.unit_code=unit['unit_code']
+
+        else:
+            unit = ProductUnit(
+            product_id=product.id,
+            unit_name=u['unit_name'],
+            conversion_quantity=u.get('conversion_quantity', 1.0),
+            retail_price=u.get('retail_price', 0.0),
+            wholesale_price=u.get('wholesale_price', 0.0),
+            is_returnable=u.get('is_returnable', False),
+            unit_code=u.get('unit_code', "") 
+            )
+            db.session.add(unit)
+
         # product_details.id==u['id'],
         # )
         # db.session.add(unit)

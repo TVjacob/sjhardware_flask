@@ -88,6 +88,8 @@ export default {
       { name: 'Supplier', path: '/supplier', icon: '🚚', permission: 'view_suppliers' },
       { name: 'Purchases', path: '/purchases', icon: '🛒', permission: 'create_purchase' },
       { name: 'Purchase List', path: '/purchaselist', icon: '📋', permission: 'view_purchases' },
+      {name :'StockAdjustments',path:'/stockadjustments',icon :'🔨', permissions:'view_customers'},
+
       { name: 'Expenses', path: '/expenses', icon: '💸', permission: 'view_expense' },
       { name: 'Reports', path: '/reports', icon: '📊', permission: 'view_reports' },
       { name: 'Users', path: '/users', icon: '👤', permission: 'view_users' },

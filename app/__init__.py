@@ -33,6 +33,8 @@ def create_app():
     from app.routes.customer import customer_bp
     from app.routes.dashboard import dashboard_bp
     from app.routes.reports import reports_bp
+    from app.routes.stock_adjustment_crud import stock_adjustment_bp
+
 
     app.register_blueprint(inventory_bp, url_prefix='/api/inventory')
     app.register_blueprint(suppliers_bp, url_prefix='/api/suppliers')
@@ -45,6 +47,8 @@ def create_app():
     app.register_blueprint(customer_bp, url_prefix='/api/customer')
     app.register_blueprint(dashboard_bp, url_prefix='/api/dashboard')
     app.register_blueprint(reports_bp, url_prefix='/api/reports')
+    app.register_blueprint(stock_adjustment_bp,url_prefix='/api/stock-adjustments')
+
 
     # ==================== SERVE VUE FRONTEND (THIS MUST BE LAST!) ====================
     @app.route("/", defaults={"path": ""})
