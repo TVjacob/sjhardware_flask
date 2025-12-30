@@ -50,35 +50,54 @@ class Product(db.Model, StatusMixin):
     category = db.relationship('Category', backref='products', lazy=True)
 
     # Relationship to ProductUnit
-    units = db.relationship(
-        "ProductUnit",
-        backref="product",
-        lazy=True,
-        cascade="all, delete-orphan"
-    )
+    # units = db.relationship(
+    #     "ProductUnit",
+    #     backref="product",
+    #     lazy=True,
+    #     cascade="all, delete-orphan"
+    # )
+
 
 class ProductUnit(db.Model, StatusMixin):
-    __tablename__ = "product_unit"
+    __tablename__ = 'product_unit'
 
     id = db.Column(db.Integer, primary_key=True)
-    product_id = db.Column(db.Integer, db.ForeignKey("product.id"), nullable=False)
-    unit_name = db.Column(db.String(50), nullable=False)  # e.g., "Quarter", "Sack", "Kilo", "Gram"
-    conversion_quantity = db.Column(db.Float, default=1.0, nullable=False)  # Conversion to base unit (e.g., 1 sack = 50 kilos)
+    product_id = db.Column(db.Integer, db.ForeignKey('product.id'), nullable=False)
+
+    # Name of the unit (Bottle, Dozen, Crate, etc.)
+    unit_name = db.Column(db.String(50), nullable=False)
+
+    # How many base units this represents (e.g., 1 sack = 12 quaters)
+    conversion_quantity = db.Column(db.Integer, default=1, nullable=False)
+
+    # Prices specific to this unit
     retail_price = db.Column(db.Float, default=0.0)
     wholesale_price = db.Column(db.Float, default=0.0)
-    is_returnable = db.Column(db.Boolean, default=False)  # For returnable units if applicable
-    unit_code = db.Column(db.String(50), unique=False, nullable=True)  # Optional barcode or code
+    cost_price = db.Column(db.Float, default=0.0)
+
+    # Whether the unit is refundable (e.g., crates or bottles that can be returned)
+    is_returnable = db.Column(db.Boolean, default=False)
+
+    # Optional barcode or code unique per unit
+    unit_code = db.Column(db.String(50), unique=False,nullable=True)
+
+    # Relationships
+    product = db.relationship(
+        'Product', 
+        backref=db.backref('units', lazy=True, cascade="all, delete-orphan")
+    )
+
+    # Link back to ReturnableContainers
+    # containers = db.relationship('ReturnableContainer', back_populates='product_unit', lazy=True)
 
     def __repr__(self):
         return f"<ProductUnit {self.unit_name} of {self.product.name}>"
 
-    def get_total_retail_price(self, quantity):
-        """Calculate total retail value for given quantity in this unit."""
+    def get_total_price(self, quantity):
+        """Calculate total retail value for given quantity."""
         return self.retail_price * quantity
 
-    def get_total_wholesale_price(self, quantity):
-        """Calculate total wholesale value for given quantity in this unit."""
-        return self.wholesale_price * quantity
+
 
 # ------------------ Suppliers & Purchase Orders ------------------
 class Supplier(db.Model, StatusMixin):
