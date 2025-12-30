@@ -71,7 +71,7 @@
         <tr>
           <th class="p-2 border">Product</th>
           <th class="p-2 border">Stock Qty</th>
-          <th class="p-2 border">Unit</th>
+          <th class="p-2 border">Details</th>
           <th class="p-2 border">Unit Price</th>
           <th class="p-2 border">Quantity</th>
           <th class="p-2 border">Total Price</th>

@@ -400,6 +400,9 @@ class ExpenseItem(db.Model, StatusMixin):
     description = db.Column(db.String(200))                # Optional details
     amount = db.Column(db.Float, nullable=False)
 
+    # account = db.relationship('account', backref='expense_item', lazy=True)
+
+
     def __repr__(self):
         return f"<ExpenseItem {self.item_name} - {self.amount}>"
 

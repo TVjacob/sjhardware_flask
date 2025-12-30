@@ -10,11 +10,12 @@
           v-model="customerForm.name"
           placeholder="Customer Name"
           class="border p-2 rounded"
+          style = "background-color:bisque;"
           required
         />
-        <input v-model="customerForm.phone" placeholder="Phone" class="border p-2 rounded" />
-        <input v-model="customerForm.email" type="email" placeholder="Email" class="border p-2 rounded" />
-        <input v-model="customerForm.address" placeholder="Address" class="border p-2 rounded" />
+        <input v-model="customerForm.phone" placeholder="Phone" class="border p-2 rounded" style = "background-color:bisque;"/>
+        <input v-model="customerForm.email" type="email" placeholder="Email" class="border p-2 rounded" style = "background-color:bisque;" />
+        <input v-model="customerForm.address" placeholder="Address" class="border p-2 rounded"  style = "background-color:bisque;"/>
 
         <button class="bg-indigo-500 text-white px-4 py-2 rounded">
           {{ editingCustomer ? 'Update' : 'Add' }} Customer

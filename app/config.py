@@ -20,9 +20,8 @@ env = load_env()
 # Final Config class – this works everywhere (local, Docker, Render)
 # ------------------------------------------------------------------
 class Config:
-    # Secret key – Render can override it, otherwise fall back to env.json
-    SECRET_KEY = os.environ.get("SECRET_KEY") or env.get("SECRET_KEY", "supersecretkey")
-
+    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL', 
+        'postgresql://postgres:password1@localhost:5432/retail_shop')
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
     # THIS IS THE ONLY LINE THAT MATTERS
