@@ -1,8 +1,0 @@
-cd sjhardware-frontend
-npm run build
-cd ..
-rm -rf static
-cp -r sjhardware-frontend/dist ./static
-git add static/
-git commit -m "Add built frontend – works on Render free tier"
-git push
