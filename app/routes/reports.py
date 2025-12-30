@@ -1,5 +1,5 @@
 from flask import Blueprint, jsonify
-from app.models import AccountTypeEnum, Category, GeneralLedger, Payment, PurchaseOrderItem, SaleItem, PurchaseOrder, Expense,Customer, Supplier, Sale, PurchaseOrder, Product, Account
+from app.models import AccountTypeEnum, Category, GeneralLedger, Payment, ProductUnit, PurchaseOrderItem, SaleItem, PurchaseOrder, Expense,Customer, Supplier, Sale, PurchaseOrder, Product, Account
 from app import db
 from sqlalchemy import func
 from datetime import datetime, timedelta
@@ -2112,6 +2112,9 @@ def sales_profit_report():
             Category.name.label("category_name"),
             SaleItem.quantity,
             SaleItem.unit_price.label("selling_price"),
+            # SaleItem.label("selling_price"),
+            SaleItem.unit_id.label("unit"),
+
             final_purchase_price.c.unit_price.label("purchase_price"),
         )
         .join(SaleItem, Sale.id == SaleItem.sale_id)
@@ -2168,7 +2171,8 @@ def sales_profit_report():
 
         sale_summary[row.sale_id]["profit_total"] += profit
         sale_summary[row.sale_id]["cost_total"] += cost
-
+        print("unit ..   ", row.unit)
+        unit_name = db.session.query(ProductUnit).filter(ProductUnit.id==row.unit).first()
         raw_data.append({
             "sale_id": row.sale_id,
             "invoice_number": row.sale_number,
@@ -2176,6 +2180,7 @@ def sales_profit_report():
             "customer": row.customer_name,
             "product": row.product_name,
             "category": row.category_name,
+            "unit":unit_name.unit_name if unit_name else "",
             "qty": row.quantity,
             "selling_price": row.selling_price,
             "purchase_price": purchase_price,

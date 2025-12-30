@@ -28,10 +28,11 @@ class Config:
     # Render injects DATABASE_URL automatically → we use it first
     # If not on Render → fall back to your env.json values
     SQLALCHEMY_DATABASE_URI = (
-        os.environ.get("DATABASE_URL")          # ← Render gives this (most important)
-        or env.get("CLOUD_DB_URL")              # ← your Render DB string in env.json
-        or env.get("DOCKER_DB_URL")             # ← for local docker-compose
-        or env.get("LOCAL_DB_URL")              # ← for running locally without Docker
+        # os.environ.get("DATABASE_URL")          # ← Render gives this (most important)
+        # or env.get("CLOUD_DB_URL")              # ← your Render DB string in env.json
+        # or env.get("DOCKER_DB_URL")             # ← for local docker-compose
+        # or 
+        env.get("LOCAL_DB_URL")              # ← for running locally without Docker
         or "postgresql://postgres:password1@localhost:5432/sjhardware"
     )
 

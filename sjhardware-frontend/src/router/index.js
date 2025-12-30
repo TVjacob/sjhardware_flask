@@ -39,6 +39,7 @@ import BalanceSheet from '@/pages/reports/BalanceSheet.vue';
 import UserProfile from '@/pages/UserProfile.vue';
 import PurchaseProduct from '@/pages/reports/PurchaseProduct.vue';
 import SalesProfit from '@/pages/reports/SalesProfit.vue';
+import StockAdjustments from '@/pages/StockAdjustments.vue';
 
 const routes = [
   {
@@ -92,6 +93,12 @@ const routes = [
       { path: 'reports/stock-list', component: StockList, meta: { showGreeting: false, pageName: 'Stock List',requiresAuth: true, } },
       { path: 'reports/out-of-stock', component: OutOfStock, meta: { showGreeting: false, pageName: 'Out Of Stock',requiresAuth: true, } },
       { path: 'reports/sales-profit', component: SalesProfit, meta: { showGreeting: false, pageName: 'Sales Profit',requiresAuth: true, } },
+      {
+        path:'/stockadjustments',
+        name:'StockAdjustments',
+        component: StockAdjustments,
+        meta: { showGreeting: false, pageName: 'Stock Adjustments', requiresAuth: true,}
+      },
       {
         path: '/purchase-orders/:id',
         name: 'PurchaseOrderDetails',

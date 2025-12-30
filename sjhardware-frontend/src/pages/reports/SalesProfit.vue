@@ -102,6 +102,8 @@
           <thead class="bg-gray-100 text-xs uppercase font-semibold">
             <tr>
               <th class="p-2 border text-left">Product</th>
+              <th class="p-2 border text-left">unit</th>
+
               <th class="p-2 border text-left">Category</th>
               <th class="p-2 border text-right">Qty</th>
               <th class="p-2 border text-right">Sell Price</th>
@@ -114,6 +116,7 @@
           <tbody>
             <tr v-for="item in invoice.items" :key="item.id" class="hover:bg-gray-50 transition">
               <td class="p-2 border">{{ item.product }}</td>
+              <td class="p-2 border">{{ item.unit }}</td>
               <td class="p-2 border">{{ item.category }}</td>
               <td class="p-2 border text-right">{{ formatQty(item.qty) }}</td>
               <td class="p-2 border text-right">{{ formatNumber(item.selling_price) }}</td>
