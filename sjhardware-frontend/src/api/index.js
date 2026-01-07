@@ -2,7 +2,7 @@ import axios from 'axios';
 import router from '../router';
 
 const api = axios.create({
-baseURL: 'http://127.0.0.1:5001/api'|| '/api',
+baseURL: 'http://127.0.0.1:5005/api'|| '/api',
   headers: { 'Content-Type': 'application/json' },
 });
 

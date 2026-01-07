@@ -843,7 +843,119 @@ def delete_purchase_order(id):
 # ------------------ Pay Purchase Order (unchanged, already good) ------------------ #
 # Your pay_purchase_order route is already excellent — no changes needed
 
-# ------------------ Edit Purchase Order (with unit support) ------------------ #
+# # ------------------ Edit Purchase Order (with unit support) ------------------ #
+# @token_required
+# @suppliers_bp.route('/orders/<int:id>/edit', methods=['PUT'])
+# def edit_purchase_order(id):
+#     po = PurchaseOrder.query.get_or_404(id)
+#     data = request.get_json()
+
+#     old_total = po.total_amount
+
+#     # Update header
+#     po.supplier_id = data.get('supplier_id', po.supplier_id)
+#     po.invoice_number = data.get('invoice_number', po.invoice_number)
+#     po.memo = data.get('memo', po.memo)
+#     po.purchase_date = datetime.strptime(data.get('purchase_date'), '%Y-%m-%d') if data.get('purchase_date') else po.purchase_date
+
+#     txn_id, txn_str = generate_transaction_number('PO-EDIT', transaction_date=po.purchase_date)
+
+#     if 'items' in data:
+#         # Track old items for stock rollback
+#         old_items = {item.id: item for item in po.items if item.status != 9}
+
+#         # Delete removed items
+#         incoming_ids = {i.get('id') for i in data['items'] if i.get('id')}
+#         for old_item in list(old_items.values()):
+#             if old_item.id not in incoming_ids:
+#                 # Rollback stock
+#                 unit = ProductUnit.query.get(old_item.unit_id)
+#                 if unit and old_item.product:
+#                     base_qty = old_item.quantity * unit.conversion_quantity
+#                     old_item.product.quantity = max((old_item.product.quantity or 0) - base_qty, 0)
+#                 old_item.status = 9
+
+#         # Update or add items
+#         for item_data in data['items']:
+#             product_id = item_data['product_id']
+#             unit_id = item_data['unit_id']
+#             quantity = float(item_data['quantity'])
+#             unit_price = float(item_data['unit_price'])
+
+#             product = Product.query.get_or_404(product_id)
+#             unit = ProductUnit.query.filter_by(id=unit_id, product_id=product_id, status=1).first_or_404()
+
+#             base_qty = quantity * unit.conversion_quantity
+
+#             if 'id' in item_data and item_data['id']:
+#                 # Update existing
+#                 item = PurchaseOrderItem.query.get(item_data['id'])
+#                 old_base = item.quantity * unit.conversion_quantity
+#                 qty_diff = base_qty - old_base
+
+#                 item.quantity = quantity
+#                 item.unit_price = unit_price
+#                 item.total_price = quantity * unit_price
+
+#                 # Adjust stock
+#                 product.quantity = (product.quantity or 0) + qty_diff
+#             else:
+#                 # New item
+#                 item = PurchaseOrderItem(
+#                     purchase_order_id=po.id,
+#                     product_id=product_id,
+#                     unit_id=unit_id,
+#                     quantity=quantity,
+#                     unit_price=unit_price,
+#                     total_price=quantity * unit_price,
+#                     status=1
+#                 )
+#                 db.session.add(item)
+#                 product.quantity = (product.quantity or 0) + base_qty
+
+#             # Update inventory transaction
+#             inv_txn = InventoryTransaction.query.filter_by(
+#                 purchase_order_id=po.id,
+#                 product_id=product_id,
+#                 unit_id=unit_id
+#             ).first()
+#             if inv_txn:
+#                 inv_txn.quantity = base_qty
+#                 inv_txn.unit_price = unit_price
+#                 inv_txn.total_price = quantity * unit_price
+#                 inv_txn.transaction_no = txn_id
+#             else:
+#                 new_inv = InventoryTransaction(
+#                     transaction_no=txn_id,
+#                     purchase_order_id=po.id,
+#                     product_id=product_id,
+#                     unit_id=unit_id,
+#                     quantity=base_qty,
+#                     unit_price=unit_price,
+#                     total_price=quantity * unit_price,
+#                     transaction_type='Purchase',
+#                     status=1
+#                 )
+#                 db.session.add(new_inv)
+
+#     # Recalculate totals
+#     po.update_totals()
+#     diff = po.total_amount - old_total
+
+#     if diff != 0:
+#         entries = [
+#             {"account_id": 1200, "transaction_type": "Debit" if diff > 0 else "Credit", "amount": abs(diff)},
+#             {"account_id": 2100, "transaction_type": "Credit" if diff > 0 else "Debit", "amount": abs(diff)}
+#         ]
+#         post_to_ledger(entries, transaction_no_id=txn_id,
+#                        description=f"PO #{po.id} edit adjustment", transaction_date=po.purchase_date)
+
+#     db.session.commit()
+
+#     return jsonify({'message': 'Purchase Order updated successfully', 'po_id': po.id})
+
+
+# ------------------ Edit Purchase Order (FIXED: unit_id updates) ------------------ #
 @token_required
 @suppliers_bp.route('/orders/<int:id>/edit', methods=['PUT'])
 def edit_purchase_order(id):
@@ -856,7 +968,8 @@ def edit_purchase_order(id):
     po.supplier_id = data.get('supplier_id', po.supplier_id)
     po.invoice_number = data.get('invoice_number', po.invoice_number)
     po.memo = data.get('memo', po.memo)
-    po.purchase_date = datetime.strptime(data.get('purchase_date'), '%Y-%m-%d') if data.get('purchase_date') else po.purchase_date
+    if data.get('purchase_date'):
+        po.purchase_date = datetime.strptime(data.get('purchase_date'), '%Y-%m-%d')
 
     txn_id, txn_str = generate_transaction_number('PO-EDIT', transaction_date=po.purchase_date)
 
@@ -864,18 +977,17 @@ def edit_purchase_order(id):
         # Track old items for stock rollback
         old_items = {item.id: item for item in po.items if item.status != 9}
 
-        # Delete removed items
+        # Delete removed items (soft delete + stock rollback)
         incoming_ids = {i.get('id') for i in data['items'] if i.get('id')}
         for old_item in list(old_items.values()):
             if old_item.id not in incoming_ids:
-                # Rollback stock
                 unit = ProductUnit.query.get(old_item.unit_id)
                 if unit and old_item.product:
                     base_qty = old_item.quantity * unit.conversion_quantity
                     old_item.product.quantity = max((old_item.product.quantity or 0) - base_qty, 0)
                 old_item.status = 9
 
-        # Update or add items
+        # Process incoming items
         for item_data in data['items']:
             product_id = item_data['product_id']
             unit_id = item_data['unit_id']
@@ -888,19 +1000,26 @@ def edit_purchase_order(id):
             base_qty = quantity * unit.conversion_quantity
 
             if 'id' in item_data and item_data['id']:
-                # Update existing
-                item = PurchaseOrderItem.query.get(item_data['id'])
-                old_base = item.quantity * unit.conversion_quantity
-                qty_diff = base_qty - old_base
+                # === UPDATE EXISTING ITEM ===
+                item = PurchaseOrderItem.query.get_or_404(item_data['id'])
 
+                # Rollback old stock
+                old_unit = ProductUnit.query.get(item.unit_id)
+                if old_unit:
+                    old_base = item.quantity * old_unit.conversion_quantity
+                    product.quantity = (product.quantity or 0) - old_base
+
+                # Update fields — INCLUDING UNIT_ID!
+                item.unit_id = unit_id
                 item.quantity = quantity
                 item.unit_price = unit_price
                 item.total_price = quantity * unit_price
 
-                # Adjust stock
-                product.quantity = (product.quantity or 0) + qty_diff
+                # Add new stock
+                product.quantity = (product.quantity or 0) + base_qty
+
             else:
-                # New item
+                # === ADD NEW ITEM ===
                 item = PurchaseOrderItem(
                     purchase_order_id=po.id,
                     product_id=product_id,
@@ -913,12 +1032,13 @@ def edit_purchase_order(id):
                 db.session.add(item)
                 product.quantity = (product.quantity or 0) + base_qty
 
-            # Update inventory transaction
+            # Update or create inventory transaction
             inv_txn = InventoryTransaction.query.filter_by(
                 purchase_order_id=po.id,
                 product_id=product_id,
                 unit_id=unit_id
             ).first()
+
             if inv_txn:
                 inv_txn.quantity = base_qty
                 inv_txn.unit_price = unit_price
@@ -952,8 +1072,7 @@ def edit_purchase_order(id):
 
     db.session.commit()
 
-    return jsonify({'message': 'Purchase Order updated successfully', 'po_id': po.id})
-
+    return jsonify({'message': 'Purchase Order updated successfully', 'po_id': po.id}), 200
 
 
 @token_required

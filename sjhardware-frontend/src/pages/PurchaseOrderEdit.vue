@@ -4,7 +4,7 @@
       Edit Purchase Order #{{ poId }}
     </h1>
 
-    <!-- Header (same as create) -->
+    <!-- Header -->
     <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
       <div>
         <label class="block font-semibold mb-1">Supplier *</label>
@@ -69,7 +69,7 @@
         </thead>
         <tbody>
           <tr v-for="(item, idx) in poItems" :key="item.id || idx" class="hover:bg-indigo-50 transition border-b">
-            <!-- Product - FULLY EDITABLE SEARCH -->
+            <!-- Product -->
             <td class="p-4">
               <div class="space-y-3">
                 <v-autocomplete
@@ -88,11 +88,17 @@
                   @update:model-value="id => selectProduct(id, idx)"
                 >
                   <template v-slot:item="{ props, item }">
-                    <v-list-item v-bind="props" :title="item.raw.name" :subtitle="`Stock: ${item.raw.quantity.toFixed(2)} base units`"></v-list-item>
+                    <v-list-item v-bind="props">
+                      <template v-slot:title>{{ item.raw.name }}</template>
+                      <template v-slot:subtitle>Stock: {{ item.raw.quantity.toFixed(2) }} base units</template>
+                    </v-list-item>
+                  </template>
+
+                  <template v-slot:selection="{ item }">
+                    <span class="font-medium text-indigo-700">{{ item.name }}</span>
                   </template>
                 </v-autocomplete>
 
-                <!-- Show current selected product -->
                 <div v-if="item.product_name" class="bg-indigo-50 px-4 py-2 rounded-lg text-sm font-semibold text-indigo-800">
                   Selected: {{ item.product_name }}
                 </div>
@@ -104,7 +110,7 @@
               {{ item.stock_in_unit ? item.stock_in_unit.toFixed(3) : '0.000' }}
             </td>
 
-            <!-- Unit Dropdown + Name Display -->
+            <!-- Unit -->
             <td class="p-4">
               <div class="space-y-3">
                 <v-select
@@ -117,7 +123,7 @@
                   density="comfortable"
                   hide-details
                   :disabled="!item.product_id || saving"
-                  @update:model-value="updateUnitStock(idx)"
+                  @update:model-value="() => updateUnitStock(idx)"
                 ></v-select>
 
                 <div class="text-center font-bold text-indigo-700 text-lg">
@@ -152,7 +158,7 @@
               />
             </td>
 
-            <!-- Total -->
+            <!-- Line Total -->
             <td class="p-4 text-right font-bold text-indigo-700 text-lg">
               {{ formatPrice(item.total_price) }}
             </td>
@@ -171,7 +177,7 @@
         </tbody>
       </table>
 
-      <!-- Add Row + Total -->
+      <!-- Add Row + Grand Total -->
       <div class="p-6 bg-gradient-to-r from-indigo-50 to-purple-50 flex justify-between items-center">
         <button
           @click="addRow"
@@ -189,7 +195,7 @@
       </div>
     </div>
 
-    <!-- Save -->
+    <!-- Update Button -->
     <div class="text-right mb-8">
       <button
         @click="updatePurchaseOrder"
@@ -200,11 +206,12 @@
       </button>
     </div>
 
-    <!-- Snackbar & Loading -->
+    <!-- Snackbar -->
     <v-snackbar v-model="snackbar.show" :color="snackbar.color" timeout="4000" location="top right">
       {{ snackbar.message }}
     </v-snackbar>
 
+    <!-- Loading -->
     <div v-if="!loaded" class="text-center py-10">
       <v-progress-circular indeterminate size="64" color="indigo"></v-progress-circular>
       <p class="mt-4 text-gray-600">Loading purchase order...</p>
@@ -213,7 +220,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import debounce from 'lodash.debounce'
 import api from '../api'
@@ -222,7 +229,6 @@ const route = useRoute()
 const router = useRouter()
 const poId = route.params.id
 
-// Header
 const poHeader = ref({
   supplier_id: null,
   invoice_number: '',
@@ -230,9 +236,7 @@ const poHeader = ref({
   memo: ''
 })
 
-// Items
 const poItems = ref([])
-
 const suppliers = ref([])
 const loadingSuppliers = ref(false)
 const saving = ref(false)
@@ -243,14 +247,12 @@ const grandTotal = computed(() => poItems.value.reduce((sum, i) => sum + (i.tota
 
 const formatPrice = (val) => new Intl.NumberFormat('en-UG', { minimumFractionDigits: 0 }).format(Number(val) || 0)
 
-// Show unit name
 const getUnitName = (item) => {
   if (!item.unit_id || !item.units.length) return '—'
   const u = item.units.find(unit => unit.id === item.unit_id)
   return u ? u.unit_name : '—'
 }
 
-// Fetch suppliers
 const fetchSuppliers = async () => {
   loadingSuppliers.value = true
   try {
@@ -263,7 +265,6 @@ const fetchSuppliers = async () => {
   }
 }
 
-// Search products
 const debouncedSearchProduct = debounce(async (query, idx) => {
   const item = poItems.value[idx]
   if (!query || query.trim().length < 2) {
@@ -279,13 +280,10 @@ const debouncedSearchProduct = debounce(async (query, idx) => {
   }
 }, 300)
 
-// Select/changing product
 const selectProduct = (id, idx) => {
   const item = poItems.value[idx]
-  const product = item.searchResults.find(p => p.id === id)
 
-  if (!product) {
-    // Cleared
+  if (!id) {
     item.product_id = null
     item.product_name = ''
     item.units = []
@@ -293,8 +291,13 @@ const selectProduct = (id, idx) => {
     item.stock_base = 0
     item.stock_in_unit = 0
     item.selectedProductObj = null
+    item.searchResults = []
+    calculateTotal(item)
     return
   }
+
+  const product = item.searchResults.find(p => p.id === id)
+  if (!product) return
 
   item.product_id = product.id
   item.product_name = product.name
@@ -302,7 +305,7 @@ const selectProduct = (id, idx) => {
   item.stock_base = product.quantity || 0
   item.selectedProductObj = product
 
-  // Keep existing unit if still valid
+  // If current unit_id no longer exists in new units → reset
   if (item.unit_id && !item.units.some(u => u.id === item.unit_id)) {
     item.unit_id = null
   }
@@ -311,13 +314,15 @@ const selectProduct = (id, idx) => {
   item.searchResults = []
 }
 
-// Update stock display
 const updateUnitStock = (idx) => {
   const item = poItems.value[idx]
-  const unit = item.units.find(u => u.id === item.unit_id)
-  item.stock_in_unit = unit && unit.conversion_quantity
-    ? (item.stock_base || 0) / unit.conversion_quantity
-    : (item.stock_base || 0)
+  const selectedUnit = item.units.find(u => u.id === item.unit_id)
+
+  if (selectedUnit && selectedUnit.conversion_quantity > 0) {
+    item.stock_in_unit = (item.stock_base || 0) / selectedUnit.conversion_quantity
+  } else {
+    item.stock_in_unit = item.stock_base || 0
+  }
   calculateTotal(item)
 }
 
@@ -345,68 +350,7 @@ const addRow = () => {
 
 const removeRow = (idx) => poItems.value.splice(idx, 1)
 
-// // Load PO
-// const fetchPurchaseOrder = async () => {
-//   try {
-//     const res = await api.get(`/suppliers/orders/${poId}`)
-//     const data = res.data
-
-//     poHeader.value = {
-//       supplier_id: data.supplier_id,
-//       invoice_number: data.invoice_number || '',
-//       purchase_date: data.purchase_date?.split('T')[0] || '',
-//       memo: data.memo || ''
-//     }
-
-//     const items = []
-
-//     for (const i of data.items) {
-//       let units = []
-//       let stock_base = 0
-
-//       try {
-//         const prodRes = await api.get(`/inventory/products/${i.product_id}`)
-//         const prod = prodRes.data
-//         units = prod.units || []
-//         stock_base = prod.quantity || 0
-//       } catch (err) {
-//         units = [{ id: i.unit_id, unit_name: i.unit_name || 'Unknown' }]
-//       }
-
-//       items.push({
-//         id: i.id,
-//         product_id: i.product_id,
-//         product_name: i.product_name,
-//         units,
-//         unit_id: i.unit_id,
-//         stock_base,
-//         stock_in_unit: 0,
-//         cost_price: i.unit_price || 0,
-//         quantity: i.quantity || 0,
-//         total_price: (i.quantity || 0) * (i.unit_price || 0),
-//         searchResults: [],
-//         selectedProductObj: null,  // ← Important: don't pre-bind so autocomplete is editable
-//         loading: false
-//       })
-//     }
-
-//     poItems.value = items
-
-//     // Calculate stock display
-//     poItems.value.forEach((_, idx) => updateUnitStock(idx))
-
-//     loaded.value = true
-//   } catch (err) {
-//     console.error(err)
-//     snackbar.value = { show: true, message: 'Failed to load order', color: 'error' }
-//     loaded.value = true
-//   }
-// }
-
-
-
-
-// Load PO - FINAL FIX FOR UNIT NAME
+// ------------------ Load Purchase Order ------------------
 const fetchPurchaseOrder = async () => {
   try {
     const res = await api.get(`/suppliers/orders/${poId}`)
@@ -424,63 +368,72 @@ const fetchPurchaseOrder = async () => {
     for (const i of data.items) {
       let units = []
       let stock_base = 0
+      let selectedProductObj = null
 
-      // Try to get fresh product data
+      // Always try to get fresh product + units
       try {
         const prodRes = await api.get(`/inventory/products/${i.product_id}`)
         const prod = prodRes.data
         units = prod.units || []
         stock_base = prod.quantity || 0
+        selectedProductObj = { id: prod.id, name: prod.name, quantity: prod.quantity }
       } catch (err) {
-        console.warn('Product units not available')
+        console.warn(`Cannot fetch fresh data for product ${i.product_id}`)
+        // Fallback: still show product name and keep saved unit_id
+        selectedProductObj = { id: i.product_id, name: i.product_name || 'Unknown' }
       }
 
-      // CRITICAL: If no units from product API, use the unit from PO!
-      if (units.length === 0 && i.unit_id && i.unit_name) {
+      // If no units from API, create minimal unit from saved data (so dropdown shows it)
+      if (units.length === 0 && i.unit_id) {
         units = [{
           id: i.unit_id,
-          unit_name: i.unit_name
+          unit_name: i.unit_name || 'Unknown Unit',
+          conversion_quantity: 1  // minimal fallback – stock will show base qty
         }]
       }
 
-      items.push({
+      const newItem = {
         id: i.id,
         product_id: i.product_id,
-        product_name: i.product_name || 'Unknown',
-        units: units,
-        unit_id: i.unit_id,
-        stock_base: stock_base,
+        product_name: i.product_name || 'Unknown Product',
+        units,
+        unit_id: i.unit_id,                    // ← keep saved unit_id
+        stock_base,
         stock_in_unit: 0,
         cost_price: i.unit_price || 0,
         quantity: i.quantity || 0,
         total_price: (i.quantity || 0) * (i.unit_price || 0),
         searchResults: [],
-        selectedProductObj: null,  // keep editable
+        selectedProductObj,                    // ← ensures autocomplete is pre-filled
         loading: false
-      })
+      }
+
+      items.push(newItem)
     }
 
     poItems.value = items
 
-    // Force recalculation of stock display
+    // Important: recalculate stock display for every row
+    await nextTick() // ensure DOM/reactive updates
     poItems.value.forEach((_, idx) => updateUnitStock(idx))
 
     loaded.value = true
   } catch (err) {
     console.error(err)
-    snackbar.value = { show: true, message: 'Failed to load order', color: 'error' }
+    snackbar.value = { show: true, message: 'Failed to load purchase order', color: 'error' }
     loaded.value = true
   }
 }
-// Update
+
+// ------------------ Update ------------------
 const updatePurchaseOrder = async () => {
   const validItems = poItems.value.filter(i => i.product_id && i.unit_id && i.quantity > 0 && i.cost_price >= 0)
-  if (validItems.length === 0) return alert('Add at least one item')
+  if (validItems.length === 0) return alert('Add at least one valid item')
 
   const payload = {
     supplier_id: poHeader.value.supplier_id,
     invoice_number: poHeader.value.invoice_number.trim(),
-    purchase_date: poHeader.value.purchase_date,
+    purchase_date: poHeader.value.purchase_date || null,
     memo: poHeader.value.memo || '',
     items: validItems.map(i => ({
       id: i.id || undefined,
@@ -494,7 +447,7 @@ const updatePurchaseOrder = async () => {
   saving.value = true
   try {
     await api.put(`/suppliers/orders/${poId}/edit`, payload)
-    snackbar.value = { show: true, message: 'Updated successfully!', color: 'success' }
+    snackbar.value = { show: true, message: 'Purchase Order updated successfully!', color: 'success' }
     setTimeout(() => router.push('/purchaselist'), 1500)
   } catch (err) {
     snackbar.value = { show: true, message: err.response?.data?.error || 'Update failed', color: 'error' }
@@ -506,5 +459,10 @@ const updatePurchaseOrder = async () => {
 onMounted(async () => {
   await fetchSuppliers()
   await fetchPurchaseOrder()
+  if (poItems.value.length === 0) addRow()
 })
 </script>
+
+<style scoped>
+/* Your custom styles */
+</style>
