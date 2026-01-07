@@ -107,7 +107,6 @@
                   @update:search="query => searchProduct(query, index)"
                   @update:model-value="id => selectProduct(id, index)"
                 >
-                  <!-- Dropdown items -->
                   <template v-slot:item="{ props, item }">
                     <v-list-item v-bind="props">
                       <template v-slot:title>
@@ -119,7 +118,6 @@
                     </v-list-item>
                   </template>
 
-                  <!-- Selected shows ID - Name -->
                   <template v-slot:selection="{ item }">
                     <span class="font-medium text-indigo-700">
                       {{ item.raw.id }} - {{ item.raw.name }}
@@ -155,9 +153,23 @@
               ></v-select>
             </td>
 
-            <!-- Unit Price -->
-            <td class="p-4 text-right font-semibold text-green-700">
-              {{ formatPrice(item.unit_price) }}
+            <!-- Editable Unit Price -->
+            <td class="p-4">
+              <div class="space-y-1">
+                <input
+                  type="number"
+                  v-model.number="item.unit_price"
+                  @input="onPriceChange(index)"
+                  min="0"
+                  step="100"
+                  placeholder="0"
+                  :disabled="!item.unit_id"
+                  class="w-full text-right border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 font-semibold text-green-700"
+                />
+                <div class="text-xs text-gray-500 text-right">
+                  Suggested: {{ formatPrice(item.suggested_price || 0) }}
+                </div>
+              </div>
             </td>
 
             <!-- Quantity -->
@@ -327,29 +339,42 @@ const selectProduct = (productId, index) => {
 
   item.product_id = product.id
   item.selectedProductObj = product
-  // selectedProductObj: null,
-
   item.product_name = product.name
   item.units = product.units || []
   item.unit_id = null
   item.unit_price = 0
-  item.available_in_unit = product.quantity || 0
-  item.quantity =  0
+  item.suggested_price = 0
+  item.available_in_unit = 0
+  item.quantity = 0
   item.line_total = 0
   item.stock_base = product.quantity
+  item.has_manual_price = false
 
   item.productSearchResults = []
 }
 
-// Update unit price and stock
+// Update unit price and stock when unit changes
 const updateUnitPriceAndStock = (index) => {
   const item = saleItems.value[index]
   const selectedUnit = item.units.find(u => u.id === item.unit_id)
   if (selectedUnit) {
-    item.unit_price = selectedUnit.retail_price || 0
-    item.available_in_unit = item.stock_base / selectedUnit.conversion_quantity
+    item.suggested_price = selectedUnit.retail_price || 0
+
+    // Only auto-fill if user hasn't manually changed price before
+    if (!item.has_manual_price) {
+      item.unit_price = selectedUnit.retail_price || 0
+    }
+
+    item.available_in_unit = item.stock_base / selectedUnit.conversion_quantity || 0
     calculateLineTotal(index)
   }
+}
+
+// Mark price as manually changed and recalculate
+const onPriceChange = (index) => {
+  const item = saleItems.value[index]
+  item.has_manual_price = true
+  calculateLineTotal(index)
 }
 
 // Calculate line total
@@ -366,13 +391,15 @@ const addItemRow = () => {
     units: [],
     unit_id: null,
     unit_price: 0,
+    suggested_price: 0,
     quantity: 0,
     line_total: 0,
     stock_base: 0,
     available_in_unit: 0,
     productSearchResults: [],
     selectedProductObj: null,
-    loadingProduct: false
+    loadingProduct: false,
+    has_manual_price: false
   })
 }
 
@@ -406,7 +433,8 @@ const saveSale = async () => {
     items: saleItems.value.map(item => ({
       product_id: item.product_id,
       unit_id: item.unit_id,
-      quantity: item.quantity
+      quantity: item.quantity,
+      unit_price: item.unit_price  // Now sending custom price if changed
     }))
   }
 
