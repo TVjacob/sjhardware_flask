@@ -63,6 +63,7 @@
             <th class="p-4 text-left">Product</th>
             <th class="p-4 text-center">Current Stock</th>
             <th class="p-4 text-center">Unit</th>
+            <th class="p-4 text-center">Last Purchase Price</th>
             <th class="p-4 text-center">Cost Price (UGX)</th>
             <th class="p-4 text-center">Quantity</th>
             <th class="p-4 text-center">Total (UGX)</th>
@@ -74,7 +75,6 @@
             <!-- Product Search + Selected Label -->
             <td class="p-4">
               <div class="space-y-3">
-                <!-- Search Autocomplete -->
                 <v-autocomplete
                   v-model="item.selectedProductObj"
                   :items="item.searchResults"
@@ -90,18 +90,20 @@
                   @update:model-value="id => selectProduct(id, idx)"
                 >
                   <template v-slot:item="{ props, item }">
-                    <v-list-item v-bind="props" :title="item.raw.name" :subtitle="`Stock: ${item.raw.quantity.toFixed(2)} base units`"></v-list-item>
+                    <v-list-item v-bind="props">
+                      <template v-slot:title>{{ item.raw.name }}</template>
+                      <template v-slot:subtitle>Stock: {{ item.raw.quantity.toFixed(2) }} base units</template>
+                    </v-list-item>
                   </template>
                 </v-autocomplete>
 
-                <!-- Selected Product Label -->
                 <div v-if="item.product_name" class="bg-indigo-50 px-4 py-2 rounded-lg text-sm font-semibold text-indigo-800">
                   Selected: {{ item.product_name }}
                 </div>
               </div>
             </td>
 
-            <!-- Current Stock (in selected unit) -->
+            <!-- Current Stock -->
             <td class="p-4 text-center font-medium">
               {{ item.stock_in_unit ? item.stock_in_unit.toFixed(3) : '0.000' }}
             </td>
@@ -118,20 +120,25 @@
                 density="comfortable"
                 hide-details
                 :disabled="!item.product_id"
-                @update:model-value="updateUnitStock(idx)"
+                @update:model-value="() => updateUnitAndLastPrice(idx)"
               ></v-select>
             </td>
 
-            <!-- Cost Price -->
+            <!-- Last Purchase Price (Reference Only) -->
+            <td class="p-4 text-center font-medium text-gray-600">
+              {{ formatPrice(item.last_purchase_price || 0) }}
+            </td>
+
+            <!-- Editable Cost Price -->
             <td class="p-4">
               <input
                 type="number"
                 v-model.number="item.cost_price"
-                @input="calculateTotal(item)"
+                @input="calculateTotalFromPrice(idx)"
                 min="0"
                 step="100"
                 placeholder="0"
-                class="w-full text-right border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500"
+                class="w-full text-right border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 font-semibold text-green-700"
               />
             </td>
 
@@ -140,7 +147,7 @@
               <input
                 type="number"
                 v-model.number="item.quantity"
-                @input="calculateTotal(item)"
+                @input="calculateTotalFromPrice(idx)"
                 min="0"
                 step="0.01"
                 placeholder="0"
@@ -148,9 +155,17 @@
               />
             </td>
 
-            <!-- Total -->
-            <td class="p-4 text-right font-bold text-indigo-700 text-lg">
-              {{ formatPrice(item.total_price) }}
+            <!-- Editable Total → Calculates Rate -->
+            <td class="p-4">
+              <input
+                type="number"
+                v-model.number="item.total_price"
+                @input="calculatePriceFromTotal(idx)"
+                min="0"
+                step="100"
+                placeholder="0"
+                class="w-full text-right border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 font-bold text-indigo-700 text-lg"
+              />
             </td>
 
             <!-- Remove -->
@@ -274,22 +289,18 @@ const debouncedSearchProduct = debounce(async (query, idx) => {
   }
 }, 300)
 
-const onProductSearch = (val, idx) => {
-  debouncedSearchProduct(val, idx)
-}
-
-// Select Product → Load Units
+// Select Product
 const selectProduct = (id, idx) => {
   const item = poItems.value[idx]
   const product = item.searchResults.find(p => p.id === id)
   if (!product) {
-    // Clear if deselected
     item.product_id = null
     item.product_name = ''
     item.units = []
     item.unit_id = null
     item.stock_in_unit = 0
     item.cost_price = 0
+    item.last_purchase_price = 0
     item.quantity = 0
     item.total_price = 0
     return
@@ -303,27 +314,48 @@ const selectProduct = (id, idx) => {
   item.stock_base = product.quantity
   item.stock_in_unit = product.quantity || 0
   item.cost_price = 0
+  item.last_purchase_price = 0
   item.quantity = 0
   item.total_price = 0
 
   item.searchResults = []
 }
 
-// Update stock when unit selected
-const updateUnitStock = (idx) => {
+// Update unit, stock, and last purchase price
+const updateUnitAndLastPrice = (idx) => {
   const item = poItems.value[idx]
   const selectedUnit = item.units.find(u => u.id === item.unit_id)
   if (selectedUnit) {
-    item.stock_in_unit = item.stock_base / selectedUnit.conversion_quantity
+    // Update current stock in selected unit
+    item.stock_in_unit = item.stock_base / selectedUnit.conversion_quantity || 0
+
+    // Set last purchase price from unit (if available)
+    item.last_purchase_price = selectedUnit.last_purchase_price || selectedUnit.purchase_price || 0
+
+    // Optional: auto-fill cost price with last purchase price
+    // Remove this line if you don't want auto-fill
+    // if (item.cost_price === 0 || item.cost_price === item.last_purchase_price) {
+    //   item.cost_price = item.last_purchase_price
+    // }
   } else {
     item.stock_in_unit = 0
+    item.last_purchase_price = 0
   }
-  calculateTotal(item)
+  calculateTotalFromPrice(idx)
 }
 
-// Calculate total
-const calculateTotal = (item) => {
+// Calculate total from cost price × quantity
+const calculateTotalFromPrice = (idx) => {
+  const item = poItems.value[idx]
   item.total_price = (item.quantity || 0) * (item.cost_price || 0)
+}
+
+// When total is entered, calculate cost price (rate)
+const calculatePriceFromTotal = (idx) => {
+  const item = poItems.value[idx]
+  if (item.quantity > 0 && item.total_price > 0) {
+    item.cost_price = item.total_price / item.quantity
+  }
 }
 
 // Add row
@@ -336,11 +368,11 @@ const addRow = () => {
     stock_base: 0,
     stock_in_unit: 0,
     cost_price: 0,
+    last_purchase_price: 0,
     quantity: 0,
     total_price: 0,
     searchResults: [],
     selectedProductObj: null,
-
     loading: false
   })
 }
@@ -378,7 +410,7 @@ const savePurchaseOrder = async () => {
       product_id: i.product_id,
       unit_id: i.unit_id,
       quantity: i.quantity,
-      unit_price: i.cost_price  // this is the purchase cost
+      unit_price: i.cost_price
     }))
   }
 
