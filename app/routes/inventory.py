@@ -596,6 +596,8 @@ def search_products():
             Product.sku.ilike(search_pattern)
         )
     ).limit(20).all()  # limit results for performance
+    # details = db.session.query(PurchaseOrderItem.unit_price).filter(PurchaseOrderItem.product_id).first()
+
 
     result = []
     for p in products:
@@ -603,6 +605,8 @@ def search_products():
 
         # Load units
         units = ProductUnit.query.filter_by(product_id=p.id, status=1).all()
+        purchase_price = PurchaseOrderItem.query.filter_by(product_id=p.id, status=1).first()
+
         units_data = [{
             "id": u.id,
             "unit_name": u.unit_name,
@@ -610,7 +614,8 @@ def search_products():
             "retail_price": float(u.retail_price or 0),
             "wholesale_price": float(u.wholesale_price or 0),
             "is_returnable": bool(u.is_returnable),
-            "unit_code": u.unit_code
+            "unit_code": u.unit_code,
+            "purchase_price":purchase_price.unit_price if purchase_price else 0
         } for u in units]
 
         result.append({

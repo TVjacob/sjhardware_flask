@@ -81,6 +81,7 @@
             <th class="p-4 text-left">Product</th>
             <th class="p-4 text-center">Available Stock</th>
             <th class="p-4 text-center">Unit</th>
+            <th class="p-4 text-center">Cost Price (UGX)</th> <!-- New Column -->
             <th class="p-4 text-center">Unit Price (UGX)</th>
             <th class="p-4 text-center">Quantity</th>
             <th class="p-4 text-center">Total (UGX)</th>
@@ -89,10 +90,9 @@
         </thead>
         <tbody>
           <tr v-for="(item, index) in saleItems" :key="index" class="border-b hover:bg-indigo-50 transition">
-            <!-- Product Search + Selected Product Label -->
+            <!-- Product Search + Details -->
             <td class="p-4">
               <div class="space-y-2">
-                <!-- Autocomplete -->
                 <v-autocomplete
                   v-model="item.selectedProductObj"
                   :items="item.productSearchResults"
@@ -125,14 +125,14 @@
                   </template>
                 </v-autocomplete>
 
-                <!-- Selected Product Name Label -->
                 <div v-if="item.product_name" class="text-sm font-semibold text-gray-800 bg-indigo-50 px-3 py-1 rounded-lg">
-                  Selected: {{ item.product_name }}
+                  Selected: {{ item.product_name }} <br />
+                  SKU: {{ item.sku || 'N/A' }} | Category: {{ item.category_name || 'N/A' }}
                 </div>
               </div>
             </td>
 
-            <!-- Stock in Selected Unit -->
+            <!-- Available Stock -->
             <td class="p-4 text-center font-medium">
               {{ item.available_in_unit ? item.available_in_unit.toFixed(3) : '0.000' }}
             </td>
@@ -153,7 +153,12 @@
               ></v-select>
             </td>
 
-            <!-- Editable Unit Price -->
+            <!-- Cost Price (Purchase Price) - Read Only -->
+            <td class="p-4 text-center font-medium text-gray-600">
+              {{ formatPrice(item.cost_price || 0) }}
+            </td>
+
+            <!-- Editable Selling Price -->
             <td class="p-4">
               <div class="space-y-1">
                 <input
@@ -186,9 +191,17 @@
               />
             </td>
 
-            <!-- Line Total -->
-            <td class="p-4 text-right font-bold text-indigo-700 text-lg">
-              {{ formatPrice(item.line_total) }}
+            <!-- Editable Line Total -->
+            <td class="p-4">
+              <input
+                type="number"
+                v-model.number="item.line_total"
+                @input="onTotalChange(index)"
+                min="0"
+                step="100"
+                placeholder="0"
+                class="w-full text-right border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 font-bold text-indigo-700 text-lg"
+              />
             </td>
 
             <!-- Remove -->
@@ -340,10 +353,13 @@ const selectProduct = (productId, index) => {
   item.product_id = product.id
   item.selectedProductObj = product
   item.product_name = product.name
+  item.sku = product.sku
+  item.category_name = product.category_name
   item.units = product.units || []
   item.unit_id = null
   item.unit_price = 0
   item.suggested_price = 0
+  item.cost_price = 0
   item.available_in_unit = 0
   item.quantity = 0
   item.line_total = 0
@@ -359,8 +375,8 @@ const updateUnitPriceAndStock = (index) => {
   const selectedUnit = item.units.find(u => u.id === item.unit_id)
   if (selectedUnit) {
     item.suggested_price = selectedUnit.retail_price || 0
+    item.cost_price = selectedUnit.purchase_price || 0  // ← This fills the Cost Price column
 
-    // Only auto-fill if user hasn't manually changed price before
     if (!item.has_manual_price) {
       item.unit_price = selectedUnit.retail_price || 0
     }
@@ -370,17 +386,26 @@ const updateUnitPriceAndStock = (index) => {
   }
 }
 
-// Mark price as manually changed and recalculate
+// Mark price as manually changed
 const onPriceChange = (index) => {
   const item = saleItems.value[index]
   item.has_manual_price = true
   calculateLineTotal(index)
 }
 
-// Calculate line total
+// Calculate total from quantity × unit price
 const calculateLineTotal = (index) => {
   const item = saleItems.value[index]
   item.line_total = (item.quantity || 0) * (item.unit_price || 0)
+}
+
+// When total is edited, back-calculate unit price
+const onTotalChange = (index) => {
+  const item = saleItems.value[index]
+  if (item.quantity > 0) {
+    item.unit_price = item.line_total / item.quantity
+    item.has_manual_price = true
+  }
 }
 
 // Add row
@@ -388,10 +413,13 @@ const addItemRow = () => {
   saleItems.value.push({
     product_id: null,
     product_name: '',
+    sku: '',
+    category_name: '',
     units: [],
     unit_id: null,
     unit_price: 0,
     suggested_price: 0,
+    cost_price: 0,
     quantity: 0,
     line_total: 0,
     stock_base: 0,
@@ -434,7 +462,7 @@ const saveSale = async () => {
       product_id: item.product_id,
       unit_id: item.unit_id,
       quantity: item.quantity,
-      unit_price: item.unit_price  // Now sending custom price if changed
+      unit_price: item.unit_price
     }))
   }
 
