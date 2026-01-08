@@ -38,6 +38,8 @@
               <th class="th">ID</th>
               <th class="th">Name</th>
               <th class="th">SKU</th>
+              <th class="th">Cost Price</th>
+
               <th class="th">Category</th>
               <th class="th text-center">Stock (Base Units)</th>
               <th class="th">Units & Prices</th>
@@ -49,6 +51,8 @@
               <td class="td text-center">{{ p.id }}</td>
               <td class="td font-medium">{{ p.name }}</td>
               <td class="td">{{ p.sku }}</td>
+              <td class="td">{{formatPrice( p.cost_price )}}</td>
+
               <td class="td">{{ p.category_name || '-' }}</td>
               <td class="td text-center font-bold text-lg">
                 <span :class="p.quantity > 10 ? 'text-green-600' : p.quantity > 0 ? 'text-orange-600' : 'text-red-600'">
