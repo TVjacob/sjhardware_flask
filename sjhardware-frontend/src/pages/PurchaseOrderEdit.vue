@@ -1,5 +1,5 @@
 <template>
-  <div class="p-6 max-w-7xl mx-auto bg-white shadow-lg rounded-lg">
+  <div class="p-6 max-w-7xl mx-auto bg-white shadow-lg rounded-lg relative">
     <h1 class="text-3xl font-bold mb-6 text-gray-800">
       Edit Purchase Order #{{ poId }}
     </h1>
@@ -18,7 +18,7 @@
           density="comfortable"
           clearable
           :loading="loadingSuppliers"
-          :disabled="saving"
+          :disabled="isFormLocked"
         ></v-autocomplete>
       </div>
 
@@ -28,7 +28,7 @@
           type="text"
           v-model.trim="poHeader.invoice_number"
           class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-indigo-500"
-          :disabled="saving"
+          :disabled="isFormLocked"
         />
       </div>
 
@@ -38,7 +38,7 @@
           type="date"
           v-model="poHeader.purchase_date"
           class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-indigo-500"
-          :disabled="saving"
+          :disabled="isFormLocked"
         />
       </div>
 
@@ -48,13 +48,13 @@
           type="text"
           v-model="poHeader.memo"
           class="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-indigo-500"
-          :disabled="saving"
+          :disabled="isFormLocked"
         />
       </div>
     </div>
 
     <!-- Items Table -->
-    <div class="bg-white rounded-xl shadow overflow-hidden mb-8">
+    <div class="bg-white rounded-xl shadow overflow-hidden mb-8 relative">
       <table class="w-full">
         <thead class="bg-gradient-to-r from-indigo-100 to-purple-100 text-gray-700">
           <tr>
@@ -83,7 +83,7 @@
                   clearable
                   hide-details
                   :loading="item.loading"
-                  :disabled="saving"
+                  :disabled="isFormLocked"
                   @update:search="val => debouncedSearchProduct(val, idx)"
                   @update:model-value="id => selectProduct(id, idx)"
                 >
@@ -122,7 +122,7 @@
                   variant="outlined"
                   density="comfortable"
                   hide-details
-                  :disabled="!item.product_id || saving"
+                  :disabled="isFormLocked || !item.product_id"
                   @update:model-value="() => updateUnitStock(idx)"
                 ></v-select>
 
@@ -137,11 +137,11 @@
               <input
                 type="number"
                 v-model.number="item.cost_price"
-                @input="calculateTotal(item)"
+                @input="calculateTotalFromPrice(item)"
                 min="0"
                 step="100"
                 class="w-full text-right border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500"
-                :disabled="saving"
+                :disabled="isFormLocked"
               />
             </td>
 
@@ -150,25 +150,33 @@
               <input
                 type="number"
                 v-model.number="item.quantity"
-                @input="calculateTotal(item)"
+                @input="calculateTotalFromPrice(item)"
                 min="0"
                 step="0.01"
                 class="w-full text-center border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500"
-                :disabled="saving"
+                :disabled="isFormLocked"
               />
             </td>
 
-            <!-- Line Total -->
-            <td class="p-4 text-right font-bold text-indigo-700 text-lg">
-              {{ formatPrice(item.total_price) }}
+            <!-- Editable Total Price -->
+            <td class="p-4">
+              <input
+                type="number"
+                v-model.number="item.total_price"
+                @input="calculatePriceFromTotal(item)"
+                min="0"
+                step="100"
+                class="w-full text-right border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 bg-yellow-50"
+                :disabled="isFormLocked"
+              />
             </td>
 
             <!-- Remove -->
             <td class="p-4 text-center">
               <button
                 @click="removeRow(idx)"
-                :disabled="saving"
-                class="w-10 h-10 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center transition shadow"
+                :disabled="isFormLocked"
+                class="w-10 h-10 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center transition shadow disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 ✕
               </button>
@@ -181,8 +189,8 @@
       <div class="p-6 bg-gradient-to-r from-indigo-50 to-purple-50 flex justify-between items-center">
         <button
           @click="addRow"
-          :disabled="saving"
-          class="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl shadow-lg transition"
+          :disabled="isFormLocked"
+          class="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl shadow-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
         >
           + Add Product
         </button>
@@ -200,21 +208,41 @@
       <button
         @click="updatePurchaseOrder"
         :disabled="saving"
-        class="px-10 py-4 bg-green-600 hover:bg-green-700 text-white text-xl font-bold rounded-2xl shadow-2xl transition"
+        class="px-10 py-4 bg-green-600 hover:bg-green-700 text-white text-xl font-bold rounded-2xl shadow-2xl transition disabled:opacity-70"
       >
-        {{ saving ? 'Updating...' : 'Update Purchase Order' }}
+        {{ saving ? 'Saving & Redirecting...' : 'Update Purchase Order' }}
       </button>
     </div>
 
+    <!-- Blocking Overlay during save + redirect -->
+    <div
+      v-if="saving"
+      class="absolute inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 rounded-lg"
+    >
+      <div class="bg-white p-8 rounded-xl shadow-2xl text-center max-w-md">
+        <v-progress-circular
+          indeterminate
+          size="64"
+          color="indigo"
+          class="mb-6"
+        ></v-progress-circular>
+        <h3 class="text-xl font-bold text-gray-800 mb-2">Saving Purchase Order</h3>
+        <p class="text-gray-600">
+          Please wait... Do not close or refresh the page.<br>
+          Redirecting after successful save...
+        </p>
+      </div>
+    </div>
+
     <!-- Snackbar -->
-    <v-snackbar v-model="snackbar.show" :color="snackbar.color" timeout="4000" location="top right">
+    <v-snackbar v-model="snackbar.show" :color="snackbar.color" timeout="5000" location="top right">
       {{ snackbar.message }}
     </v-snackbar>
 
-    <!-- Loading -->
-    <div v-if="!loaded" class="text-center py-10">
+    <!-- Loading (initial) -->
+    <div v-if="!loaded" class="text-center py-20">
       <v-progress-circular indeterminate size="64" color="indigo"></v-progress-circular>
-      <p class="mt-4 text-gray-600">Loading purchase order...</p>
+      <p class="mt-4 text-gray-600">Loading purchase order data...</p>
     </div>
   </div>
 </template>
@@ -242,6 +270,9 @@ const loadingSuppliers = ref(false)
 const saving = ref(false)
 const loaded = ref(false)
 const snackbar = ref({ show: false, message: '', color: 'success' })
+
+// More complete lock: disable form while saving OR redirecting
+const isFormLocked = computed(() => saving.value)
 
 const grandTotal = computed(() => poItems.value.reduce((sum, i) => sum + (i.total_price || 0), 0))
 
@@ -292,7 +323,7 @@ const selectProduct = (id, idx) => {
     item.stock_in_unit = 0
     item.selectedProductObj = null
     item.searchResults = []
-    calculateTotal(item)
+    calculateTotalFromPrice(item)
     return
   }
 
@@ -305,7 +336,6 @@ const selectProduct = (id, idx) => {
   item.stock_base = product.quantity || 0
   item.selectedProductObj = product
 
-  // If current unit_id no longer exists in new units → reset
   if (item.unit_id && !item.units.some(u => u.id === item.unit_id)) {
     item.unit_id = null
   }
@@ -323,11 +353,19 @@ const updateUnitStock = (idx) => {
   } else {
     item.stock_in_unit = item.stock_base || 0
   }
-  calculateTotal(item)
+  calculateTotalFromPrice(item)
 }
 
-const calculateTotal = (item) => {
+const calculateTotalFromPrice = (item) => {
   item.total_price = (item.quantity || 0) * (item.cost_price || 0)
+}
+
+const calculatePriceFromTotal = (item) => {
+  if (item.quantity > 0) {
+    item.cost_price = Number((item.total_price / item.quantity).toFixed(2))
+  } else {
+    item.cost_price = 0
+  }
 }
 
 const addRow = () => {
@@ -350,7 +388,6 @@ const addRow = () => {
 
 const removeRow = (idx) => poItems.value.splice(idx, 1)
 
-// ------------------ Load Purchase Order ------------------
 const fetchPurchaseOrder = async () => {
   try {
     const res = await api.get(`/suppliers/orders/${poId}`)
@@ -370,7 +407,6 @@ const fetchPurchaseOrder = async () => {
       let stock_base = 0
       let selectedProductObj = null
 
-      // Always try to get fresh product + units
       try {
         const prodRes = await api.get(`/inventory/products/${i.product_id}`)
         const prod = prodRes.data
@@ -379,16 +415,14 @@ const fetchPurchaseOrder = async () => {
         selectedProductObj = { id: prod.id, name: prod.name, quantity: prod.quantity }
       } catch (err) {
         console.warn(`Cannot fetch fresh data for product ${i.product_id}`)
-        // Fallback: still show product name and keep saved unit_id
         selectedProductObj = { id: i.product_id, name: i.product_name || 'Unknown' }
       }
 
-      // If no units from API, create minimal unit from saved data (so dropdown shows it)
       if (units.length === 0 && i.unit_id) {
         units = [{
           id: i.unit_id,
           unit_name: i.unit_name || 'Unknown Unit',
-          conversion_quantity: 1  // minimal fallback – stock will show base qty
+          conversion_quantity: 1
         }]
       }
 
@@ -397,14 +431,14 @@ const fetchPurchaseOrder = async () => {
         product_id: i.product_id,
         product_name: i.product_name || 'Unknown Product',
         units,
-        unit_id: i.unit_id,                    // ← keep saved unit_id
+        unit_id: i.unit_id,
         stock_base,
         stock_in_unit: 0,
         cost_price: i.unit_price || 0,
         quantity: i.quantity || 0,
         total_price: (i.quantity || 0) * (i.unit_price || 0),
         searchResults: [],
-        selectedProductObj,                    // ← ensures autocomplete is pre-filled
+        selectedProductObj,
         loading: false
       }
 
@@ -412,9 +446,7 @@ const fetchPurchaseOrder = async () => {
     }
 
     poItems.value = items
-
-    // Important: recalculate stock display for every row
-    await nextTick() // ensure DOM/reactive updates
+    await nextTick()
     poItems.value.forEach((_, idx) => updateUnitStock(idx))
 
     loaded.value = true
@@ -425,10 +457,12 @@ const fetchPurchaseOrder = async () => {
   }
 }
 
-// ------------------ Update ------------------
 const updatePurchaseOrder = async () => {
   const validItems = poItems.value.filter(i => i.product_id && i.unit_id && i.quantity > 0 && i.cost_price >= 0)
-  if (validItems.length === 0) return alert('Add at least one valid item')
+  if (validItems.length === 0) {
+    snackbar.value = { show: true, message: 'Add at least one valid item', color: 'error' }
+    return
+  }
 
   const payload = {
     supplier_id: poHeader.value.supplier_id,
@@ -440,17 +474,31 @@ const updatePurchaseOrder = async () => {
       product_id: i.product_id,
       unit_id: i.unit_id,
       quantity: i.quantity,
-      unit_price: i.cost_price
+      unit_price: Number(i.cost_price.toFixed(2))
     }))
   }
 
   saving.value = true
+
   try {
     await api.put(`/suppliers/orders/${poId}/edit`, payload)
-    snackbar.value = { show: true, message: 'Purchase Order updated successfully!', color: 'success' }
-    setTimeout(() => router.push('/purchaselist'), 1500)
+    snackbar.value = { 
+      show: true, 
+      message: 'Purchase Order updated successfully! Redirecting...', 
+      color: 'success' 
+    }
+
+    // Give user time to see success message (1.5–2 seconds)
+    await new Promise(resolve => setTimeout(resolve, 1800))
+
+    // Final redirect
+    router.push('/purchaselist')
   } catch (err) {
-    snackbar.value = { show: true, message: err.response?.data?.error || 'Update failed', color: 'error' }
+    snackbar.value = { 
+      show: true, 
+      message: err.response?.data?.error || 'Update failed', 
+      color: 'error' 
+    }
   } finally {
     saving.value = false
   }
@@ -464,5 +512,14 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-/* Your custom styles */
+/* Highlight editable total price */
+input[type="number"][v-model*="total_price"] {
+  background-color: #fefce8 !important;
+}
+
+/* Optional: stronger disabled appearance */
+:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
 </style>

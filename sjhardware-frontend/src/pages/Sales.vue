@@ -1,5 +1,5 @@
 <template>
-  <div class="p-6 max-w-7xl mx-auto bg-gray-50 min-h-screen">
+  <div class="p-6 max-w-7xl mx-auto bg-gray-50 min-h-screen relative">
     <h1 class="text-4xl font-bold mb-8 text-gray-800">💰 Sales Dashboard</h1>
 
     <!-- Sale Header -->
@@ -12,6 +12,7 @@
             type="date"
             v-model="saleHeader.sale_date"
             class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+            :disabled="isFormLocked"
           />
         </div>
 
@@ -28,6 +29,7 @@
             density="comfortable"
             clearable
             :loading="loadingCustomers"
+            :disabled="isFormLocked"
           ></v-autocomplete>
         </div>
 
@@ -41,6 +43,7 @@
             step="100"
             placeholder="0"
             class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none text-right"
+            :disabled="isFormLocked"
           />
         </div>
 
@@ -52,6 +55,7 @@
             v-model="saleHeader.memo"
             placeholder="Optional note..."
             class="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+            :disabled="isFormLocked"
           />
         </div>
 
@@ -68,20 +72,21 @@
             density="comfortable"
             clearable
             :loading="loadingAccounts"
+            :disabled="isFormLocked"
           ></v-autocomplete>
         </div>
       </div>
     </div>
 
     <!-- Items Table -->
-    <div class="bg-white rounded-2xl shadow-lg overflow-hidden">
+    <div class="bg-white rounded-2xl shadow-lg overflow-hidden relative">
       <table class="w-full">
         <thead class="bg-gradient-to-r from-indigo-100 to-purple-100 text-gray-700">
           <tr>
             <th class="p-4 text-left">Product</th>
             <th class="p-4 text-center">Available Stock</th>
             <th class="p-4 text-center">Unit</th>
-            <th class="p-4 text-center">Cost Price (UGX)</th> <!-- New Column -->
+            <th class="p-4 text-center">Cost Price (UGX)</th>
             <th class="p-4 text-center">Unit Price (UGX)</th>
             <th class="p-4 text-center">Quantity</th>
             <th class="p-4 text-center">Total (UGX)</th>
@@ -104,6 +109,7 @@
                   clearable
                   hide-details
                   :loading="item.loadingProduct"
+                  :disabled="isFormLocked"
                   @update:search="query => searchProduct(query, index)"
                   @update:model-value="id => selectProduct(id, index)"
                 >
@@ -148,7 +154,7 @@
                 variant="outlined"
                 density="comfortable"
                 hide-details
-                :disabled="!item.product_id"
+                :disabled="isFormLocked || !item.product_id"
                 @update:model-value="() => updateUnitPriceAndStock(index)"
               ></v-select>
             </td>
@@ -168,7 +174,7 @@
                   min="0"
                   step="100"
                   placeholder="0"
-                  :disabled="!item.unit_id"
+                  :disabled="isFormLocked || !item.unit_id"
                   class="w-full text-right border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 font-semibold text-green-700"
                 />
                 <div class="text-xs text-gray-500 text-right">
@@ -187,6 +193,7 @@
                 :max="item.available_in_unit"
                 step="0.01"
                 placeholder="0"
+                :disabled="isFormLocked"
                 class="w-full text-center border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500"
               />
             </td>
@@ -200,6 +207,7 @@
                 min="0"
                 step="100"
                 placeholder="0"
+                :disabled="isFormLocked"
                 class="w-full text-right border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 font-bold text-indigo-700 text-lg"
               />
             </td>
@@ -208,7 +216,8 @@
             <td class="p-4 text-center">
               <button
                 @click="removeItem(index)"
-                class="w-10 h-10 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center transition shadow"
+                :disabled="isFormLocked"
+                class="w-10 h-10 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center transition shadow disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 ✕
               </button>
@@ -221,7 +230,8 @@
       <div class="p-6 bg-gradient-to-r from-indigo-50 to-purple-50 flex justify-between items-center">
         <button
           @click="addItemRow"
-          class="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl shadow-lg transition transform hover:scale-105"
+          :disabled="isFormLocked"
+          class="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl shadow-lg transition transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           + Add Item
         </button>
@@ -245,14 +255,37 @@
       <button
         @click="saveSale"
         :disabled="saving || saleItems.length === 0"
-        class="px-10 py-4 bg-green-600 hover:bg-green-700 text-white text-xl font-bold rounded-2xl shadow-2xl transition transform hover:scale-105 disabled:opacity-50"
+        class="px-10 py-4 bg-green-600 hover:bg-green-700 text-white text-xl font-bold rounded-2xl shadow-2xl transition transform hover:scale-105 disabled:opacity-70"
       >
         {{ saving ? 'Saving Sale...' : 'Complete Sale' }}
       </button>
     </div>
 
-    <!-- Notification -->
-    <div v-if="notification" class="fixed bottom-8 right-8 bg-gray-900 text-white px-8 py-4 rounded-2xl shadow-2xl text-lg z-50 animate-pulse">
+    <!-- Full Blocking Overlay during save -->
+    <div
+      v-if="saving"
+      class="absolute inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 rounded-xl"
+    >
+      <div class="bg-white p-10 rounded-2xl shadow-2xl text-center max-w-lg">
+        <v-progress-circular
+          indeterminate
+          size="80"
+          color="indigo"
+          class="mb-8"
+        ></v-progress-circular>
+        <h3 class="text-2xl font-bold text-gray-800 mb-3">Processing Sale...</h3>
+        <p class="text-gray-600 text-lg">
+          Please wait a moment.<br>
+          <strong>Do not refresh or close this page.</strong>
+        </p>
+      </div>
+    </div>
+
+    <!-- Success/Error Notification -->
+    <div
+      v-if="notification"
+      class="fixed bottom-8 right-8 bg-gray-900 text-white px-8 py-5 rounded-2xl shadow-2xl text-lg z-50 animate-fade-in-out"
+    >
       {{ notification }}
     </div>
   </div>
@@ -266,7 +299,7 @@ import api from '../api'
 // Header
 const saleHeader = ref({
   sale_date: new Date().toISOString().slice(0, 10),
-  customer_id: 1,
+  customer_id: 1, // default walk-in customer
   amount_paid: 0,
   memo: '',
   payment_account_id: null
@@ -275,7 +308,7 @@ const saleHeader = ref({
 // Items
 const saleItems = ref([])
 
-// Data
+// Data sources
 const customers = ref([])
 const paymentAccounts = ref([])
 const loadingCustomers = ref(false)
@@ -283,12 +316,14 @@ const loadingAccounts = ref(false)
 const saving = ref(false)
 const notification = ref('')
 
-// Grand Total
+// Computed
 const grandTotal = computed(() => {
   return saleItems.value.reduce((sum, item) => sum + (item.line_total || 0), 0)
 })
 
-// Format Price
+const isFormLocked = computed(() => saving.value)
+
+// Formatters
 const formatPrice = (val) => {
   const value = Number(val) || 0
   return new Intl.NumberFormat('en-UG', {
@@ -297,27 +332,26 @@ const formatPrice = (val) => {
   }).format(value)
 }
 
-// Fetch Customers
+// Data Fetching
 const fetchCustomers = async () => {
   loadingCustomers.value = true
   try {
     const res = await api.get('/customer/')
     customers.value = res.data
   } catch (err) {
-    console.error(err)
+    console.error('Failed to load customers:', err)
   } finally {
     loadingCustomers.value = false
   }
 }
 
-// Fetch Payment Accounts
 const fetchPaymentAccounts = async () => {
   loadingAccounts.value = true
   try {
     const res = await api.get('/accounts/?type=ASSET')
     paymentAccounts.value = res.data
   } catch (err) {
-    console.error(err)
+    console.error('Failed to load accounts:', err)
   } finally {
     loadingAccounts.value = false
   }
@@ -369,13 +403,13 @@ const selectProduct = (productId, index) => {
   item.productSearchResults = []
 }
 
-// Update unit price and stock when unit changes
+// Update price & stock on unit change
 const updateUnitPriceAndStock = (index) => {
   const item = saleItems.value[index]
   const selectedUnit = item.units.find(u => u.id === item.unit_id)
   if (selectedUnit) {
     item.suggested_price = selectedUnit.retail_price || 0
-    item.cost_price = selectedUnit.purchase_price || 0  // ← This fills the Cost Price column
+    item.cost_price = selectedUnit.purchase_price || 0
 
     if (!item.has_manual_price) {
       item.unit_price = selectedUnit.retail_price || 0
@@ -386,20 +420,16 @@ const updateUnitPriceAndStock = (index) => {
   }
 }
 
-// Mark price as manually changed
 const onPriceChange = (index) => {
-  const item = saleItems.value[index]
-  item.has_manual_price = true
+  saleItems.value[index].has_manual_price = true
   calculateLineTotal(index)
 }
 
-// Calculate total from quantity × unit price
 const calculateLineTotal = (index) => {
   const item = saleItems.value[index]
   item.line_total = (item.quantity || 0) * (item.unit_price || 0)
 }
 
-// When total is edited, back-calculate unit price
 const onTotalChange = (index) => {
   const item = saleItems.value[index]
   if (item.quantity > 0) {
@@ -408,7 +438,7 @@ const onTotalChange = (index) => {
   }
 }
 
-// Add row
+// Row management
 const addItemRow = () => {
   saleItems.value.push({
     product_id: null,
@@ -431,25 +461,43 @@ const addItemRow = () => {
   })
 }
 
-// Remove row
 const removeItem = (index) => {
   saleItems.value.splice(index, 1)
 }
 
 // Save Sale
 const saveSale = async () => {
-  if (!saleHeader.value.customer_id) return alert('Please select a customer')
-  if (saleItems.value.length === 0) return alert('Add at least one item')
+  if (!saleHeader.value.customer_id) {
+    notification.value = 'Please select a customer'
+    return
+  }
+  if (saleItems.value.length === 0) {
+    notification.value = 'Add at least one item'
+    return
+  }
   if (saleHeader.value.amount_paid > 0 && !saleHeader.value.payment_account_id) {
-    return alert('Select payment account when amount paid')
+    notification.value = 'Select payment account when amount paid'
+    return
   }
 
   for (let i = 0; i < saleItems.value.length; i++) {
     const item = saleItems.value[i]
-    if (!item.product_id) return alert(`Row ${i + 1}: Select a product`)
-    if (!item.unit_id) return alert(`Row ${i + 1}: Select a unit`)
-    if (!item.quantity || item.quantity <= 0) return alert(`Row ${i + 1}: Enter quantity > 0`)
-    if (item.quantity > item.available_in_unit) return alert(`Row ${i + 1}: Not enough stock`)
+    if (!item.product_id) {
+      notification.value = `Row ${i + 1}: Select a product`
+      return
+    }
+    if (!item.unit_id) {
+      notification.value = `Row ${i + 1}: Select a unit`
+      return
+    }
+    if (!item.quantity || item.quantity <= 0) {
+      notification.value = `Row ${i + 1}: Enter quantity > 0`
+      return
+    }
+    if (item.quantity > item.available_in_unit) {
+      notification.value = `Row ${i + 1}: Not enough stock`
+      return
+    }
   }
 
   const payload = {
@@ -467,9 +515,13 @@ const saveSale = async () => {
   }
 
   saving.value = true
+
   try {
     const res = await api.post('/sales/', payload)
     notification.value = `Sale #${res.data.sale_id} saved successfully!`
+
+    // Brief delay to show success, then reset
+    await new Promise(resolve => setTimeout(resolve, 1800))
     resetForm()
   } catch (err) {
     console.error(err)
@@ -480,7 +532,6 @@ const saveSale = async () => {
   }
 }
 
-// Reset form
 const resetForm = () => {
   saleHeader.value = {
     sale_date: new Date().toISOString().slice(0, 10),
@@ -502,5 +553,21 @@ onMounted(() => {
 </script>
 
 <style scoped>
-/* Your custom styles */
+/* Fade in/out animation for notification */
+@keyframes fadeInOut {
+  0% { opacity: 0; transform: translateY(20px); }
+  10% { opacity: 1; transform: translateY(0); }
+  90% { opacity: 1; transform: translateY(0); }
+  100% { opacity: 0; transform: translateY(20px); }
+}
+
+.animate-fade-in-out {
+  animation: fadeInOut 5s forwards;
+}
+
+/* Disabled style enhancement */
+:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
 </style>

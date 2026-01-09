@@ -11,21 +11,27 @@ stock_adjustment_bp = Blueprint(
 # ------------------------------------------------
 # Serializer
 # ------------------------------------------------
-def serialize_adjustment(a):
+def serialize_adjustment(adj):
+    """
+    Serialize a StockAdjustment instance to dict with unit info
+    """
+    unit = adj.unit  # from relationship
+    
     return {
-        "id": a.id,
-        "product_id": a.product_id,
-        "product_name": a.product.name if a.product else None,
-        "adjustment_type": a.adjustment_type,
-        "quantity_change": a.quantity,
-        "previous_quantity": a.previous_quantity,
-        "new_quantity": a.new_quantity,
-        "reason": a.reason,
-        "transaction_no": a.transaction_no,
-        "adjusted_at": a.adjusted_at.isoformat() if a.adjusted_at else None,
-        "status": a.status
+        'id': adj.id,
+        'product_id': adj.product_id,
+        'product_name': adj.product.name if adj.product else None,
+        'unit_id': adj.unit_id,
+        'unit_name': unit.unit_name if unit else None,               # ← Added
+        'adjustment_type': adj.adjustment_type,
+        'quantity': float(adj.quantity),                            # quantity in the selected unit
+        'previous_quantity': float(adj.previous_quantity) if adj.previous_quantity is not None else None,
+        'new_quantity': float(adj.new_quantity) if adj.new_quantity is not None else None,
+        'reason': adj.reason,
+        'adjusted_at': adj.adjusted_at.isoformat() if adj.adjusted_at else None,
+        'transaction_no': adj.transaction_no,
+        'status': adj.status,
     }
-
 
 # ------------------------------------------------
 # GET ALL
