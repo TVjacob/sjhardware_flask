@@ -58,7 +58,7 @@
         </thead>
         <tbody>
           <tr
-          v-for="sale in filteredSales"
+            v-for="sale in filteredSales"
             :key="sale.sale_id"
             class="hover:bg-gray-50 transition cursor-pointer"
           >
@@ -84,6 +84,18 @@
               </span>
             </td>
             <td class="p-2 border text-center flex justify-center gap-2">
+              <!-- Edit Button -->
+              <router-link
+                :to="`/editsales/${sale.sale_id}`"
+                class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 rounded-lg transition flex items-center gap-1"
+              >
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+                Edit
+              </router-link>
+
+              <!-- Receive Payment (only for unpaid) -->
               <button
                 v-if="sale.balance > 0"
                 @click="openPaymentModal(sale)"
@@ -91,12 +103,16 @@
               >
                 Receive Payment
               </button>
+
+              <!-- View Report -->
               <button
                 @click="previewPaymentReport(sale.sale_id)"
                 class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-lg transition"
               >
                 View Report
               </button>
+
+              <!-- Delete -->
               <button
                 @click="deleteSale(sale.sale_id)"
                 class="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded-lg transition"
@@ -105,7 +121,7 @@
               </button>
             </td>
           </tr>
-          <tr v-if="sales.length === 0">
+          <tr v-if="filteredSales.length === 0">
             <td colspan="9" class="p-4 text-center text-gray-500">
               No sales found.
             </td>
@@ -130,11 +146,15 @@
     />
   </div>
 </template>
+
 <script setup>
 import { ref, computed, onMounted } from 'vue';
+import { useRouter } from 'vue-router'; // if needed for programmatic navigation
 import api from '../api';
 import PaymentModal from './PaymentModal.vue';
 import ReportModal from './ReportModal.vue';
+
+const router = useRouter();
 
 const currentTab = ref('unpaid');
 const sales = ref([]);
@@ -177,7 +197,7 @@ const filteredSales = computed(() => {
     });
 });
 
-// Fetch accounts
+// Fetch accounts (for payment modal)
 const fetchAccounts = async () => {
   try {
     const res = await api.get('/accounts/cash-bank');
@@ -205,6 +225,7 @@ const openPaymentModal = sale => {
   selectedSale.value = sale;
   showPaymentModal.value = true;
 };
+
 const previewPaymentReport = async saleId => {
   try {
     const res = await api.get(`/payments/details?sale_id=${saleId}&type=invoice`);
