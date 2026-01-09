@@ -291,6 +291,8 @@ def get_latest_cost_price(product_id):
 # ----------------------------------------------------------------------
 # Re-build product.quantity (base units) from purchases & sales
 # ----------------------------------------------------------------------
+from sqlalchemy import text
+
 def rebuild_product_quantities():
     try:
         sql = text("""
@@ -311,19 +313,48 @@ def rebuild_product_quantities():
             LEFT JOIN product_unit pu ON si.unit_id = pu.id
             WHERE si.status != 9
             GROUP BY si.product_id
+        ),
+        adjustment_totals AS (
+            SELECT
+                sa.product_id,
+                COALESCE(SUM(
+                    CASE
+                        WHEN UPPER(sa.adjustment_type) = 'INCREASE'
+                            THEN sa.quantity * COALESCE(pu.conversion_quantity, 1.0)
+                        WHEN UPPER(sa.adjustment_type) = 'DECREASE'
+                            THEN -1 * sa.quantity * COALESCE(pu.conversion_quantity, 1.0)
+                        ELSE 0
+                    END
+                ), 0) AS total_adjusted_base
+            FROM stock_adjustment sa
+            LEFT JOIN product_unit pu ON sa.unit_id = pu.id
+            WHERE sa.status != 9
+            GROUP BY sa.product_id
         )
+
         UPDATE product p
-        SET quantity = 
-            COALESCE(pur.total_purchased_base, 0) - COALESCE(sal.total_sold_base, 0)
+        SET quantity =
+            COALESCE(pur.total_purchased_base, 0)
+          - COALESCE(sal.total_sold_base, 0)
+          + COALESCE(adj.total_adjusted_base, 0)
+
         FROM purchase_totals pur
-        FULL JOIN sale_totals sal ON pur.product_id = sal.product_id
-        WHERE p.id = COALESCE(pur.product_id, sal.product_id);
+        FULL JOIN sale_totals sal 
+            ON pur.product_id = sal.product_id
+        FULL JOIN adjustment_totals adj
+            ON COALESCE(pur.product_id, sal.product_id) = adj.product_id
+
+        WHERE p.id = COALESCE(pur.product_id, sal.product_id, adj.product_id);
         """)
+
         db.session.execute(sql)
         db.session.commit()
+        print("✅ Product quantities rebuilt successfully (including stock adjustments).")
+
     except Exception as e:
         db.session.rollback()
-        print(f"Failed to rebuild quantities: {e}")
+        print(f"❌ Failed to rebuild product quantities: {e}")
+
 
 
 # ----------------------------------------------------------------------
