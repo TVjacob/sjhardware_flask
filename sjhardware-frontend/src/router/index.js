@@ -40,6 +40,7 @@ import UserProfile from '@/pages/UserProfile.vue';
 import PurchaseProduct from '@/pages/reports/PurchaseProduct.vue';
 import SalesProfit from '@/pages/reports/SalesProfit.vue';
 import StockAdjustments from '@/pages/StockAdjustments.vue';
+import EditSale from '@/pages/EditSale.vue';
 
 const routes = [
   {
@@ -72,7 +73,14 @@ const routes = [
       { path: 'reports', component: Report, meta: { showGreeting: false, pageName: 'Reports',requiresAuth: true, } },
       
       { path: 'reports/purchased-products', component: PurchaseProduct, meta: { showGreeting: false, pageName: 'Purchased Product',requiresAuth: true, } },
+      { path: '/editsale', component: EditSale, meta: { showGreeting: false, pageName: 'EditSale',requiresAuth: true, } },
 
+      {
+        path: '/editsales/:id',
+        name: 'Edit Sale',
+        component: EditSale,
+        meta: { showGreeting: false, pageName: 'Edit Sale', requiresAuth: true,}
+      },
       // { path: 'reports/sales-profit', component: SalesProfit, meta: { showGreeting: false, pageName: 'Sales Profit',requiresAuth: true, } },
 
 

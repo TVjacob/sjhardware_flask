@@ -67,7 +67,7 @@
       </div>
       <div class="bg-white shadow rounded-xl border p-4 text-center">
         <p class="text-sm font-medium text-gray-600">Total Profit</p>
-        <p class="text-2xl md:text-3xl font-bold mt-1" :class="totals.total_profit >=0 ? 'text-green-600' : 'text-red-600'">
+        <p class="text-2xl md:text-3xl font-bold mt-1" :class="totals.total_profit >= 0 ? 'text-green-600' : 'text-red-600'">
           {{ formatNumber(totals.total_profit) }}
         </p>
       </div>
@@ -88,11 +88,25 @@
         <div>
           <h2 class="text-lg font-bold">{{ invoice.invoice }}</h2>
           <p class="text-sm text-gray-600">Date: {{ invoice.date }}</p>
+          <p class="text-sm text-gray-600">Customer: {{ invoice.customer }}</p>
         </div>
-        <div class="text-left md:text-right">
-          <p class="text-sm font-semibold">Sales: <span class="text-blue-600">{{ formatNumber(invoice.sales_total) }}</span></p>
-          <p class="text-sm font-semibold">Cost: <span class="text-red-600">{{ formatNumber(invoice.cost_total) }}</span></p>
-          <p class="text-sm font-semibold">Profit: <span :class="invoice.profit_total >=0 ? 'text-green-600' : 'text-red-600'">{{ formatNumber(invoice.profit_total) }}</span></p>
+        <div class="text-left md:text-right flex items-center gap-4">
+          <div>
+            <p class="text-sm font-semibold">Sales: <span class="text-blue-600">{{ formatNumber(invoice.sales_total) }}</span></p>
+            <p class="text-sm font-semibold">Cost: <span class="text-red-600">{{ formatNumber(invoice.cost_total) }}</span></p>
+            <p class="text-sm font-semibold">Profit: <span :class="invoice.profit_total >= 0 ? 'text-green-600' : 'text-red-600'">{{ formatNumber(invoice.profit_total) }}</span></p>
+          </div>
+
+          <!-- EDIT BUTTON -->
+          <router-link
+            :to="`/editsales/${invoice.sale_id}`"
+            class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-medium transition flex items-center gap-2 shadow-sm"
+          >
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+            </svg>
+            Edit Sale
+          </router-link>
         </div>
       </div>
 
@@ -102,8 +116,7 @@
           <thead class="bg-gray-100 text-xs uppercase font-semibold">
             <tr>
               <th class="p-2 border text-left">Product</th>
-              <th class="p-2 border text-left">unit</th>
-
+              <th class="p-2 border text-left">Unit</th>
               <th class="p-2 border text-left">Category</th>
               <th class="p-2 border text-right">Qty</th>
               <th class="p-2 border text-right">Sell Price</th>
@@ -123,11 +136,18 @@
               <td class="p-2 border text-right">{{ formatNumber(item.purchase_price) }}</td>
               <td class="p-2 border text-right">{{ formatNumber(item.line_sales) }}</td>
               <td class="p-2 border text-right">{{ formatNumber(item.line_cost) }}</td>
-              <td class="p-2 border text-right font-bold" :class="item.profit >=0 ? 'text-green-600' : 'text-red-600'">{{ formatNumber(item.profit) }}</td>
+              <td class="p-2 border text-right font-bold" :class="item.profit >= 0 ? 'text-green-600' : 'text-red-600'">
+                {{ formatNumber(item.profit) }}
+              </td>
             </tr>
           </tbody>
         </table>
       </div>
+    </div>
+
+    <!-- No Data Message -->
+    <div v-if="groupedData.length === 0" class="text-center py-12 text-gray-500">
+      No sales found for the selected filters
     </div>
   </div>
 </template>
@@ -135,6 +155,9 @@
 <script setup>
 import { ref, computed, onMounted } from "vue";
 import api from "@/api";
+import { useRouter } from "vue-router"; // ← if you need programmatic navigation
+
+const router = useRouter();
 
 const rawData = ref([]);
 const totals = ref({});
@@ -146,50 +169,55 @@ const fetchData = async () => {
   try {
     const res = await api.get("/reports/sales-profit", {
       params: {
-        search: search.value,
-        start_date: startDate.value,
-        end_date: endDate.value
+        search: search.value.trim() || undefined,
+        start_date: startDate.value || undefined,
+        end_date: endDate.value || undefined
       }
     });
     rawData.value = res.data.data || [];
     totals.value = res.data.totals || {};
   } catch (err) {
-    console.error(err);
+    console.error("Failed to load sales profit report:", err);
   }
 };
 
-/* GROUP BY INVOICE */
+/* GROUP BY INVOICE (enhanced to include sale_id & customer) */
 const groupedData = computed(() => {
   const groups = {};
   rawData.value.forEach(row => {
-    if (!groups[row.invoice_number]) {
-      groups[row.invoice_number] = {
+    const invoiceKey = row.invoice_number;
+    if (!groups[invoiceKey]) {
+      groups[invoiceKey] = {
         invoice: row.invoice_number,
+        sale_id: row.sale_id,           // ← Important: store sale_id here
         date: new Date(row.sale_date).toLocaleDateString(),
+        customer: row.customer || "Walk-in",
         sales_total: 0,
         cost_total: 0,
         profit_total: 0,
         items: []
       };
     }
-    groups[row.invoice_number].sales_total += Number(row.line_sales || 0);
-    groups[row.invoice_number].cost_total += Number(row.line_cost || 0);
-    groups[row.invoice_number].profit_total += Number(row.profit || 0);
-    groups[row.invoice_number].items.push(row);
+
+    groups[invoiceKey].sales_total += Number(row.line_sales || 0);
+    groups[invoiceKey].cost_total += Number(row.line_cost || 0);
+    groups[invoiceKey].profit_total += Number(row.profit || 0);
+    groups[invoiceKey].items.push(row);
   });
+
   return Object.values(groups);
 });
 
-const formatQty = (num) => Number(num || 0).toLocaleString(undefined, { minimumFractionDigits:0, maximumFractionDigits:0 });
-const formatNumber = (num) => Number(num || 0).toLocaleString(undefined, { minimumFractionDigits:2, maximumFractionDigits:2 });
+const formatQty = (num) => Number(num || 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+const formatNumber = (num) => Number(num || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 onMounted(fetchData);
 </script>
 
 <style scoped>
 @keyframes fadeIn {
-  0% { opacity: 0; transform: translateY(8px);}
-  100% { opacity: 1; transform: translateY(0);}
+  0% { opacity: 0; transform: translateY(8px); }
+  100% { opacity: 1; transform: translateY(0); }
 }
 .animate-fadeIn { animation: fadeIn 0.4s ease-out forwards; }
 </style>

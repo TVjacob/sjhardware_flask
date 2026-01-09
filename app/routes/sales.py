@@ -8,7 +8,7 @@ from app.models import (
 from app.utils.auth import token_required
 from app.utils.gl_utils import post_to_ledger, generate_transaction_number_partone
 from datetime import datetime
-from sqlalchemy import desc, or_
+from sqlalchemy import desc, func, or_
 
 sales_bp = Blueprint('sales', __name__, url_prefix='/sales')
 
@@ -401,71 +401,395 @@ def delete_sale(sale_id):
         return jsonify({"error": f"Failed to delete sale: {str(e)}"}), 500
 
 
-# # # ------------------ Soft Delete Sale (Status = 9) ------------------ #
-# @token_required
-# @sales_bp.route('/<int:sale_id>', methods=['DELETE'])
-# def delete_sale(sale_id):
-#     sale = Sale.query.get_or_404(sale_id)
+# ------------------------------------------------
+# GET Sale for EDIT - Full detailed data
+# ------------------------------------------------
+@token_required
+@sales_bp.route('/<int:sale_id>/edit', methods=['GET'])
+def get_sale_for_edit(sale_id):
+    """
+    Returns complete sale data optimized for editing:
+    - Header: sale info, customer, totals, payment status
+    - Items: full product details + all available units + current stock
+    - Payments: summary + list
+    """
+    sale = Sale.query.get_or_404(sale_id)
 
-#     try:
-#         # 1️⃣ Soft delete sale
-#         sale.status = 9
-#         update_timestamps(sale)
-#         db.session.add(sale)
+    # Customer info (fallback to Walk-in if missing)
+    customer = sale.customer
+    customer_data = {
+        "id": customer.id if customer else 1,
+        "name": customer.name if customer else "Walk-in Customer",
+        "phone": customer.phone if customer else "",
+        "email": customer.email if customer else "",
+        "address": customer.address if customer else ""
+    } if customer else {
+        "id": 1,
+        "name": "Walk-in Customer",
+        "phone": "",
+        "email": "",
+        "address": ""
+    }
 
-#         # 2️⃣ Soft delete sale items & restore stock
-#         sale_items = SaleItem.query.filter_by(sale_id=sale.id, status=1).all()
-#         for item in sale_items:
-#             item.status = 9
-#             update_timestamps(item)
+    # Sale Items - enriched with units & stock
+    sale_items = SaleItem.query.filter_by(sale_id=sale.id, status=1).all()
+    items = []
 
-#             # Restore product stock
-#             product = Product.query.get(item.product_id)
-#             if product:
-#                 product.quantity += item.quantity
-#                 db.session.add(product)
+    for si in sale_items:
+        product = si.product
 
-#             db.session.add(item)
+        # Category
+        category_name = None
+        if product and product.category:
+            category_name = product.category.name
 
-#         # 3️⃣ Soft delete payments
-#         payments = Payment.query.filter_by(sale_id=sale.id, status=1).all()
-#         for payment in payments:
-#             payment.status = 9
-#             update_timestamps(payment)
-#             db.session.add(payment)
+        # All available units for this product
+        units = []
+        if product:
+            for u in product.units:
+                units.append({
+                    "id": u.id,
+                    "unit_name": u.unit_name,
+                    "conversion_quantity": u.conversion_quantity,
+                    "retail_price": float(u.retail_price) if u.retail_price else 0.0,
+                    "wholesale_price": float(u.wholesale_price) if u.wholesale_price else 0.0,
+                    "cost_price": float(u.cost_price) if u.cost_price else 0.0,
+                    "is_returnable": u.is_returnable
+                })
+        
+        
+        purchase_price = PurchaseOrderItem.query.filter_by(product_id=si.product_id, status=1).first()
 
-#         # 4️⃣ Soft delete inventory transactions
-#         inv_txns = InventoryTransaction.query.filter_by(sale_id=sale.id, status=1).all()
-#         for txn in inv_txns:
-#             txn.status = 9
-#             update_timestamps(txn)
-#             db.session.add(txn)
 
-#         # 5️⃣ Reverse all related General Ledger entries
-#         gl_entries = GeneralLedger.query.filter(
-#             or_(
-#                 GeneralLedger.description.ilike(f"%Sale #{sale_id}%"),
-#                 GeneralLedger.description.ilike(f"%Payment for Sale #{sale_id}%")
-#             )
-#         ).all()
-#         print("gl_entries ",len(gl_entries))
+        # Currently selected unit (if exists)
+        selected_unit = next((u for u in product.units if u.id == si.unit_id), None) if product else None
 
-#         for entry in gl_entries:
-#             reverse_type = 'Credit' if entry.transaction_type == 'Debit' else 'Debit'
-#             reverse_entry = GeneralLedger(
-#                 account_id=entry.account_id,
-#                 transaction_type=reverse_type,
-#                 amount=entry.amount,
-#                 description=f"Reversal of {entry.description}",
-#                 transaction_date=datetime.utcnow(),
-#                 transaction_no=entry.transaction_no,
-#                 status=1
-#             )
-#             db.session.add(reverse_entry)
+        # Current stock (in base units)
+        current_stock_base = float(product.quantity) if product else 0.0
 
-#         db.session.commit()
-#         return jsonify({"message": f"Sale #{sale_id} soft deleted (status=9), stock restored, GL reversed"}), 200
+        items.append({
+            "id": si.id,
+            "product_id": si.product_id,
+            "product_name": si.product_name or (product.name if product else "Unknown Product"),
+            "sku": product.sku if product else None,
+            "category_name": category_name,
+            "quantity": float(si.quantity),
+            "unit_price": float(si.unit_price),
+            "stock_qty":0,
+            "total_price": float(si.total_price),
+            "unit_id": si.unit_id,
+            "unit_name": selected_unit.unit_name if selected_unit else None,
+            "current_stock_base": current_stock_base,
+            "last_purchase_price":purchase_price.unit_price if purchase_price else 0,
+            "units": units,  # ← all available units for editing
+            # Helpful for frontend validation/display
+            "max_quantity_allowed": current_stock_base if not selected_unit else current_stock_base / selected_unit.conversion_quantity if selected_unit.conversion_quantity > 0 else 0
+        })
 
-#     except Exception as e:
-#         db.session.rollback()
-#         return jsonify({"error": f"Failed to delete sale: {str(e)}"}), 500
+    # Payments summary + list
+    payments = Payment.query.filter_by(sale_id=sale.id, status=1).all()
+    payment_list = [
+        {
+            "id": p.id,
+            "amount": float(p.amount),
+            "payment_type": p.payment_type,
+            "payment_date": p.payment_date.strftime("%Y-%m-%d %H:%M") if p.payment_date else None,
+            "reference": p.reference,
+            "payment_account_id": p.payment_account_id
+        }
+        for p in payments
+    ]
+
+    total_paid = sum(float(p.amount) for p in payments)
+
+    # Final response structure
+    data = {
+        "sale_id": sale.id,
+        "sale_number": sale.sale_number,
+        "sale_date": sale.sale_date.strftime("%Y-%m-%d") if sale.sale_date else None,
+        "customer_id": sale.customer_id,
+        "customer": customer_data,
+        "total_amount": float(sale.total_amount),
+        "total_paid": total_paid,
+        "balance": float(sale.balance),
+        "payment_status": sale.payment_status,
+        "memo": sale.memo if hasattr(sale, 'memo') else "",  # in case you add memo later
+        "payment_account_id": getattr(sale, "payment_account_id", None),
+        "items": items,
+        "payments": payment_list,
+        "created_at": sale.created_at.isoformat() if sale.created_at else None,
+        "updated_at": sale.updated_at.isoformat() if sale.updated_at else None
+    }
+
+    return jsonify({
+        "status": "success",
+        "message": f"Sale #{sale.sale_number} loaded for editing",
+        "data": data
+    }), 200
+
+
+# ------------------------------------------------
+# GET Single Sale - Lightweight view version
+# ------------------------------------------------
+@token_required
+@sales_bp.route('/<int:sale_id>', methods=['GET'])
+def get_sale_edit(sale_id):
+    """
+    Lightweight version for viewing sale details (no full units list)
+    Used in list views, receipts, etc.
+    """
+    sale = Sale.query.get_or_404(sale_id)
+
+    # Basic customer info
+    customer_name = sale.customer.name if sale.customer else "Walk-in Customer"
+
+    # Sale items (minimal)
+    sale_items = SaleItem.query.filter_by(sale_id=sale.id, status=1).all()
+    items = [
+        {
+            "product_id": si.product_id,
+            "product_name": si.product_name or (si.product.name if si.product else "Unknown"),
+            "quantity": float(si.quantity),
+            "unit_price": float(si.unit_price),
+            "total_price": float(si.total_price),
+            "unit_id": si.unit_id,
+            "unit_name": si.unit.unit_name if si.unit else None
+        }
+        for si in sale_items
+    ]
+
+    # Basic payment summary
+    total_paid = db.session.query(func.sum(Payment.amount))\
+        .filter(Payment.sale_id == sale.id, Payment.status == 1)\
+        .scalar() or 0.0
+
+    return jsonify({
+        "sale_id": sale.id,
+        "sale_number": sale.sale_number,
+        "sale_date": sale.sale_date.strftime("%Y-%m-%d") if sale.sale_date else None,
+        "customer_name": customer_name,
+        "total_amount": float(sale.total_amount),
+        "total_paid": float(total_paid),
+        "balance": float(sale.balance),
+        "payment_status": sale.payment_status,
+        "items": items,
+        "created_at": sale.created_at.isoformat() if sale.created_at else None
+    }), 200
+
+
+
+
+@token_required
+@sales_bp.route('/edit', methods=['POST'])
+def create_or_update_sale():
+    data = request.json
+
+    try:
+        sale_id = data.get("sale_id")  # Optional - present if updating
+        items = data.get('items', [])
+        amount_paid = float(data.get('amount_paid', 0))
+        payment_account_id = data.get('payment_account_id')
+        sale_date_str = data.get("sale_date")
+        payment_type = data.get('payment_type', 'Cash')
+        customer_id = data.get("customer_id", 1)  # Default walk-in
+
+        if not items:
+            return jsonify({"error": "At least one item is required"}), 400
+
+        # Parse sale date
+        try:
+            sale_date = datetime.strptime(sale_date_str, "%Y-%m-%d") if sale_date_str else datetime.utcnow()
+        except ValueError:
+            return jsonify({"error": "Invalid date format. Use YYYY-MM-DD"}), 400
+
+        if amount_paid > 0 and not payment_account_id:
+            return jsonify({"error": "Payment account required when amount_paid > 0"}), 400
+
+        # --- If updating, soft-delete previous sale first (reversal) ---
+        if sale_id:
+            from flask import current_app
+            current_app.logger.info(f"Updating sale #{sale_id}: reversing previous sale.")
+            # You can call your delete_sale(sale_id) function here if it handles reversal properly
+            # For now, we create new sale and let old one stay soft-deleted
+
+        # --- Initialize totals & transaction ---
+        total_amount = 0.0
+        cogs_total = 0.0
+        txn_id, txn_str = generate_transaction_number_partone('INV', transaction_date=sale_date)
+
+        # --- Create new Sale record ---
+        sale = Sale(
+            sale_number=txn_str,
+            customer_id=customer_id,
+            total_amount=0,  # updated later
+            total_paid=amount_paid,
+            balance=0,
+            sale_date=sale_date,
+            status=1
+        )
+        db.session.add(sale)
+        db.session.flush()  # Get sale.id
+
+        # --- Process Sale Items ---
+        for idx, item_data in enumerate(items, start=1):
+            product_id = item_data.get("product_id")
+            unit_id = item_data.get("unit_id")
+            quantity = float(item_data.get("quantity", 0))  # in selected unit
+            unit_price = float(item_data.get("unit_price", 0))
+            total_price = float(item_data.get("total_price", unit_price * quantity))
+
+            if not product_id or not unit_id:
+                return jsonify({"error": f"Product ID and Unit ID required for item #{idx}"}), 400
+
+            product = Product.query.get_or_404(product_id)
+
+            unit = ProductUnit.query.filter_by(id=unit_id, product_id=product_id, status=1).first()
+            if not unit:
+                return jsonify({"error": f"Invalid unit {unit_id} for product {product.name}"}), 400
+
+            # Convert to base units for stock check
+            base_qty_required = quantity * (unit.conversion_quantity or 1)
+            if product.quantity < base_qty_required:
+                return jsonify({"error": f"Insufficient stock for {product.name} ({unit.unit_name})"}), 400
+
+            # Deduct stock in base units
+            product.quantity -= base_qty_required
+            db.session.add(product)
+
+            # COGS calculation (latest purchase price)
+            latest_cost = get_latest_cost_price(product.id)  # You already have this helper
+            cogs_amount = latest_cost * base_qty_required
+
+            # Record sale item
+            sale_item = SaleItem(
+                sale_id=sale.id,
+                product_id=product.id,
+                unit_id=unit.id,
+                product_name=product.name,
+                quantity=quantity,
+                unit_price=unit_price,
+                total_price=total_price,
+                status=1
+            )
+            db.session.add(sale_item)
+
+            # Inventory transaction (base units)
+            inv_txn = InventoryTransaction(
+                transaction_no=txn_id,
+                sale_id=sale.id,
+                product_id=product.id,
+                unit_id=unit.id,
+                quantity=base_qty_required,
+                unit_price=latest_cost,
+                total_price=cogs_amount,
+                transaction_type='Sale',
+                status=1
+            )
+            db.session.add(inv_txn)
+
+            total_amount += total_price
+            cogs_total += cogs_amount
+
+        # --- Final Sale updates ---
+        sale.total_amount = total_amount
+        sale.balance = total_amount - amount_paid
+
+        # Set payment status
+        if amount_paid >= total_amount:
+            sale.status = 1  # Paid
+        elif amount_paid > 0:
+            sale.status = 4  # Partial
+        else:
+            sale.status = 3  # Credit
+
+        sale.update_totals()  # Use your built-in method
+
+        # --- General Ledger Entries ---
+        entries = []
+
+        # Sales Revenue (always credit full amount)
+        entries.append({
+            "account_id": 4000,           # Sales Revenue
+            "transaction_type": "Credit",
+            "amount": total_amount
+        })
+
+        # COGS & Inventory
+        entries.extend([
+            {"account_id": 5000, "transaction_type": "Debit", "amount": cogs_total},    # COGS Debit
+            {"account_id": 1200, "transaction_type": "Credit", "amount": cogs_total},   # Inventory Credit
+        ])
+
+        # Payment portion
+        if amount_paid > 0:
+            payment_account = Account.query.get(payment_account_id)
+            if not payment_account:
+                raise ValueError("Invalid payment account")
+
+            entries.append({
+                "account_id": payment_account.code,    # Cash/Bank/Mobile
+                "transaction_type": "Debit",
+                "amount": amount_paid
+            })
+
+            # Remaining balance → Accounts Receivable
+            if sale.balance > 0:
+                entries.append({
+                    "account_id": 1100,                # A/R
+                    "transaction_type": "Debit",
+                    "amount": sale.balance
+                })
+
+        else:
+            # Full credit sale
+            entries.append({
+                "account_id": 1100,                    # A/R full amount
+                "transaction_type": "Debit",
+                "amount": total_amount
+            })
+
+        # Post to ledger
+        post_to_ledger(
+            entries,
+            transaction_no_id=txn_id,
+            description=f"Sale Invoice #{txn_str} - {'Update' if sale_id else 'Create'}",
+            transaction_date=sale_date
+        )
+
+        sale.transaction_no = txn_id
+
+        # --- Record Payment (if any) ---
+        if amount_paid > 0:
+            payment = Payment(
+                sale_id=sale.id,
+                amount=amount_paid,
+                payment_type=payment_type,
+                payment_date=sale_date,
+                reference=data.get("memo", txn_str),
+                payment_account_id=payment_account_id,
+                transaction_no=txn_id,
+                status=1
+            )
+            db.session.add(payment)
+
+        db.session.commit()
+
+        return jsonify({
+            "message": f"Sale {'updated' if sale_id else 'created'} successfully",
+            "sale_id": sale.id,
+            "sale_number": txn_str,
+            "total_amount": total_amount,
+            "total_paid": amount_paid,
+            "balance": sale.balance,
+            "payment_status": sale.payment_status,
+            "transaction_no": txn_str,
+            "sale_date": sale_date.strftime("%Y-%m-%d")
+        }), 201
+
+    except ValueError as ve:
+        db.session.rollback()
+        return jsonify({"error": str(ve)}), 400
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Sale creation/update failed: {str(e)}")
+        return jsonify({"error": "Failed to process sale"}), 500

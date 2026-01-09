@@ -469,6 +469,9 @@ def get_product(id):
 def get_product_units(id):
     Product.query.get_or_404(id)  # just to 404 if product missing
     units = ProductUnit.query.filter_by(product_id=id, status=1).all()
+    purchase_price = PurchaseOrderItem.query.filter_by(product_id=id, status=1).first()
+    product = Product.query.filter_by(id=id).first()
+
     units_data = [{
         "id": u.id,
         "unit_name": u.unit_name,
@@ -476,7 +479,9 @@ def get_product_units(id):
         "retail_price": u.retail_price,
         "wholesale_price": u.wholesale_price,
         "is_returnable": u.is_returnable,
-        "unit_code": u.unit_code
+        "unit_code": u.unit_code,
+        "cost_price":purchase_price.unit_price if purchase_price else 0,
+        "quantity":product.quantity if product else 0,
     } for u in units]
 
     return jsonify(units_data)
