@@ -53,38 +53,51 @@ def get_adjustment(id):
 # ------------------------------------------------
 @stock_adjustment_bp.route("/", methods=["POST"])
 def create_adjustment():
-    data = request.get_json()
+    data = request.get_json() or {}
 
     required = ["product_id", "adjustment_type", "quantity_change"]
     for f in required:
         if f not in data:
             return jsonify({"error": f"{f} is required"}), 400
 
-    product = Product.query.get(data["product_id"])
+    # ✅ Correct way to load product
+    product = db.session.get(Product, data["product_id"])
     if not product:
         return jsonify({"error": "Product not found"}), 404
 
-    previous_qty = product.quantity or 0
+    previous_qty = float(product.quantity or 0)
 
     adj_type = data["adjustment_type"].upper()
-    qty = int(data["quantity_change"] or 0)
+    qty = float(data.get("quantity_change", 0))
+
+    # ✅ Unit conversion (optional but recommended)
+    unit_multiplier = 1
+    if data.get("unit_id"):
+        unit = db.session.get(ProductUnit, data["unit_id"])
+        if not unit:
+            return jsonify({"error": "Invalid unit"}), 400
+        unit_multiplier = unit.conversion_quantity
+
+    actual_qty = qty * unit_multiplier
 
     if adj_type == "INCREASE":
-        new_qty = previous_qty + qty
+        new_qty = previous_qty + actual_qty
 
     elif adj_type == "DECREASE":
-        new_qty = previous_qty - qty
+        new_qty = previous_qty - actual_qty
         if new_qty < 0:
             return jsonify({"error": "Stock cannot go below zero"}), 400
 
     else:
         return jsonify({"error": "adjustment_type must be INCREASE or DECREASE"}), 400
 
-    # Update product stock
+    # ✅ Update product stock
     product.quantity = new_qty
+    db.session.add(product)   # IMPORTANT
 
     adjustment = StockAdjustment(
-        product_id=data["product_id"],
+        product_id=product.id,
+        unit_id=data.get("unit_id"),
         adjustment_type=adj_type,
         quantity=qty,
         previous_quantity=previous_qty,
@@ -98,8 +111,59 @@ def create_adjustment():
 
     return jsonify({
         "message": "Stock adjustment created",
-        "adjustment": serialize_adjustment(adjustment)
+        "previous_qty": previous_qty,
+        "new_qty": new_qty
     }), 201
+
+# @stock_adjustment_bp.route("/", methods=["POST"])
+# def create_adjustment():
+#     data = request.get_json()
+
+#     required = ["product_id", "adjustment_type", "quantity_change"]
+#     for f in required:
+#         if f not in data:
+#             return jsonify({"error": f"{f} is required"}), 400
+
+#     product = Product.query.get(data["product_id"])
+#     if not product:
+#         return jsonify({"error": "Product not found"}), 404
+
+#     previous_qty = product.quantity or 0
+
+#     adj_type = data["adjustment_type"].upper()
+#     qty = int(data["quantity_change"] or 0)
+
+#     if adj_type == "INCREASE":
+#         new_qty = previous_qty + qty
+
+#     elif adj_type == "DECREASE":
+#         new_qty = previous_qty - qty
+#         if new_qty < 0:
+#             return jsonify({"error": "Stock cannot go below zero"}), 400
+
+#     else:
+#         return jsonify({"error": "adjustment_type must be INCREASE or DECREASE"}), 400
+
+#     # Update product stock
+#     product.quantity = new_qty
+
+#     adjustment = StockAdjustment(
+#         product_id=data["product_id"],
+#         adjustment_type=adj_type,
+#         quantity=qty,
+#         previous_quantity=previous_qty,
+#         new_quantity=new_qty,
+#         reason=data.get("reason", ""),
+#         status=data.get("status", 1)
+#     )
+
+#     db.session.add(adjustment)
+#     db.session.commit()
+
+#     return jsonify({
+#         "message": "Stock adjustment created",
+#         "adjustment": serialize_adjustment(adjustment)
+#     }), 201
 
 
 # ------------------------------------------------
