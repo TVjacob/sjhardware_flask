@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify
 from app import db
-from app.models import StockAdjustment, Product
+from app.models import ProductUnit, StockAdjustment, Product
 
 stock_adjustment_bp = Blueprint(
     "stock_adjustment_bp",
