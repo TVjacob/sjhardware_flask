@@ -1903,13 +1903,13 @@ def purchase_report():
     # -------------------------------
     if search:
         query = query.filter(
-            or_(
+            # or_(
                 Product.name.ilike(f"%{search}%"),
-                PurchaseOrder.invoice_number.ilike(f"%{search}%"),
-                Supplier.name.ilike(f"%{search}%"),
-                Category.name.ilike(f"%{search}%"),
-                PurchaseOrder.memo.ilike(f"%{search}%"),
-            )
+                # PurchaseOrder.invoice_number.ilike(f"%{search}%"),
+                # Supplier.name.ilike(f"%{search}%"),
+                # Category.name.ilike(f"%{search}%"),
+                # PurchaseOrder.memo.ilike(f"%{search}%"),
+            # )
         )
 
     # -------------------------------

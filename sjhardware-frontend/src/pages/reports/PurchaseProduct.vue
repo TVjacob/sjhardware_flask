@@ -19,20 +19,12 @@
 
       <div>
         <label class="text-sm font-medium text-gray-600">Start Date</label>
-        <input
-          type="date"
-          v-model="startDate"
-          class="input-field"
-        />
+        <input type="date" v-model="startDate" class="input-field" />
       </div>
 
       <div>
         <label class="text-sm font-medium text-gray-600">End Date</label>
-        <input
-          type="date"
-          v-model="endDate"
-          class="input-field"
-        />
+        <input type="date" v-model="endDate" class="input-field" />
       </div>
     </div>
 
@@ -77,7 +69,7 @@
         <tbody>
           <tr
             v-for="row in reportData"
-            :key="row.purchase_id + page"
+            :key="row.purchase_id"
             class="hover:bg-gray-50 transition"
           >
             <td class="td-cell">{{ row.purchase_id }}</td>
@@ -164,9 +156,13 @@ const startDate = ref("");
 const endDate = ref("");
 
 let debounceTimer = null;
+let requestInProgress = false;
 
 /* ---------------- FETCH DATA ---------------- */
 const fetchData = async () => {
+  if (requestInProgress) return;
+  requestInProgress = true;
+
   loading.value = true;
 
   try {
@@ -174,49 +170,43 @@ const fetchData = async () => {
       page: page.value,
       per_page: perPage,
       search: search.value.trim(),
-      start_date: startDate.value,
-      end_date: endDate.value
+      start_date: startDate.value || undefined,
+      end_date: endDate.value || undefined
     };
 
     const res = await api.get("/reports/purchased-product", { params });
 
-    // Force reactivity
-    reportData.value = [...(res.data.data || [])];
+    reportData.value = res.data.data || [];
     totalRecords.value = Number(res.data.total_records || 0);
-    totals.value = { ...(res.data.totals || {}) };
+    totals.value = res.data.totals || null;
 
   } catch (err) {
     console.error("Fetch error:", err);
   } finally {
     loading.value = false;
+    requestInProgress = false;
   }
 };
 
 /* ---------------- DEBOUNCED FILTER WATCH ---------------- */
 watch([search, startDate, endDate], () => {
   page.value = 1;
-
   clearTimeout(debounceTimer);
-  debounceTimer = setTimeout(() => {
-    fetchData();
-  }, 400);
-});
-
-/* ---------------- PAGE WATCH ---------------- */
-watch(page, () => {
-  fetchData();
+  debounceTimer = setTimeout(fetchData, 400);
 });
 
 /* ---------------- PAGINATION ---------------- */
 const nextPage = () => {
   if (page.value < Math.ceil(totalRecords.value / perPage)) {
     page.value++;
+    fetchData();
   }
 };
 
 const prevPage = () => {
   if (page.value > 1) {
     page.value--;
+    fetchData();
   }
 };
 
