@@ -1868,6 +1868,223 @@ def balance_sheet_report():
         }
     })
 
+# @reports_bp.route("/purchased-product", methods=["GET"])
+# @token_required
+# def purchase_report():
+#     page = int(request.args.get("page", 1))
+#     per_page = 100
+
+#     search = request.args.get("search", "").strip()
+#     start_date = request.args.get("start_date", None)
+#     end_date = request.args.get("end_date", None)
+
+#     query = (
+#         db.session.query(
+#             PurchaseOrder.id.label("purchase_id"),
+#             PurchaseOrder.invoice_number,
+#             PurchaseOrder.purchase_date,
+#             PurchaseOrder.memo,
+#             Supplier.name.label("supplier_name"),
+#             Product.name.label("product_name"),
+#             Category.name.label("category_name"),
+#             PurchaseOrderItem.quantity,
+#             PurchaseOrderItem.unit_price,
+#             PurchaseOrderItem.total_price,
+#         )
+#         .join(PurchaseOrderItem, PurchaseOrder.id == PurchaseOrderItem.purchase_order_id)
+#         .join(Product, Product.id == PurchaseOrderItem.product_id)
+#         .outerjoin(Category, Category.id == Product.category_id)
+#         .outerjoin(Supplier, Supplier.id == PurchaseOrder.supplier_id)
+#         .filter(PurchaseOrder.status != 9)
+#     )
+
+#     # -------------------------------
+#     # 🔍 Improved Search Filters
+#     # -------------------------------
+#     if search:
+#         query = query.filter(
+#             # or_(
+#                 Product.name.ilike(f"%{search}%"),
+#                 # PurchaseOrder.invoice_number.ilike(f"%{search}%"),
+#                 # Supplier.name.ilike(f"%{search}%"),
+#                 # Category.name.ilike(f"%{search}%"),
+#                 # PurchaseOrder.memo.ilike(f"%{search}%"),
+#             # )
+#         )
+
+#     # -------------------------------
+#     # 📅 Date Range Filters
+#     # -------------------------------
+#     if start_date:
+#         query = query.filter(
+#             cast(PurchaseOrder.purchase_date, String) >= start_date
+#         )
+
+#     if end_date:
+#         query = query.filter(
+#             cast(PurchaseOrder.purchase_date, String) <= end_date
+#         )
+
+#     total_records = query.count()
+
+#     results = (
+#         query.order_by(PurchaseOrder.purchase_date.desc())
+#         .paginate(page=page, per_page=per_page, error_out=False)
+#     )
+
+#     data = []
+#     total_qty = 0
+#     total_amount = 0
+
+#     for row in results.items:
+#         total_qty += row.quantity
+#         total_amount += row.total_price
+
+#         data.append({
+#             "purchase_id": row.purchase_id,
+#             "invoice_number": row.invoice_number,
+#             "purchase_date": row.purchase_date,
+#             "memo": row.memo,
+#             "supplier": row.supplier_name,
+#             "product": row.product_name,
+#             "category": row.category_name,
+#             "qty": row.quantity,
+#             "unit_price": row.unit_price,
+#             "total_price": row.total_price,
+#         })
+
+#     return jsonify({
+#         "page": page,
+#         "per_page": per_page,
+#         "total_records": total_records,
+#         "totals": {
+#             "total_quantity": total_qty,
+#             "total_amount": total_amount
+#         },
+#         "data": data
+#     }), 200
+# from sqlalchemy import or_, cast, String, func
+
+# @reports_bp.route("/purchased-product", methods=["GET"])
+# @token_required
+# def purchase_report():
+#     page = int(request.args.get("page", 1))
+#     per_page = 100
+
+#     search = request.args.get("search", "").strip()
+#     start_date = request.args.get("start_date")
+#     end_date = request.args.get("end_date")
+
+#     base_query = (
+#         db.session.query(
+#             PurchaseOrderItem.id.label("item_id"),
+#             PurchaseOrder.id.label("purchase_id"),
+#             PurchaseOrder.invoice_number,
+#             PurchaseOrder.purchase_date,
+#             PurchaseOrder.memo,
+#             Supplier.name.label("supplier_name"),
+#             Product.name.label("product_name"),
+#             Category.name.label("category_name"),
+#             PurchaseOrderItem.quantity,
+#             PurchaseOrderItem.unit_price,
+#             PurchaseOrderItem.total_price,
+#         )
+#         .join(PurchaseOrder, PurchaseOrder.id == PurchaseOrderItem.purchase_order_id)
+#         .join(Product, Product.id == PurchaseOrderItem.product_id)
+#         .outerjoin(Category, Category.id == Product.category_id)
+#         .outerjoin(Supplier, Supplier.id == PurchaseOrder.supplier_id)
+#         .filter(PurchaseOrder.status != 9)
+#         .distinct(PurchaseOrderItem.id)     # ✅ prevent duplicates
+#     )
+
+#     # -------------------------------
+#     # 🔍 Search
+#     # -------------------------------
+#     if search:
+#         base_query = base_query.filter(
+#             or_(
+#                 Product.name.ilike(f"%{search}%"),
+#                 PurchaseOrder.invoice_number.ilike(f"%{search}%"),
+#                 Supplier.name.ilike(f"%{search}%"),
+#                 Category.name.ilike(f"%{search}%"),
+#                 PurchaseOrder.memo.ilike(f"%{search}%"),
+#             )
+#         )
+
+#     # -------------------------------
+#     # 📅 Date filters
+#     # -------------------------------
+#     if start_date:
+#         base_query = base_query.filter(
+#             cast(PurchaseOrder.purchase_date, String) >= start_date
+#         )
+
+#     if end_date:
+#         base_query = base_query.filter(
+#             cast(PurchaseOrder.purchase_date, String) <= end_date
+#         )
+
+#     # -------------------------------
+#     # ✅ Correct total count
+#     # -------------------------------
+#     total_records = (
+#         db.session.query(func.count(func.distinct(PurchaseOrderItem.id)))
+#         .select_from(base_query.subquery())
+#         .scalar()
+#     )
+
+#     # -------------------------------
+#     # ✅ Pagination (FIXED ORDER BY)
+#     # -------------------------------
+#     results = (
+#         base_query
+#         .order_by(
+#             PurchaseOrderItem.id,                   # 👈 MUST BE FIRST
+#             PurchaseOrder.purchase_date.desc()
+#         )
+#         .paginate(page=page, per_page=per_page, error_out=False)
+#     )
+
+#     data = []
+#     total_qty = 0
+#     total_amount = 0
+
+#     for row in results.items:
+#         total_qty += row.quantity or 0
+#         total_amount += row.total_price or 0
+
+#         data.append({
+#             "purchase_id": row.purchase_id,
+#             "invoice_number": row.invoice_number,
+#             "purchase_date": row.purchase_date,
+#             "memo": row.memo,
+#             "supplier": row.supplier_name,
+#             "product": row.product_name,
+#             "category": row.category_name,
+#             "qty": row.quantity,
+#             "unit_price": row.unit_price,
+#             "total_price": row.total_price,
+#         })
+
+#     return jsonify({
+#         "page": page,
+#         "per_page": per_page,
+#         "total_records": total_records,
+#         "totals": {
+#             "total_quantity": total_qty,
+#             "total_amount": total_amount
+#         },
+#         "data": data
+#     }), 200
+
+
+
+
+from sqlalchemy import or_, cast, String, func, distinct
+from sqlalchemy import or_
+from flask import jsonify, request
+# assuming db, PurchaseOrder, PurchaseOrderItem, Product, Category, Supplier are already imported
+
 @reports_bp.route("/purchased-product", methods=["GET"])
 @token_required
 def purchase_report():
@@ -1875,10 +2092,13 @@ def purchase_report():
     per_page = 100
 
     search = request.args.get("search", "").strip()
-    start_date = request.args.get("start_date", None)
-    end_date = request.args.get("end_date", None)
+    start_date = request.args.get("start_date")
+    end_date = request.args.get("end_date")
 
-    query = (
+    # ────────────────────────────────────────────────────────────────
+    # Detailed query — one row per purchased item
+    # ────────────────────────────────────────────────────────────────
+    base_query = (
         db.session.query(
             PurchaseOrder.id.label("purchase_id"),
             PurchaseOrder.invoice_number,
@@ -1887,9 +2107,9 @@ def purchase_report():
             Supplier.name.label("supplier_name"),
             Product.name.label("product_name"),
             Category.name.label("category_name"),
-            PurchaseOrderItem.quantity,
-            PurchaseOrderItem.unit_price,
-            PurchaseOrderItem.total_price,
+            PurchaseOrderItem.quantity.label("quantity"),
+            PurchaseOrderItem.unit_price.label("unit_price"),
+            PurchaseOrderItem.total_price.label("total_price")
         )
         .join(PurchaseOrderItem, PurchaseOrder.id == PurchaseOrderItem.purchase_order_id)
         .join(Product, Product.id == PurchaseOrderItem.product_id)
@@ -1898,59 +2118,63 @@ def purchase_report():
         .filter(PurchaseOrder.status != 9)
     )
 
-    # -------------------------------
-    # 🔍 Improved Search Filters
-    # -------------------------------
+    # Search filter ───────────────────────────────────────────────────
     if search:
-        query = query.filter(
-            # or_(
+        base_query = base_query.filter(
+            or_(
+                PurchaseOrder.invoice_number.ilike(f"%{search}%"),
+                Supplier.name.ilike(f"%{search}%"),
                 Product.name.ilike(f"%{search}%"),
-                # PurchaseOrder.invoice_number.ilike(f"%{search}%"),
-                # Supplier.name.ilike(f"%{search}%"),
-                # Category.name.ilike(f"%{search}%"),
-                # PurchaseOrder.memo.ilike(f"%{search}%"),
-            # )
+                Category.name.ilike(f"%{search}%"),
+                PurchaseOrder.memo.ilike(f"%{search}%"),
+            )
         )
 
-    # -------------------------------
-    # 📅 Date Range Filters
-    # -------------------------------
+    # Date filter ─────────────────────────────────────────────────────
     if start_date:
-        query = query.filter(
-            cast(PurchaseOrder.purchase_date, String) >= start_date
+        base_query = base_query.filter(
+            PurchaseOrder.purchase_date >= f"{start_date} 00:00:00"
         )
-
     if end_date:
-        query = query.filter(
-            cast(PurchaseOrder.purchase_date, String) <= end_date
+        base_query = base_query.filter(
+            PurchaseOrder.purchase_date <= f"{end_date} 23:59:59"
         )
 
-    total_records = query.count()
+    # Get total count for pagination
+    total_records = base_query.count()
 
+    # Fetch paginated results
     results = (
-        query.order_by(PurchaseOrder.purchase_date.desc())
-        .paginate(page=page, per_page=per_page, error_out=False)
+        base_query
+        .order_by(PurchaseOrder.purchase_date.desc(), PurchaseOrder.id, Product.name)
+        .limit(per_page)
+        .offset((page - 1) * per_page)
+        .all()
     )
 
+    # Prepare response data
     data = []
-    total_qty = 0
-    total_amount = 0
+    grand_total_qty = 0
+    grand_total_amount = 0
 
-    for row in results.items:
-        total_qty += row.quantity
-        total_amount += row.total_price
+    for row in results:
+        qty = row.quantity or 0
+        total = row.total_price or 0
+
+        grand_total_qty += qty
+        grand_total_amount += total
 
         data.append({
             "purchase_id": row.purchase_id,
             "invoice_number": row.invoice_number,
-            "purchase_date": row.purchase_date,
+            "purchase_date": row.purchase_date.isoformat() if row.purchase_date else None,
             "memo": row.memo,
             "supplier": row.supplier_name,
             "product": row.product_name,
-            "category": row.category_name,
-            "qty": row.quantity,
-            "unit_price": row.unit_price,
-            "total_price": row.total_price,
+            "category": row.category_name or None,
+            "quantity": float(qty),
+            "unit_price": round(float(row.unit_price or 0), 2),
+            "total_price": float(total)
         })
 
     return jsonify({
@@ -1958,12 +2182,11 @@ def purchase_report():
         "per_page": per_page,
         "total_records": total_records,
         "totals": {
-            "total_quantity": total_qty,
-            "total_amount": total_amount
+            "total_quantity": float(grand_total_qty),
+            "total_amount": float(grand_total_amount)
         },
         "data": data
     }), 200
-
 
 # @reports_bp.route("/purchased-product", methods=["GET"])
 # @token_required
