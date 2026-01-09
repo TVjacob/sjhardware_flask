@@ -1,6 +1,8 @@
 <template>
   <div class="p-6 max-w-7xl mx-auto bg-gray-50 min-h-screen relative">
-    <h1 class="text-4xl font-bold mb-8 text-gray-800">💰 Sales Dashboard</h1>
+    <h1 class="text-4xl font-bold mb-8 text-gray-800">
+      {{ isEditMode ? `Edit Sale #${saleId}` : 'Create New Sale' }}
+    </h1>
 
     <!-- Sale Header -->
     <div class="bg-white rounded-2xl shadow-lg p-6 mb-8">
@@ -97,7 +99,7 @@
           <tr v-for="(item, index) in saleItems" :key="index" class="border-b hover:bg-indigo-50 transition">
             <!-- Product Search + Details -->
             <td class="p-4">
-              <div class="space-y-2">
+              <div class="space-y-3">
                 <v-autocomplete
                   v-model="item.selectedProductObj"
                   :items="item.productSearchResults"
@@ -131,9 +133,13 @@
                   </template>
                 </v-autocomplete>
 
-                <div v-if="item.product_name" class="text-sm font-semibold text-gray-800 bg-indigo-50 px-3 py-1 rounded-lg">
-                  Selected: {{ item.product_name }} <br />
-                  SKU: {{ item.sku || 'N/A' }} | Category: {{ item.category_name || 'N/A' }}
+                <!-- Selected Product Display (Clear & Prominent) -->
+                <div
+                  v-if="item.product_name"
+                  class="bg-green-50 border border-green-200 px-4 py-2 rounded-lg text-sm font-medium text-green-800 flex justify-between items-center"
+                >
+                  <span>Selected: <strong>{{ item.product_name }}</strong></span>
+                  <span class="text-xs text-gray-600">SKU: {{ item.sku || 'N/A' }}</span>
                 </div>
               </div>
             </td>
@@ -143,23 +149,33 @@
               {{ item.available_in_unit ? item.available_in_unit.toFixed(3) : '0.000' }}
             </td>
 
-            <!-- Unit Select -->
+            <!-- Unit -->
             <td class="p-4">
-              <v-select
-                v-model="item.unit_id"
-                :items="item.units"
-                item-title="unit_name"
-                item-value="id"
-                placeholder="Select unit"
-                variant="outlined"
-                density="comfortable"
-                hide-details
-                :disabled="isFormLocked || !item.product_id"
-                @update:model-value="() => updateUnitPriceAndStock(index)"
-              ></v-select>
+              <div class="space-y-2">
+                <v-select
+                  v-model="item.unit_id"
+                  :items="item.units"
+                  item-title="unit_name"
+                  item-value="id"
+                  placeholder="Select unit"
+                  variant="outlined"
+                  density="comfortable"
+                  hide-details
+                  :disabled="isFormLocked || !item.product_id"
+                  @update:model-value="() => updateUnitPriceAndStock(index)"
+                ></v-select>
+
+                <!-- Selected Unit Display (Clear & Prominent) -->
+                <div
+                  v-if="item.unit_id && selectedUnitName(index)"
+                  class="bg-indigo-50 border border-indigo-200 px-3 py-1.5 rounded-lg text-sm font-medium text-indigo-800 text-center"
+                >
+                  Selected Unit: <strong>{{ selectedUnitName(index) }}</strong>
+                </div>
+              </div>
             </td>
 
-            <!-- Cost Price (Purchase Price) - Read Only -->
+            <!-- Cost Price (Last Purchase Price) - Read Only -->
             <td class="p-4 text-center font-medium text-gray-600">
               {{ formatPrice(item.cost_price || 0) }}
             </td>
@@ -267,15 +283,10 @@
       class="absolute inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 rounded-xl"
     >
       <div class="bg-white p-10 rounded-2xl shadow-2xl text-center max-w-lg">
-        <v-progress-circular
-          indeterminate
-          size="80"
-          color="indigo"
-          class="mb-8"
-        ></v-progress-circular>
+        <v-progress-circular indeterminate size="80" color="indigo" class="mb-8"></v-progress-circular>
         <h3 class="text-2xl font-bold text-gray-800 mb-3">Processing Sale...</h3>
         <p class="text-gray-600 text-lg">
-          Please wait a moment.<br>
+          Please wait a moment.<br />
           <strong>Do not refresh or close this page.</strong>
         </p>
       </div>
@@ -299,7 +310,7 @@ import api from '../api'
 // Header
 const saleHeader = ref({
   sale_date: new Date().toISOString().slice(0, 10),
-  customer_id: 1, // default walk-in customer
+  customer_id: 1, // default walk-in
   amount_paid: 0,
   memo: '',
   payment_account_id: null
@@ -403,7 +414,14 @@ const selectProduct = (productId, index) => {
   item.productSearchResults = []
 }
 
-// Update price & stock on unit change
+// Helper to get selected unit name
+const selectedUnitName = (index) => {
+  const item = saleItems.value[index]
+  const unit = item.units.find(u => u.id === item.unit_id)
+  return unit ? unit.unit_name : null
+}
+
+// Update unit price & stock on unit change
 const updateUnitPriceAndStock = (index) => {
   const item = saleItems.value[index]
   const selectedUnit = item.units.find(u => u.id === item.unit_id)
@@ -465,7 +483,7 @@ const removeItem = (index) => {
   saleItems.value.splice(index, 1)
 }
 
-// Save Sale
+// Save Sale (unchanged from your version)
 const saveSale = async () => {
   if (!saleHeader.value.customer_id) {
     notification.value = 'Please select a customer'
@@ -520,7 +538,6 @@ const saveSale = async () => {
     const res = await api.post('/sales/', payload)
     notification.value = `Sale #${res.data.sale_id} saved successfully!`
 
-    // Brief delay to show success, then reset
     await new Promise(resolve => setTimeout(resolve, 1800))
     resetForm()
   } catch (err) {

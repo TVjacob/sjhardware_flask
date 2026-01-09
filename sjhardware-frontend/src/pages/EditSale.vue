@@ -99,7 +99,7 @@
           <tr v-for="(item, index) in saleItems" :key="index" class="border-b hover:bg-indigo-50 transition">
             <!-- Product -->
             <td class="p-4">
-              <div class="space-y-2">
+              <div class="space-y-3">
                 <v-autocomplete
                   v-model="item.selectedProductObj"
                   :items="item.productSearchResults"
@@ -133,32 +133,51 @@
                   </template>
                 </v-autocomplete>
 
-                <div v-if="item.product_name" class="text-sm font-semibold text-gray-800 bg-indigo-50 px-3 py-1 rounded-lg">
-                  Selected: {{ item.product_name }} <br />
-                  SKU: {{ item.sku || 'N/A' }} | Category: {{ item.category_name || 'N/A' }}
+                <!-- Selected Product – Very Clear Green Badge -->
+                <div
+                  v-if="item.product_name"
+                  class="bg-green-50 border border-green-200 px-4 py-3 rounded-lg text-base font-medium text-green-800 shadow-sm flex justify-between items-center"
+                >
+                  <span>Selected: <strong>{{ item.product_name }}</strong></span>
+                  <span class="text-sm text-gray-600">SKU: {{ item.sku || 'N/A' }}</span>
                 </div>
               </div>
             </td>
 
             <!-- Available Stock -->
             <td class="p-4 text-center font-medium">
-              {{ item.available_in_unit ? item.available_in_unit.toFixed(3) : '0.000' }}
+              <div class="space-y-1">
+                <span class="text-lg">{{ item.available_in_unit ? item.available_in_unit.toFixed(3) : '0.000' }}</span>
+                <div v-if="item.unit_id" class="text-xs text-gray-500">
+                  {{ selectedUnitName(index) || 'base units' }}
+                </div>
+              </div>
             </td>
 
             <!-- Unit -->
             <td class="p-4">
-              <v-select
-                v-model="item.unit_id"
-                :items="item.units"
-                item-title="unit_name"
-                item-value="id"
-                placeholder="Select unit"
-                variant="outlined"
-                density="comfortable"
-                hide-details
-                :disabled="isFormLocked || !item.product_id"
-                @update:model-value="() => updateUnitPriceAndStock(index)"
-              ></v-select>
+              <div class="space-y-3">
+                <v-select
+                  v-model="item.unit_id"
+                  :items="item.units"
+                  item-title="unit_name"
+                  item-value="id"
+                  placeholder="Select unit"
+                  variant="outlined"
+                  density="comfortable"
+                  hide-details
+                  :disabled="isFormLocked || !item.product_id"
+                  @update:model-value="() => updateUnitPriceAndStock(index)"
+                ></v-select>
+
+                <!-- Selected Unit – Very Clear Blue Badge -->
+                <div
+                  v-if="item.unit_id && selectedUnitName(index)"
+                  class="bg-indigo-50 border border-indigo-200 px-4 py-3 rounded-lg text-base font-medium text-indigo-800 text-center shadow-sm"
+                >
+                  Selected Unit: <strong>{{ selectedUnitName(index) }}</strong>
+                </div>
+              </div>
             </td>
 
             <!-- Cost Price (Last Purchase Price) - Read Only -->
@@ -272,8 +291,8 @@
         <v-progress-circular indeterminate size="80" color="indigo" class="mb-8"></v-progress-circular>
         <h3 class="text-2xl font-bold text-gray-800 mb-3">Processing Sale...</h3>
         <p class="text-gray-600 text-lg">
-          Please wait.<br />
-          <strong>Do not refresh or close the page.</strong>
+          Please wait a moment.<br />
+          <strong>Do not refresh or close this page.</strong>
         </p>
       </div>
     </div>
@@ -322,6 +341,13 @@ const isFormLocked = computed(() => saving.value)
 const formatPrice = (val) => {
   const value = Number(val) || 0
   return new Intl.NumberFormat('en-UG', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(value)
+}
+
+// Helper to show selected unit name clearly
+const selectedUnitName = (index) => {
+  const item = saleItems.value[index]
+  const unit = item.units.find(u => u.id === item.unit_id)
+  return unit ? unit.unit_name : null
 }
 
 // Fetch static data
@@ -395,14 +421,14 @@ const selectProduct = (productId, index) => {
   item.productSearchResults = []
 }
 
-// Update unit price & stock when unit changes
+// Update unit price & stock on unit change
 const updateUnitPriceAndStock = (index) => {
   const item = saleItems.value[index]
   const selectedUnit = item.units.find(u => u.id === item.unit_id)
   if (selectedUnit) {
     item.suggested_price = selectedUnit.retail_price || 0
-    // Cost price remains last purchase price (not unit-specific)
-    // item.cost_price = selectedUnit.purchase_price || item.cost_price  // ← optional if you want unit cost
+    // Cost price remains last purchase price (not unit-specific unless you want)
+    // item.cost_price = selectedUnit.purchase_price || item.cost_price
 
     if (!item.has_manual_price) {
       item.unit_price = selectedUnit.retail_price || 0
@@ -565,7 +591,7 @@ const loadSaleForEdit = async (id) => {
       unit_id: i.unit_id,
       unit_price: i.unit_price,
       suggested_price: i.suggested_price || 0,
-      cost_price: i.last_purchase_price || 0,           // ← Last purchase price
+      cost_price: i.cost_price || 0,           // ← Last purchase price
       quantity: i.quantity,
       line_total: i.total_price,
       stock_base: i.current_stock_base || 0,
@@ -575,13 +601,15 @@ const loadSaleForEdit = async (id) => {
       has_manual_price: false
     }))
 
-    // Auto-select units
+    // Auto-select units & update display
     saleItems.value.forEach((item, idx) => {
       if (item.units && item.units.length) {
         const selected = item.units.find(u => u.id === item.unit_id)
         if (selected) {
           item.suggested_price = selected.retail_price || 0
           item.unit_price = item.unit_price || selected.retail_price || 0
+          // Trigger stock update
+          updateUnitPriceAndStock(idx)
         }
       }
     })
@@ -605,5 +633,31 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-/* Your existing styles */
+/* Fade in/out animation for notification */
+@keyframes fadeInOut {
+  0% { opacity: 0; transform: translateY(20px); }
+  10% { opacity: 1; transform: translateY(0); }
+  90% { opacity: 1; transform: translateY(0); }
+  100% { opacity: 0; transform: translateY(20px); }
+}
+
+.animate-fade-in-out {
+  animation: fadeInOut 5s forwards;
+}
+
+/* Disabled style enhancement */
+:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+/* Make selected badges stand out */
+.bg-green-50 {
+  background-color: #f0fdf4 !important;
+  border-color: #dcfce7 !important;
+}
+.bg-indigo-50 {
+  background-color: #eef2ff !important;
+  border-color: #e0e7ff !important;
+}
 </style>

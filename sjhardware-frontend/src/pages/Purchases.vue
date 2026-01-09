@@ -1,10 +1,12 @@
 <template>
   <div class="p-6 max-w-7xl mx-auto bg-white shadow-lg rounded-lg">
-    <h1 class="text-3xl font-bold mb-6 text-gray-800">Purchase Order Dashboard</h1>
+    <h1 class="text-3xl font-bold mb-6 text-gray-800">
+      {{ isEditMode ? `Edit Purchase Order #${poId}` : 'Create Purchase Order' }}
+    </h1>
 
-    <!-- --------- Purchase Order Header --------- -->
+    <!-- Purchase Order Header -->
     <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-      <!-- Supplier Combobox -->
+      <!-- Supplier -->
       <div>
         <label class="block font-semibold mb-1">Supplier *</label>
         <v-autocomplete
@@ -55,7 +57,7 @@
       </div>
     </div>
 
-    <!-- --------- Items Table --------- -->
+    <!-- Items Table -->
     <div class="bg-white rounded-xl shadow overflow-hidden mb-8">
       <table class="w-full">
         <thead class="bg-gradient-to-r from-indigo-100 to-purple-100 text-gray-700">
@@ -72,7 +74,7 @@
         </thead>
         <tbody>
           <tr v-for="(item, idx) in poItems" :key="idx" class="hover:bg-indigo-50 transition border-b">
-            <!-- Product Search + Selected Label -->
+            <!-- Product -->
             <td class="p-4">
               <div class="space-y-3">
                 <v-autocomplete
@@ -97,34 +99,54 @@
                   </template>
                 </v-autocomplete>
 
-                <div v-if="item.product_name" class="bg-indigo-50 px-4 py-2 rounded-lg text-sm font-semibold text-indigo-800">
-                  Selected: {{ item.product_name }}
+                <!-- Selected Product Badge (Very Visible) -->
+                <div
+                  v-if="item.product_name"
+                  class="bg-green-50 border border-green-200 px-4 py-2.5 rounded-lg text-base font-medium text-green-800 flex justify-between items-center shadow-sm"
+                >
+                  <span>Selected: <strong>{{ item.product_name }}</strong></span>
+                  <span class="text-sm text-gray-600">Stock: {{ item.stock_base?.toFixed(2) || '0' }} base</span>
                 </div>
               </div>
             </td>
 
-            <!-- Current Stock -->
+            <!-- Current Stock (in selected unit) -->
             <td class="p-4 text-center font-medium">
-              {{ item.stock_in_unit ? item.stock_in_unit.toFixed(3) : '0.000' }}
+              <div class="space-y-1">
+                <span>{{ item.stock_in_unit ? item.stock_in_unit.toFixed(3) : '0.000' }}</span>
+                <div v-if="item.unit_id" class="text-xs text-gray-500">
+                  {{ selectedUnitName(idx) || 'base' }}
+                </div>
+              </div>
             </td>
 
-            <!-- Unit Select -->
+            <!-- Unit -->
             <td class="p-4">
-              <v-select
-                v-model="item.unit_id"
-                :items="item.units"
-                item-title="unit_name"
-                item-value="id"
-                placeholder="Select unit"
-                variant="outlined"
-                density="comfortable"
-                hide-details
-                :disabled="!item.product_id"
-                @update:model-value="() => updateUnitAndLastPrice(idx)"
-              ></v-select>
+              <div class="space-y-3">
+                <v-select
+                  v-model="item.unit_id"
+                  :items="item.units"
+                  item-title="unit_name"
+                  item-value="id"
+                  placeholder="Select unit"
+                  variant="outlined"
+                  density="comfortable"
+                  hide-details
+                  :disabled="!item.product_id"
+                  @update:model-value="() => updateUnitAndLastPrice(idx)"
+                ></v-select>
+
+                <!-- Selected Unit Badge (Very Visible) -->
+                <div
+                  v-if="item.unit_id && selectedUnitName(idx)"
+                  class="bg-indigo-50 border border-indigo-200 px-4 py-2 rounded-lg text-base font-medium text-indigo-800 text-center shadow-sm"
+                >
+                  Selected: <strong>{{ selectedUnitName(idx) }}</strong>
+                </div>
+              </div>
             </td>
 
-            <!-- Last Purchase Price (Reference Only) -->
+            <!-- Last Purchase Price (Reference) -->
             <td class="p-4 text-center font-medium text-gray-600">
               {{ formatPrice(item.last_purchase_price || 0) }}
             </td>
@@ -155,7 +177,7 @@
               />
             </td>
 
-            <!-- Editable Total → Calculates Rate -->
+            <!-- Editable Total -->
             <td class="p-4">
               <input
                 type="number"
@@ -181,7 +203,7 @@
         </tbody>
       </table>
 
-      <!-- Add Row & Grand Total -->
+      <!-- Add Row + Grand Total -->
       <div class="p-6 bg-gradient-to-r from-indigo-50 to-purple-50 flex justify-between items-center">
         <button
           @click="addRow"
@@ -321,22 +343,26 @@ const selectProduct = (id, idx) => {
   item.searchResults = []
 }
 
+// Selected Unit Name (for display)
+const selectedUnitName = (idx) => {
+  const item = poItems.value[idx]
+  const unit = item.units.find(u => u.id === item.unit_id)
+  return unit ? unit.unit_name : null
+}
+
 // Update unit, stock, and last purchase price
 const updateUnitAndLastPrice = (idx) => {
   const item = poItems.value[idx]
   const selectedUnit = item.units.find(u => u.id === item.unit_id)
   if (selectedUnit) {
-    // Update current stock in selected unit
+    // Stock in selected unit
     item.stock_in_unit = item.stock_base / selectedUnit.conversion_quantity || 0
 
-    // Set last purchase price from unit (if available)
+    // Last purchase price (reference)
     item.last_purchase_price = selectedUnit.last_purchase_price || selectedUnit.purchase_price || 0
 
-    // Optional: auto-fill cost price with last purchase price
-    // Remove this line if you don't want auto-fill
-    // if (item.cost_price === 0 || item.cost_price === item.last_purchase_price) {
-    //   item.cost_price = item.last_purchase_price
-    // }
+    // Optional: auto-fill cost price with last purchase price (uncomment if wanted)
+    // item.cost_price = item.last_purchase_price
   } else {
     item.stock_in_unit = 0
     item.last_purchase_price = 0
@@ -350,7 +376,7 @@ const calculateTotalFromPrice = (idx) => {
   item.total_price = (item.quantity || 0) * (item.cost_price || 0)
 }
 
-// When total is entered, calculate cost price (rate)
+// When total is entered, calculate cost price
 const calculatePriceFromTotal = (idx) => {
   const item = poItems.value[idx]
   if (item.quantity > 0 && item.total_price > 0) {
@@ -378,9 +404,7 @@ const addRow = () => {
 }
 
 // Remove row
-const removeRow = (idx) => {
-  poItems.value.splice(idx, 1)
-}
+const removeRow = (idx) => poItems.value.splice(idx, 1)
 
 // Save PO
 const savePurchaseOrder = async () => {
@@ -450,5 +474,11 @@ onMounted(() => {
 </script>
 
 <style scoped>
-/* Clean styling */
+/* Optional: Enhance selected badges */
+.bg-green-50 {
+  background-color: #f0fdf4;
+}
+.bg-indigo-50 {
+  background-color: #eef2ff;
+}
 </style>

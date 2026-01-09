@@ -99,15 +99,25 @@
                   </template>
                 </v-autocomplete>
 
-                <div v-if="item.product_name" class="bg-indigo-50 px-4 py-2 rounded-lg text-sm font-semibold text-indigo-800">
-                  Selected: {{ item.product_name }}
+                <!-- Selected Product – Clear & Beautiful Badge -->
+                <div
+                  v-if="item.product_name"
+                  class="bg-green-50 border border-green-200 px-4 py-3 rounded-lg text-base font-medium text-green-800 shadow-sm flex justify-between items-center"
+                >
+                  <span>Selected: <strong>{{ item.product_name }}</strong></span>
+                  <span class="text-sm text-gray-600">Stock: {{ item.stock_base?.toFixed(2) || '0' }} base</span>
                 </div>
               </div>
             </td>
 
-            <!-- Current Stock -->
+            <!-- Current Stock (in selected unit) -->
             <td class="p-4 text-center font-medium">
-              {{ item.stock_in_unit ? item.stock_in_unit.toFixed(3) : '0.000' }}
+              <div class="space-y-1">
+                <span class="text-lg">{{ item.stock_in_unit ? item.stock_in_unit.toFixed(3) : '0.000' }}</span>
+                <div v-if="item.unit_id" class="text-xs text-gray-500">
+                  {{ selectedUnitName(idx) || 'base units' }}
+                </div>
+              </div>
             </td>
 
             <!-- Unit -->
@@ -126,8 +136,12 @@
                   @update:model-value="() => updateUnitStock(idx)"
                 ></v-select>
 
-                <div class="text-center font-bold text-indigo-700 text-lg">
-                  {{ getUnitName(item) }}
+                <!-- Selected Unit – Clear & Beautiful Badge -->
+                <div
+                  v-if="item.unit_id && selectedUnitName(idx)"
+                  class="bg-indigo-50 border border-indigo-200 px-4 py-3 rounded-lg text-base font-medium text-indigo-800 text-center shadow-sm"
+                >
+                  Selected Unit: <strong>{{ selectedUnitName(idx) }}</strong>
                 </div>
               </div>
             </td>
@@ -271,7 +285,6 @@ const saving = ref(false)
 const loaded = ref(false)
 const snackbar = ref({ show: false, message: '', color: 'success' })
 
-// More complete lock: disable form while saving OR redirecting
 const isFormLocked = computed(() => saving.value)
 
 const grandTotal = computed(() => poItems.value.reduce((sum, i) => sum + (i.total_price || 0), 0))
@@ -282,6 +295,13 @@ const getUnitName = (item) => {
   if (!item.unit_id || !item.units.length) return '—'
   const u = item.units.find(unit => unit.id === item.unit_id)
   return u ? u.unit_name : '—'
+}
+
+// Helper to show selected unit name clearly
+const selectedUnitName = (idx) => {
+  const item = poItems.value[idx]
+  const unit = item.units.find(u => u.id === item.unit_id)
+  return unit ? unit.unit_name : null
 }
 
 const fetchSuppliers = async () => {
@@ -488,10 +508,7 @@ const updatePurchaseOrder = async () => {
       color: 'success' 
     }
 
-    // Give user time to see success message (1.5–2 seconds)
     await new Promise(resolve => setTimeout(resolve, 1800))
-
-    // Final redirect
     router.push('/purchaselist')
   } catch (err) {
     snackbar.value = { 
@@ -517,7 +534,15 @@ input[type="number"][v-model*="total_price"] {
   background-color: #fefce8 !important;
 }
 
-/* Optional: stronger disabled appearance */
+/* Make selected badges pop more */
+.bg-green-50 {
+  background-color: #f0fdf4 !important;
+}
+.bg-indigo-50 {
+  background-color: #eef2ff !important;
+}
+
+/* Stronger disabled look */
 :disabled {
   opacity: 0.65;
   cursor: not-allowed;
