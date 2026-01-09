@@ -3,7 +3,7 @@ from flask import Blueprint, request, jsonify
 from app import db
 from app.models import (
     Product, ProductUnit, Customer, Sale, SaleItem,
-    InventoryTransaction, Payment, GeneralLedger, PurchaseOrderItem, Account
+    InventoryTransaction, Payment, GeneralLedger, PurchaseOrderItem, Account, StockAdjustment
 )
 from app.utils.auth import token_required
 from app.utils.gl_utils import post_to_ledger, generate_transaction_number_partone
