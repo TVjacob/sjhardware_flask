@@ -295,3 +295,173 @@ def get_sale(sale_id):
         "sale_date": sale.sale_date.strftime("%Y-%m-%d"),
         "items": items_data
     })
+
+
+
+
+@token_required
+@sales_bp.route('/<int:sale_id>', methods=['DELETE'])
+def delete_sale(sale_id):
+    sale = Sale.query.get_or_404(sale_id)
+
+    try:
+        # 1️⃣ Soft delete sale
+        sale.status = 9
+        update_timestamps(sale)
+        db.session.add(sale)
+
+        # 2️⃣ Soft delete sale items & restore stock correctly
+        sale_items = SaleItem.query.filter_by(sale_id=sale.id, status=1).all()
+
+        for item in sale_items:
+            item.status = 9
+            update_timestamps(item)
+            db.session.add(item)
+
+            product = db.session.get(Product, item.product_id)
+            if not product:
+                continue
+
+            previous_qty = float(product.quantity or 0)
+
+            # ✅ Apply unit conversion
+            multiplier = 1
+            if item.unit_id:
+                unit = db.session.get(ProductUnit, item.unit_id)
+                if unit:
+                    multiplier = unit.conversion_quantity
+
+            restored_qty = float(item.quantity) * multiplier
+            new_qty = previous_qty + restored_qty
+
+            # ✅ Update product stock
+            product.quantity = new_qty
+            db.session.add(product)
+
+            # ✅ OPTIONAL (Recommended): log stock adjustment
+            adjustment = StockAdjustment(
+                product_id=product.id,
+                unit_id=item.unit_id,
+                adjustment_type="INCREASE",
+                quantity=item.quantity,   # original unit qty
+                previous_quantity=previous_qty,
+                new_quantity=new_qty,
+                reason=f"Sale #{sale_id} deleted - stock restored",
+                status=1
+            )
+            db.session.add(adjustment)
+
+        # 3️⃣ Soft delete payments
+        payments = Payment.query.filter_by(sale_id=sale.id, status=1).all()
+        for payment in payments:
+            payment.status = 9
+            update_timestamps(payment)
+            db.session.add(payment)
+
+        # 4️⃣ Soft delete inventory transactions
+        inv_txns = InventoryTransaction.query.filter_by(sale_id=sale.id, status=1).all()
+        for txn in inv_txns:
+            txn.status = 9
+            update_timestamps(txn)
+            db.session.add(txn)
+
+        # 5️⃣ Reverse all related General Ledger entries
+        gl_entries = GeneralLedger.query.filter(
+            or_(
+                GeneralLedger.description.ilike(f"%Sale #{sale_id}%"),
+                GeneralLedger.description.ilike(f"%Payment for Sale #{sale_id}%")
+            )
+        ).all()
+
+        for entry in gl_entries:
+            reverse_type = 'Credit' if entry.transaction_type == 'Debit' else 'Debit'
+            reverse_entry = GeneralLedger(
+                account_id=entry.account_id,
+                transaction_type=reverse_type,
+                amount=entry.amount,
+                description=f"Reversal of {entry.description}",
+                transaction_date=datetime.utcnow(),
+                transaction_no=entry.transaction_no,
+                status=1
+            )
+            db.session.add(reverse_entry)
+
+        db.session.commit()
+
+        return jsonify({
+            "message": f"Sale #{sale_id} soft deleted, stock restored correctly, GL reversed"
+        }), 200
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": f"Failed to delete sale: {str(e)}"}), 500
+
+
+# # # ------------------ Soft Delete Sale (Status = 9) ------------------ #
+# @token_required
+# @sales_bp.route('/<int:sale_id>', methods=['DELETE'])
+# def delete_sale(sale_id):
+#     sale = Sale.query.get_or_404(sale_id)
+
+#     try:
+#         # 1️⃣ Soft delete sale
+#         sale.status = 9
+#         update_timestamps(sale)
+#         db.session.add(sale)
+
+#         # 2️⃣ Soft delete sale items & restore stock
+#         sale_items = SaleItem.query.filter_by(sale_id=sale.id, status=1).all()
+#         for item in sale_items:
+#             item.status = 9
+#             update_timestamps(item)
+
+#             # Restore product stock
+#             product = Product.query.get(item.product_id)
+#             if product:
+#                 product.quantity += item.quantity
+#                 db.session.add(product)
+
+#             db.session.add(item)
+
+#         # 3️⃣ Soft delete payments
+#         payments = Payment.query.filter_by(sale_id=sale.id, status=1).all()
+#         for payment in payments:
+#             payment.status = 9
+#             update_timestamps(payment)
+#             db.session.add(payment)
+
+#         # 4️⃣ Soft delete inventory transactions
+#         inv_txns = InventoryTransaction.query.filter_by(sale_id=sale.id, status=1).all()
+#         for txn in inv_txns:
+#             txn.status = 9
+#             update_timestamps(txn)
+#             db.session.add(txn)
+
+#         # 5️⃣ Reverse all related General Ledger entries
+#         gl_entries = GeneralLedger.query.filter(
+#             or_(
+#                 GeneralLedger.description.ilike(f"%Sale #{sale_id}%"),
+#                 GeneralLedger.description.ilike(f"%Payment for Sale #{sale_id}%")
+#             )
+#         ).all()
+#         print("gl_entries ",len(gl_entries))
+
+#         for entry in gl_entries:
+#             reverse_type = 'Credit' if entry.transaction_type == 'Debit' else 'Debit'
+#             reverse_entry = GeneralLedger(
+#                 account_id=entry.account_id,
+#                 transaction_type=reverse_type,
+#                 amount=entry.amount,
+#                 description=f"Reversal of {entry.description}",
+#                 transaction_date=datetime.utcnow(),
+#                 transaction_no=entry.transaction_no,
+#                 status=1
+#             )
+#             db.session.add(reverse_entry)
+
+#         db.session.commit()
+#         return jsonify({"message": f"Sale #{sale_id} soft deleted (status=9), stock restored, GL reversed"}), 200
+
+#     except Exception as e:
+#         db.session.rollback()
+#         return jsonify({"error": f"Failed to delete sale: {str(e)}"}), 500
