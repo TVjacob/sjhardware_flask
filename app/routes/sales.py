@@ -12,6 +12,10 @@ from sqlalchemy import desc, or_
 
 sales_bp = Blueprint('sales', __name__, url_prefix='/sales')
 
+def update_timestamps(obj):
+    obj.updated_at = datetime.utcnow()
+    if not obj.created_at:
+        obj.created_at = datetime.utcnow()
 # Helper: Get latest purchase unit_price for COGS
 def get_latest_cost_price(product_id):
     latest = PurchaseOrderItem.query \
