@@ -15,14 +15,17 @@ def serialize_adjustment(adj):
     """
     Serialize a StockAdjustment instance to dict with unit info
     """
-    unit = adj.unit  # from relationship
+    unit = adj.unit  # from relationship]
+    if adj.unit is None:
+        unit = ProductUnit.query.filter(ProductUnit.product_id==adj.product_id,ProductUnit.conversion_quantity==1,ProductUnit.status==1 ).first()
+    
     
     return {
         'id': adj.id,
         'product_id': adj.product_id,
         'product_name': adj.product.name if adj.product else None,
-        'unit_id': adj.unit_id,
-        'unit_name': unit.unit_name if unit else None,               # ← Added
+        'unit_id': adj.unit_id if adj.unit_id else unit.id,
+        'unit_name': unit.unit_name if unit else None,              # ← Added
         'adjustment_type': adj.adjustment_type,
         'quantity': float(adj.quantity),                            # quantity in the selected unit
         'previous_quantity': float(adj.previous_quantity) if adj.previous_quantity is not None else None,

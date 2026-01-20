@@ -128,6 +128,8 @@
               <th class="th">Date</th>
               <th class="th">Product</th>
               <th class="th">Unit</th>
+              <th class="th">Adjusted quantity</th>
+
               <th class="th text-center">Qty Change</th>
               <th class="th text-center">Prev Stock (unit)</th>
               <th class="th text-center">New Stock (unit)</th>
@@ -140,6 +142,8 @@
               <td class="td">{{ formatDate(adj.adjusted_at) }}</td>
               <td class="td">{{ adj.product_name }}</td>
               <td class="td">{{ adj.unit_name || 'Base' }}</td>
+              <td class="td">{{ adj.quantity || '0' }}</td>
+
               <td class="td text-center font-medium" :class="adj.adjustment_type === 'INCREASE' ? 'text-green-600' : 'text-red-600'">
                 {{ adj.adjustment_type === 'INCREASE' ? '+' : '-' }}{{ adj.quantity_change }}
               </td>
