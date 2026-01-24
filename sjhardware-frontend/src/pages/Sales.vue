@@ -51,7 +51,7 @@
 
         <!-- Memo -->
         <div>
-          <label class="block text-sm font-semibold text-gray-700 mb-2">Memo / Note</label>
+          <label class="block text-sm font-semibold text-gray-700 mb-2">Recipt no or Voucher no</label>
           <input
             type="text"
             v-model="saleHeader.memo"
