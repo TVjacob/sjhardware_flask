@@ -34,6 +34,7 @@ def create_sale():
     payment_account_id = data.get('payment_account_id')
     sale_date_str = data.get('sale_date')
     customer_id = data.get('customer_id', 1)  # default walk-in
+    memo = data.get('memo', '')
 
     if not items:
         return jsonify({"error": "At least one item is required"}), 400
@@ -60,6 +61,7 @@ def create_sale():
             total_paid=amount_paid,
             balance=0,
             sale_date=sale_date,
+            memo=memo,
             status=1
         )
         db.session.add(sale)
@@ -225,10 +227,11 @@ def get_sales():
 
     if search:
         query = query.filter(
-            or_(
-                Sale.sale_number.ilike(f"%{search}%"),
+            # or_(
+                Sale.sale_number.ilike(f"%{search}%")|
+                Sale.memo.ilike(f"%{search}%")|
                 Customer.name.ilike(f"%{search}%")
-            )
+            # )
         )
 
     if start_date:
@@ -257,8 +260,9 @@ def get_sales():
             "id": s.id,
             "sale_id": s.id,
             "sale_number": s.sale_number,
+            "memo": s.memo if hasattr(s, 'memo') else "",
             "customer_name": s.customer.name,
-            "total_amount": float(s.total_amount),
+            "total_amount": float(s.total_amount), 
             "total_paid": float(s.total_paid),
             "balance": float(s.balance),
             "sale_date": s.sale_date.strftime("%Y-%m-%d"),
@@ -292,6 +296,7 @@ def get_sale(sale_id):
         "id": sale.id,
         "sale_number": sale.sale_number,
         "customer_id": sale.customer_id,
+        "memo": sale.memo if hasattr(sale, 'memo') else "",
         "customer_name": sale.customer.name,
         "total_amount": float(sale.total_amount),
         "total_paid": float(sale.total_paid),
@@ -591,6 +596,7 @@ def create_or_update_sale():
         payment_account_id = data.get('payment_account_id')
         sale_date_str = data.get("sale_date")
         payment_type = data.get('payment_type', 'Cash')
+        memo = data.get("memo", "")
         customer_id = data.get("customer_id", 1)  # Default walk-in
 
         if not items:
@@ -625,6 +631,7 @@ def create_or_update_sale():
             total_paid=amount_paid,
             balance=0,
             sale_date=sale_date,
+            memo=memo,
             status=1
         )
         db.session.add(sale)

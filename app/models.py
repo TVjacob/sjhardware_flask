@@ -179,6 +179,8 @@ class Sale(db.Model, StatusMixin):
     id = db.Column(db.Integer, primary_key=True)
     sale_number = db.Column(db.String(50), unique=True, nullable=False)
 
+    memo = db.Column(db.String(255))  # Optional memo or notes
+
     # Customer
     customer_id = db.Column(db.Integer, db.ForeignKey('customer.id'), nullable=False, default=1)  # Default Walk-in
     
