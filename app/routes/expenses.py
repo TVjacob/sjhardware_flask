@@ -4,6 +4,10 @@ from app.models import Account, Expense, ExpenseItem, GeneralLedger
 from app.utils.auth import token_required
 from app.utils.gl_utils import post_to_ledger, generate_transaction_number
 from datetime import datetime
+
+from flask import request, jsonify
+from sqlalchemy import or_
+
 # from flask import Blueprint, jsonify
 from sqlalchemy.orm import joinedload
 
@@ -115,14 +119,92 @@ def create_expense():
         return jsonify({"error": str(e)}), 500
 
 # --- Get all expenses ---
+# @token_required
+# @expenses_bp.route('/', methods=['GET'])
+# def get_expenses():
+#     expenses = Expense.query.filter_by( status=1).all()
+#     data = [{
+#         "id": e.id,
+#         "description": e.description,
+#         "total_amount": e.total_amount,  # FIXED: replaced 'amount' with 'total_amount'
+#         "payment_account_id": e.payment_account_id,
+#         "expense_date": e.expense_date.strftime('%Y-%m-%d'),
+#         "reference": e.reference,
+#         "status": e.status,
+#         "transaction_no": e.transaction_no,
+#         "items": [
+#             {
+#                 "id": item.id,
+#                 "account_id": item.account_id,
+#                 "item_name": item.item_name,
+#                 "description": item.description,
+#                 "amount": item.amount
+#             }
+#             for item in e.items
+#         ]
+#     } for e in expenses]
+    
+#     return jsonify(data)
+
+
 @token_required
 @expenses_bp.route('/', methods=['GET'])
 def get_expenses():
-    expenses = Expense.query.filter_by( status=1).all()
+    # -------------------
+    # Query params
+    # -------------------
+    page = int(request.args.get('page', 1))
+    per_page = int(request.args.get('per_page', 10))
+    search = request.args.get('search')
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
+
+    # -------------------
+    # Base query
+    # -------------------
+    query = Expense.query.filter(Expense.status == 1)
+
+    # -------------------
+    # Date filtering
+    # -------------------
+    if start_date:
+        start = datetime.strptime(start_date, '%Y-%m-%d')
+        query = query.filter(Expense.expense_date >= start)
+
+    if end_date:
+        end = datetime.strptime(end_date, '%Y-%m-%d')
+        query = query.filter(Expense.expense_date <= end)
+
+    # -------------------
+    # Search filter
+    # -------------------
+    if search:
+        query = query.outerjoin(ExpenseItem).filter(
+            or_(
+                Expense.description.ilike(f'%{search}%'),
+                Expense.reference.ilike(f'%{search}%'),
+                ExpenseItem.item_name.ilike(f'%{search}%')
+            )
+        )
+
+    # -------------------
+    # Pagination
+    # -------------------
+    pagination = query.order_by(Expense.expense_date.desc()).paginate(
+        page=page,
+        per_page=per_page,
+        error_out=False
+    )
+
+    expenses = pagination.items
+
+    # -------------------
+    # Response data
+    # -------------------
     data = [{
         "id": e.id,
         "description": e.description,
-        "total_amount": e.total_amount,  # FIXED: replaced 'amount' with 'total_amount'
+        "total_amount": e.total_amount,
         "payment_account_id": e.payment_account_id,
         "expense_date": e.expense_date.strftime('%Y-%m-%d'),
         "reference": e.reference,
@@ -139,8 +221,18 @@ def get_expenses():
             for item in e.items
         ]
     } for e in expenses]
-    
-    return jsonify(data)
+
+    return jsonify({
+        "data": data,
+        "pagination": {
+            "total": pagination.total,
+            "pages": pagination.pages,
+            "current_page": pagination.page,
+            "per_page": pagination.per_page,
+            "has_next": pagination.has_next,
+            "has_prev": pagination.has_prev
+        }
+    })
 
 
 

@@ -17,25 +17,75 @@
       </h2>
     </div>
 
-    <!-- Search & Export -->
-    <div class="mb-4 flex flex-wrap gap-2">
-      <input
-        v-model="searchQuery"
-        placeholder="Search description or reference"
-        class="border p-2 rounded shadow-sm focus:ring-2 focus:ring-indigo-400 transition"
-      />
-      <button @click="searchExpenses" class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded shadow transition transform hover:scale-105">Search</button>
-      <button @click="fetchExpenses" class="bg-gray-300 hover:bg-gray-400 px-4 py-2 rounded shadow transition transform hover:scale-105">Reset</button>
-      <button @click="exportExcel" class="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded shadow transition transform hover:scale-105">Export Excel</button>
-      <button @click="exportPDF" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded shadow transition transform hover:scale-105">Export PDF</button>
+    <!-- Search + Date Filter + Export -->
+    <div class="mb-6 flex flex-wrap items-end gap-3">
+      <!-- Search -->
+      <div class="flex-1 min-w-[220px]">
+        <label class="block text-sm font-medium text-gray-700 mb-1">Search</label>
+        <input
+          v-model="searchQuery"
+          placeholder="Description, reference, item name..."
+          class="border p-2 rounded w-full shadow-sm focus:ring-2 focus:ring-indigo-400 transition"
+        />
+      </div>
 
-      <!-- Add Expense Item Button -->
-      <button
-        @click="showItemModal = true"
-        class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded shadow transition transform hover:scale-105 mb-4 ml-2"
-      >
-        + Add Expense Item
-      </button>
+      <!-- From Date -->
+      <div class="min-w-[180px]">
+        <label class="block text-sm font-medium text-gray-700 mb-1">From Date</label>
+        <input
+          v-model="dateRange.start"
+          type="date"
+          class="border p-2 rounded w-full shadow-sm focus:ring-2 focus:ring-indigo-400 transition"
+        />
+      </div>
+
+      <!-- To Date -->
+      <div class="min-w-[180px]">
+        <label class="block text-sm font-medium text-gray-700 mb-1">To Date</label>
+        <input
+          v-model="dateRange.end"
+          type="date"
+          class="border p-2 rounded w-full shadow-sm focus:ring-2 focus:ring-indigo-400 transition"
+        />
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="flex gap-2 flex-wrap">
+        <button
+          @click="applyFilters"
+          class="bg-green-600 hover:bg-green-700 text-white px-5 py-2 rounded shadow transition transform hover:scale-105"
+        >
+          Filter
+        </button>
+
+        <button
+          @click="resetFilters"
+          class="bg-gray-500 hover:bg-gray-600 text-white px-5 py-2 rounded shadow transition transform hover:scale-105"
+        >
+          Reset
+        </button>
+
+        <button
+          @click="exportExcel"
+          class="bg-yellow-500 hover:bg-yellow-600 text-white px-5 py-2 rounded shadow transition transform hover:scale-105"
+        >
+          Excel
+        </button>
+
+        <button
+          @click="exportPDF"
+          class="bg-red-500 hover:bg-red-600 text-white px-5 py-2 rounded shadow transition transform hover:scale-105"
+        >
+          PDF
+        </button>
+
+        <button
+          @click="showItemModal = true"
+          class="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2 rounded shadow transition transform hover:scale-105"
+        >
+          + New Item
+        </button>
+      </div>
     </div>
 
     <!-- Expenses Table -->
@@ -78,13 +128,12 @@
               </td>
             </tr>
 
-            <!-- Expanded Details with accordion animation -->
-            <tr>
+            <!-- Expanded row -->
+            <tr v-if="expandedRows.includes(expense.id)">
               <td colspan="8" class="p-0 border">
                 <div
                   class="overflow-hidden transition-all duration-500 ease-in-out"
                   :style="{ height: expandedRowHeights[expense.id] || 0 + 'px' }"
-                  ref="expandedRowsRefs"
                 >
                   <div class="p-4 bg-gray-50 border-t shadow-inner">
                     <h3 class="font-semibold mb-2">Expense Items</h3>
@@ -115,13 +164,12 @@
       </table>
     </div>
 
-    <!-- Expense Modal -->
+    <!-- Add/Edit Expense Modal -->
     <div v-if="showModal" class="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50 animate-fadeInModal">
       <div class="bg-white rounded-lg p-6 w-full max-w-[806px] relative shadow-xl transform transition-all scale-95 animate-scaleUp">
         <h2 class="text-xl font-bold mb-4">{{ editingExpense ? 'Edit Expense' : 'Add Expense' }}</h2>
         <button @click="closeModal" class="absolute top-2 right-2 text-gray-600 hover:text-gray-800 transition transform hover:scale-110">✖</button>
 
-        <!-- Expense Header -->
         <div class="grid grid-cols-2 gap-4 mb-4">
           <input v-model="expenseForm.description" placeholder="Expense Description" class="border p-2 rounded shadow-sm focus:ring-2 focus:ring-indigo-400 transition" />
           <input v-model="expenseForm.reference" placeholder="Reference" class="border p-2 rounded shadow-sm focus:ring-2 focus:ring-indigo-400 transition" />
@@ -132,7 +180,6 @@
           <input v-model="expenseForm.expense_date" type="date" class="border p-2 rounded shadow-sm focus:ring-2 focus:ring-indigo-400 transition" />
         </div>
 
-        <!-- Expense Items -->
         <h3 class="font-bold mb-2">Expense Items</h3>
         <div v-for="(item, index) in expenseForm.items" :key="`item-${index}`" class="grid grid-cols-5 gap-2 mb-2">
           <input list="expenseAccounts" v-model="item.account_name" placeholder="Select Expense Account" class="border p-2 rounded shadow-sm focus:ring-2 focus:ring-indigo-400 transition" @focus="fetchExpenseAccounts('')"/>
@@ -147,13 +194,11 @@
 
         <button type="button" @click="addItem" class="bg-gray-300 hover:bg-gray-400 px-4 py-2 rounded shadow transition transform hover:scale-105 mb-4">+ Add Item</button>
 
-        <!-- Amount Paid -->
         <div class="mb-4">
           <label class="block text-sm font-bold mb-1">Amount Paid</label>
           <input type="number" :value="amountPaid.toFixed(2)" class="border p-2 rounded w-full bg-gray-100" disabled />
         </div>
 
-        <!-- Submit -->
         <div class="flex justify-end">
           <button @click="submitExpense" class="bg-indigo-500 hover:bg-indigo-600 text-white px-6 py-2 rounded shadow transition transform hover:scale-105">
             {{ editingExpense ? 'Update Expense' : 'Create Expense' }}
@@ -195,12 +240,18 @@ import "jspdf-autotable";
 
 export default {
   data() {
-    const today = new Date().toISOString().split("T")[0]// YYYY-MM-DD
+    const today = new Date().toISOString().split("T")[0];
+    const oneMonthAgo = new Date();
+    oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
+    const defaultStart = oneMonthAgo.toISOString().split("T")[0];
 
     return {
-
       expenses: [],
       searchQuery: "",
+      dateRange: {
+        start: defaultStart,
+        end: today,
+      },
       showModal: false,
       editingExpense: false,
       expandedRows: [],
@@ -224,6 +275,7 @@ export default {
       expenseSubtypes: [],
     };
   },
+
   computed: {
     grandTotal() {
       return this.expenses.reduce((sum, expense) => sum + (expense.total_amount || 0), 0);
@@ -232,12 +284,13 @@ export default {
       return this.expenseForm.items.reduce((total, item) => total + (item.amount || 0), 0);
     },
   },
+
   methods: {
-    
     getAccountName(accountId) {
       const acc = this.expenseAccounts.find(a => a.id === accountId);
       return acc ? acc.name : "Unknown Account";
     },
+
     async fetchCashBankAccounts(search = "") {
       try {
         const res = await api.get("/accounts/cash-bank", { params: { search } });
@@ -246,6 +299,7 @@ export default {
         console.error("Error fetching cash/bank accounts:", err);
       }
     },
+
     async fetchExpenseAccounts(search = "") {
       try {
         const res = await api.get("/accounts/expense-account", { params: { search } });
@@ -254,6 +308,7 @@ export default {
         console.error("Error fetching expense accounts:", err);
       }
     },
+
     async fetchExpenseSubtypes() {
       try {
         const res = await api.get("/accounts/");
@@ -262,18 +317,20 @@ export default {
         console.error("Error fetching expense subtypes:", err);
       }
     },
+
     addItem() {
       this.expenseForm.items.push({ account_name: "", account_id: null, item_name: "", description: "", amount: 0 });
     },
-        // Close expense item modal
-    closeItemModal() {
-      this.expenseItemForm = { name: "", account_subtype: "" };
-      this.showItemModal = false;
-      // this.removeEscapeListener();
-    },
+
     removeItem(index) {
       this.expenseForm.items.splice(index, 1);
     },
+
+    closeItemModal() {
+      this.expenseItemForm = { name: "", account_subtype: "" };
+      this.showItemModal = false;
+    },
+
     validateExpense() {
       if (!this.expenseForm.description.trim()) {
         alert("Expense description is required.");
@@ -307,6 +364,7 @@ export default {
       }
       return true;
     },
+
     async submitExpense() {
       const paymentAcc = this.cashBankAccounts.find(a => a.name === this.expenseForm.payment_account_name);
       if (!paymentAcc) {
@@ -314,6 +372,7 @@ export default {
         return;
       }
       this.expenseForm.payment_account_id = paymentAcc.id;
+
       for (const item of this.expenseForm.items) {
         const acc = this.expenseAccounts.find(a => a.name === item.account_name);
         if (!acc) {
@@ -322,6 +381,7 @@ export default {
         }
         item.account_id = acc.id;
       }
+
       if (!this.validateExpense()) return;
 
       try {
@@ -339,31 +399,29 @@ export default {
         alert("Failed to submit expense. " + (err.response?.data?.error || err.message));
       }
     },
+
     async submitExpenseItem() {
-  if (!this.expenseItemForm.name.trim() || !this.expenseItemForm.account_subtype) {
-    alert("Expense Item Name and Type are required!");
-    return;
-  }
+      if (!this.expenseItemForm.name.trim() || !this.expenseItemForm.account_subtype) {
+        alert("Expense Item Name and Type are required!");
+        return;
+      }
 
-  try {
-    const payload = {
-      name: this.expenseItemForm.name.trim(),
-      account_subtype: this.expenseItemForm.account_subtype
-    };
+      try {
+        const payload = {
+          name: this.expenseItemForm.name.trim(),
+          account_subtype: this.expenseItemForm.account_subtype
+        };
 
-    const res = await api.post("/accounts/expense-items", payload);
-    alert(`✅ Expense Item "${this.expenseItemForm.name}" created successfully!`);
+        await api.post("/accounts/expense-items", payload);
+        alert(`✅ Expense Item "${this.expenseItemForm.name}" created successfully!`);
 
-    // Refresh expense accounts list so the new item can be selected
-    await this.fetchExpenseAccounts();
-
-    // Close the modal and reset form
-    this.closeItemModal();
-  } catch (err) {
-    console.error("❌ Error creating expense item:", err);
-    alert("Failed to create expense item. " + (err.response?.data?.error || err.message));
-  }
-},
+        await this.fetchExpenseAccounts();
+        this.closeItemModal();
+      } catch (err) {
+        console.error("❌ Error creating expense item:", err);
+        alert("Failed to create expense item. " + (err.response?.data?.error || err.message));
+      }
+    },
 
     editExpense(expense) {
       this.expenseForm = {
@@ -384,13 +442,14 @@ export default {
       this.editingExpense = true;
       this.showModal = true;
     },
+
     closeModal() {
       this.resetForm();
       this.showModal = false;
     },
-    resetForm() {
-      const today = new Date().toISOString().split("T")[0]// YYYY-MM-DD
 
+    resetForm() {
+      const today = new Date().toISOString().split("T")[0];
       this.expenseForm = {
         id: null,
         description: "",
@@ -402,46 +461,67 @@ export default {
       };
       this.editingExpense = false;
     },
+
+    // ────────────────────────────────────────────────
+    //           Main data fetching with filters
+    // ────────────────────────────────────────────────
     async fetchExpenses() {
       try {
-        const res = await api.get("/expenses/");
-        this.expenses = res.data;
+        const params = {
+          search: this.searchQuery || undefined,
+          start_date: this.dateRange.start || undefined,
+          end_date: this.dateRange.end || undefined,
+        };
+
+        // Remove undefined keys
+        const cleanParams = Object.fromEntries(
+          Object.entries(params).filter(([_, value]) => value !== undefined)
+        );
+
+        const res = await api.get("/expenses/", { params: cleanParams });
+        this.expenses = res.data.data || [];
+
         this.$nextTick(() => this.updateExpandedHeights());
       } catch (err) {
         console.error("❌ Error fetching expenses:", err);
         alert("Failed to load expenses. Please try again.");
       }
     },
+
+    applyFilters() {
+      if (this.dateRange.start && this.dateRange.end && this.dateRange.start > this.dateRange.end) {
+        alert("Start date cannot be later than end date.");
+        return;
+      }
+      this.fetchExpenses();
+    },
+
+    resetFilters() {
+      this.searchQuery = "";
+      const today = new Date().toISOString().split("T")[0];
+      const oneMonthAgo = new Date();
+      oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
+
+      this.dateRange = {
+        start: oneMonthAgo.toISOString().split("T")[0],
+        end: today,
+      };
+      this.fetchExpenses();
+    },
+
     async deleteExpense(id) {
-      if (confirm("Are you sure you want to delete this expense?")) {
-        try {
-          await api.delete(`/expenses/${id}`);
-          alert("🗑️ Expense deleted successfully!");
-          this.fetchExpenses();
-        } catch (err) {
-          console.error("❌ Error deleting expense:", err);
-          alert("Failed to delete expense. Please try again.");
-        }
-      }
-    },
-    async searchExpenses() {
+      if (!confirm("Are you sure you want to delete this expense?")) return;
+
       try {
-        const res = await api.get("/expenses/");
-        this.expenses = res.data.filter(
-          e => e.description.toLowerCase().includes(this.searchQuery.toLowerCase()) ||
-               (e.reference && e.reference.toLowerCase().includes(this.searchQuery.toLowerCase()))
-        );
-        this.$nextTick(() => this.updateExpandedHeights());
+        await api.delete(`/expenses/${id}`);
+        alert("🗑️ Expense deleted successfully!");
+        this.fetchExpenses();
       } catch (err) {
-        console.error("❌ Error searching expenses:", err);
-        alert("Search failed. Please try again.");
+        console.error("❌ Error deleting expense:", err);
+        alert("Failed to delete expense.");
       }
     },
-    formatDate(dateStr) {
-      if (!dateStr) return "";
-      const d = new Date(dateStr);
-      return d.toLocaleDateString();
-    },
+
     toggleExpand(id, index) {
       const i = this.expandedRows.indexOf(id);
       if (i > -1) {
@@ -451,15 +531,19 @@ export default {
       }
       this.$nextTick(() => this.updateExpandedHeights());
     },
+
     updateExpandedHeights() {
-      if (!this.$refs.expandedRowsRefs) return;
-      this.expenses.forEach((exp, idx) => {
-        const el = this.$refs.expandedRowsRefs[idx];
-        if (el) {
-          this.expandedRowHeights[exp.id] = el.scrollHeight;
-        }
+      this.$nextTick(() => {
+        if (!this.$refs.expandedRowsRefs) return;
+        this.expenses.forEach((exp, idx) => {
+          const el = this.$refs.expandedRowsRefs[idx];
+          if (el) {
+            this.expandedRowHeights[exp.id] = el.scrollHeight;
+          }
+        });
       });
     },
+
     exportExcel() {
       try {
         const ws = XLSX.utils.json_to_sheet(this.expenses);
@@ -471,6 +555,7 @@ export default {
         alert("Failed to export Excel.");
       }
     },
+
     exportPDF() {
       try {
         const doc = new jsPDF();
@@ -487,6 +572,7 @@ export default {
       }
     },
   },
+
   mounted() {
     this.fetchExpenses();
     this.fetchCashBankAccounts();
