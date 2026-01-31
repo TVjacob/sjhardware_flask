@@ -13,7 +13,7 @@
     <!-- Grand Total -->
     <div class="mb-4 p-4 bg-gray-100 rounded shadow hover:shadow-lg transition transform hover:scale-[1.01]">
       <h2 class="text-lg font-bold">
-        Grand Total Paid: <span class="text-green-600">{{ grandTotal.toFixed(2) }}</span>
+        Grand Total Paid: <span class="text-green-600">{{ formatCurrency(grandTotal) }}</span>
       </h2>
     </div>
 
@@ -109,13 +109,13 @@
               class="transition-all duration-300 hover:bg-gray-50 hover:shadow-sm cursor-pointer transform hover:scale-[1.01]"
             >
               <td class="p-3 text-center">
-                <button @click="toggleExpand(expense.id, index)" class="text-blue-600 font-bold transition transform hover:scale-110">
-                  {{ expandedRows.includes(expense.id) ? '-' : '+' }}
+                <button @click="toggleExpand(expense.id)" class="text-blue-600 font-bold transition transform hover:scale-110">
+                  {{ expandedRows.includes(expense.id) ? '−' : '+' }}
                 </button>
               </td>
               <td class="p-3">{{ expense.id }}</td>
               <td class="p-3">{{ expense.description }}</td>
-              <td class="p-3 text-right">{{ expense.total_amount.toFixed(2) }}</td>
+              <td class="p-3 text-right">{{ formatCurrency(expense.total_amount) }}</td>
               <td class="p-3">{{ expense.reference }}</td>
               <td class="p-3">{{ expense.expense_date }}</td>
               <td class="p-3">{{ expense.transaction_no }}</td>
@@ -129,37 +129,39 @@
             </tr>
 
             <!-- Expanded row -->
-            <tr v-if="expandedRows.includes(expense.id)">
-              <td colspan="8" class="p-0 border">
-                <div
-                  class="overflow-hidden transition-all duration-500 ease-in-out"
-                  :style="{ height: expandedRowHeights[expense.id] || 0 + 'px' }"
-                >
-                  <div class="p-4 bg-gray-50 border-t shadow-inner">
-                    <h3 class="font-semibold mb-2">Expense Items</h3>
-                    <table class="w-full border text-sm">
-                      <thead>
-                        <tr>
-                          <th class="p-2 border">Account</th>
-                          <th class="p-2 border">Item Name</th>
-                          <th class="p-2 border">Description</th>
-                          <th class="p-2 border">Amount</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <tr v-for="item in expense.items" :key="`item-${item.id}`" class="hover:bg-gray-100 transition">
-                          <td class="p-2 border">{{ getAccountName(item.account_id) }}</td>
-                          <td class="p-2 border">{{ item.item_name }}</td>
-                          <td class="p-2 border">{{ item.description }}</td>
-                          <td class="p-2 border">{{ item.amount.toFixed(2) }}</td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
+            <tr v-show="expandedRows.includes(expense.id)">
+              <td colspan="8" class="p-0">
+                <div class="p-4 bg-gray-50 border-t shadow-inner">
+                  <h3 class="font-semibold mb-2">Expense Items</h3>
+                  <table class="w-full border text-sm">
+                    <thead>
+                      <tr>
+                        <th class="p-2 border">Account</th>
+                        <th class="p-2 border">Item Name</th>
+                        <th class="p-2 border">Description</th>
+                        <th class="p-2 border">Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr v-for="item in expense.items" :key="`item-${item.id}`" class="hover:bg-gray-100 transition">
+                        <td class="p-2 border">{{ getAccountName(item.account_id) }}</td>
+                        <td class="p-2 border">{{ item.item_name }}</td>
+                        <td class="p-2 border">{{ item.description }}</td>
+                        <td class="p-2 border text-right">{{ formatCurrency(item.amount) }}</td>
+                      </tr>
+                    </tbody>
+                  </table>
                 </div>
               </td>
             </tr>
           </template>
+
+          <!-- No data message -->
+          <tr v-if="expenses.length === 0">
+            <td colspan="8" class="p-8 text-center text-gray-500">
+              No expenses found for the selected period / search.
+            </td>
+          </tr>
         </tbody>
       </table>
     </div>
@@ -173,7 +175,13 @@
         <div class="grid grid-cols-2 gap-4 mb-4">
           <input v-model="expenseForm.description" placeholder="Expense Description" class="border p-2 rounded shadow-sm focus:ring-2 focus:ring-indigo-400 transition" />
           <input v-model="expenseForm.reference" placeholder="Reference" class="border p-2 rounded shadow-sm focus:ring-2 focus:ring-indigo-400 transition" />
-          <input list="paymentAccounts" v-model="expenseForm.payment_account_name" placeholder="Payment Account (Cash/Bank)" class="border p-2 rounded shadow-sm focus:ring-2 focus:ring-indigo-400 transition" @focus="fetchCashBankAccounts('')"/>
+          <input 
+            list="paymentAccounts" 
+            v-model="expenseForm.payment_account_name" 
+            placeholder="Payment Account (Cash/Bank)" 
+            class="border p-2 rounded shadow-sm focus:ring-2 focus:ring-indigo-400 transition" 
+            @focus="fetchCashBankAccounts('')"
+          />
           <datalist id="paymentAccounts">
             <option v-for="acc in cashBankAccounts" :key="acc.id" :value="acc.name"></option>
           </datalist>
@@ -182,7 +190,13 @@
 
         <h3 class="font-bold mb-2">Expense Items</h3>
         <div v-for="(item, index) in expenseForm.items" :key="`item-${index}`" class="grid grid-cols-5 gap-2 mb-2">
-          <input list="expenseAccounts" v-model="item.account_name" placeholder="Select Expense Account" class="border p-2 rounded shadow-sm focus:ring-2 focus:ring-indigo-400 transition" @focus="fetchExpenseAccounts('')"/>
+          <input 
+            list="expenseAccounts" 
+            v-model="item.account_name" 
+            placeholder="Select Expense Account" 
+            class="border p-2 rounded shadow-sm focus:ring-2 focus:ring-indigo-400 transition" 
+            @focus="fetchExpenseAccounts('')"
+          />
           <datalist id="expenseAccounts">
             <option v-for="acc in expenseAccounts" :key="acc.id" :value="acc.name"></option>
           </datalist>
@@ -255,7 +269,6 @@ export default {
       showModal: false,
       editingExpense: false,
       expandedRows: [],
-      expandedRowHeights: {},
       expenseForm: {
         id: null,
         description: "",
@@ -278,14 +291,24 @@ export default {
 
   computed: {
     grandTotal() {
-      return this.expenses.reduce((sum, expense) => sum + (expense.total_amount || 0), 0);
+      return this.expenses.reduce((sum, expense) => sum + Number(expense.total_amount || 0), 0);
     },
     amountPaid() {
-      return this.expenseForm.items.reduce((total, item) => total + (item.amount || 0), 0);
+      return this.expenseForm.items.reduce((total, item) => total + Number(item.amount || 0), 0);
     },
   },
 
   methods: {
+    formatCurrency(value) {
+      if (!value && value !== 0) return "UGX 0";
+      return new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: 'UGX',
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0
+      }).format(value);
+    },
+
     getAccountName(accountId) {
       const acc = this.expenseAccounts.find(a => a.id === accountId);
       return acc ? acc.name : "Unknown Account";
@@ -462,9 +485,6 @@ export default {
       this.editingExpense = false;
     },
 
-    // ────────────────────────────────────────────────
-    //           Main data fetching with filters
-    // ────────────────────────────────────────────────
     async fetchExpenses() {
       try {
         const params = {
@@ -473,7 +493,6 @@ export default {
           end_date: this.dateRange.end || undefined,
         };
 
-        // Remove undefined keys
         const cleanParams = Object.fromEntries(
           Object.entries(params).filter(([_, value]) => value !== undefined)
         );
@@ -481,7 +500,6 @@ export default {
         const res = await api.get("/expenses/", { params: cleanParams });
         this.expenses = res.data.data || [];
 
-        this.$nextTick(() => this.updateExpandedHeights());
       } catch (err) {
         console.error("❌ Error fetching expenses:", err);
         alert("Failed to load expenses. Please try again.");
@@ -522,26 +540,12 @@ export default {
       }
     },
 
-    toggleExpand(id, index) {
-      const i = this.expandedRows.indexOf(id);
-      if (i > -1) {
-        this.expandedRows.splice(i, 1);
+    toggleExpand(id) {
+      if (this.expandedRows.includes(id)) {
+        this.expandedRows = this.expandedRows.filter(rowId => rowId !== id);
       } else {
         this.expandedRows.push(id);
       }
-      this.$nextTick(() => this.updateExpandedHeights());
-    },
-
-    updateExpandedHeights() {
-      this.$nextTick(() => {
-        if (!this.$refs.expandedRowsRefs) return;
-        this.expenses.forEach((exp, idx) => {
-          const el = this.$refs.expandedRowsRefs[idx];
-          if (el) {
-            this.expandedRowHeights[exp.id] = el.scrollHeight;
-          }
-        });
-      });
     },
 
     exportExcel() {
@@ -562,7 +566,12 @@ export default {
         doc.autoTable({
           head: [["ID", "Description", "Total Amount", "Reference", "Expense Date", "Transaction No"]],
           body: this.expenses.map(e => [
-            e.id, e.description, e.total_amount, e.reference, e.expense_date, e.transaction_no
+            e.id, 
+            e.description, 
+            e.total_amount, 
+            e.reference, 
+            e.expense_date, 
+            e.transaction_no
           ])
         });
         doc.save("expenses.pdf");
@@ -596,8 +605,8 @@ export default {
 .animate-scaleUp { animation: scaleUp 0.3s ease-out forwards; }
 
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(-10px);}
-  to { opacity: 1; transform: translateY(0);}
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 .animate-fadeIn { animation: fadeIn 0.5s ease-in-out forwards; }
 </style>
