@@ -615,6 +615,7 @@ def create_or_update_sale():
         if sale_id:
             from flask import current_app
             current_app.logger.info(f"Updating sale #{sale_id}: reversing previous sale.")
+            success = delete_sale(sale_id)
             # You can call your delete_sale(sale_id) function here if it handles reversal properly
             # For now, we create new sale and let old one stay soft-deleted
 
