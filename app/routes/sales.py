@@ -309,7 +309,7 @@ def get_sale(sale_id):
 
 
 @token_required
-@sales_bp.route('/<int:sale_id>', methods=['DELETE'])
+@sales_bp.route('/<int:sale_id>/delete', methods=['DELETE'])
 def delete_sale(sale_id):
     sale = Sale.query.get_or_404(sale_id)
 
