@@ -198,8 +198,13 @@
                   :disabled="isFormLocked || !item.unit_id"
                   class="w-full text-right border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 font-semibold text-green-700"
                 />
-                <div class="text-xs text-gray-500 text-right">
-                  Suggested: {{ formatPrice(item.suggested_price || 0) }}
+                <div class="text-xs text-right" :class="{ 'text-amber-600 font-medium': item.isExistingItem }">
+                  <template v-if="item.isExistingItem">
+                    Historical price from sale
+                  </template>
+                  <template v-else>
+                    Suggested: {{ formatPrice(item.suggested_price || 0) }}
+                  </template>
                 </div>
               </div>
             </td>
@@ -343,14 +348,12 @@ const formatPrice = (val) => {
   return new Intl.NumberFormat('en-UG', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(value)
 }
 
-// Helper to show selected unit name clearly
 const selectedUnitName = (index) => {
   const item = saleItems.value[index]
   const unit = item.units.find(u => u.id === item.unit_id)
   return unit ? unit.unit_name : null
 }
 
-// Fetch static data
 const fetchCustomers = async () => {
   loadingCustomers.value = true
   try {
@@ -375,7 +378,6 @@ const fetchPaymentAccounts = async () => {
   }
 }
 
-// Product Search
 const searchProduct = debounce(async (query, index) => {
   const item = saleItems.value[index]
   if (!query || query.trim().length < 2) {
@@ -396,7 +398,6 @@ const searchProduct = debounce(async (query, index) => {
   }
 }, 300)
 
-// Select Product
 const selectProduct = (productId, index) => {
   const item = saleItems.value[index]
   const product = item.productSearchResults.find(p => p.id === productId)
@@ -411,32 +412,32 @@ const selectProduct = (productId, index) => {
   item.unit_id = null
   item.unit_price = 0
   item.suggested_price = 0
-  item.cost_price = product.last_purchase_price || 0  // ← Last purchase price (cost)
+  item.cost_price = product.last_purchase_price || 0
   item.available_in_unit = 0
   item.quantity = 0
   item.line_total = 0
   item.stock_base = product.quantity
   item.has_manual_price = false
+  item.isExistingItem = false   // New item → use current price logic
 
   item.productSearchResults = []
 }
 
-// Update unit price & stock on unit change
 const updateUnitPriceAndStock = (index) => {
   const item = saleItems.value[index]
   const selectedUnit = item.units.find(u => u.id === item.unit_id)
-  if (selectedUnit) {
-    item.suggested_price = selectedUnit.retail_price || 0
-    // Cost price remains last purchase price (not unit-specific unless you want)
-    // item.cost_price = selectedUnit.purchase_price || item.cost_price
+  if (!selectedUnit) return
 
-    if (!item.has_manual_price) {
-      item.unit_price = selectedUnit.retail_price || 0
-    }
+  item.suggested_price = selectedUnit.retail_price || 0
 
-    item.available_in_unit = item.stock_base / selectedUnit.conversion_quantity || 0
-    calculateLineTotal(index)
+  // For new items (or when user hasn't manually set price): use current retail price
+  if (!item.isExistingItem && !item.has_manual_price) {
+    item.unit_price = selectedUnit.retail_price || 0
   }
+  // For existing items: keep the historical price unless manually changed
+
+  item.available_in_unit = item.stock_base / selectedUnit.conversion_quantity || 0
+  calculateLineTotal(index)
 }
 
 const onPriceChange = (index) => {
@@ -457,7 +458,6 @@ const onTotalChange = (index) => {
   }
 }
 
-// Row management
 const addItemRow = () => {
   saleItems.value.push({
     product_id: null,
@@ -476,7 +476,8 @@ const addItemRow = () => {
     productSearchResults: [],
     selectedProductObj: null,
     loadingProduct: false,
-    has_manual_price: false
+    has_manual_price: false,
+    isExistingItem: false   // New rows always use current price
   })
 }
 
@@ -484,7 +485,6 @@ const removeItem = (index) => {
   saleItems.value.splice(index, 1)
 }
 
-// Save Sale (Create or Update)
 const saveSale = async () => {
   if (!saleHeader.value.customer_id) {
     notification.value = 'Please select a customer'
@@ -558,19 +558,6 @@ const saveSale = async () => {
   }
 }
 
-const resetForm = () => {
-  saleHeader.value = {
-    sale_date: new Date().toISOString().slice(0, 10),
-    customer_id: 1,
-    amount_paid: 0,
-    memo: '',
-    payment_account_id: null
-  }
-  saleItems.value = []
-  addItemRow()
-}
-
-// Load existing sale for edit
 const loadSaleForEdit = async (id) => {
   try {
     const res = await api.get(`/sales/${id}/edit`)
@@ -589,27 +576,26 @@ const loadSaleForEdit = async (id) => {
       category_name: i.category_name,
       units: i.units,
       unit_id: i.unit_id,
-      unit_price: i.unit_price,
+      unit_price: i.unit_price,               // Preserve historical selling price
       suggested_price: i.suggested_price || 0,
-      cost_price: i.cost_price || 0,           // ← Last purchase price
+      cost_price: i.last_purchase_price || i.cost_price || 0,
       quantity: i.quantity,
       line_total: i.total_price,
       stock_base: i.current_stock_base || 0,
       available_in_unit: i.max_quantity_allowed || 0,
       selectedProductObj: { id: i.product_id, name: i.product_name },
       loadingProduct: false,
-      has_manual_price: false
+      has_manual_price: true,                 // Historical price is considered "manual"
+      isExistingItem: true                    // Flag to prevent price override
     }))
 
-    // Auto-select units & update display
+    // Update display values (suggested price & stock), but keep historical unit_price
     saleItems.value.forEach((item, idx) => {
-      if (item.units && item.units.length) {
+      if (item.units?.length) {
         const selected = item.units.find(u => u.id === item.unit_id)
         if (selected) {
           item.suggested_price = selected.retail_price || 0
-          item.unit_price = item.unit_price || selected.retail_price || 0
-          // Trigger stock update
-          updateUnitPriceAndStock(idx)
+          updateUnitPriceAndStock(idx)  // Updates stock only
         }
       }
     })
