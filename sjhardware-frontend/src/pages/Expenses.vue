@@ -166,6 +166,52 @@
       </table>
     </div>
 
+    <!-- Pagination Controls -->
+    <div v-if="pagination.total > 0" class="mt-6 flex flex-col sm:flex-row justify-between items-center gap-4 text-sm">
+      <div class="text-gray-700">
+        Showing
+        <span class="font-medium">{{ (pagination.current_page - 1) * pagination.per_page + 1 }}</span>
+        to
+        <span class="font-medium">{{ Math.min(pagination.current_page * pagination.per_page, pagination.total) }}</span>
+        of
+        <span class="font-medium">{{ pagination.total }}</span>
+        results
+      </div>
+
+      <div class="flex items-center gap-3">
+        <button
+          @click="changePage(pagination.current_page - 1)"
+          :disabled="!pagination.has_prev"
+          class="px-4 py-2 bg-gray-200 text-gray-800 rounded hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed transition"
+        >
+          Previous
+        </button>
+
+        <span class="px-4 py-2 font-medium text-gray-800">
+          Page {{ pagination.current_page }} of {{ pagination.pages }}
+        </span>
+
+        <button
+          @click="changePage(pagination.current_page + 1)"
+          :disabled="!pagination.has_next"
+          class="px-4 py-2 bg-gray-200 text-gray-800 rounded hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed transition"
+        >
+          Next
+        </button>
+
+        <select
+          v-model="perPage"
+          @change="applyFilters"
+          class="border border-gray-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-400 focus:outline-none"
+        >
+          <option :value="10">10 per page</option>
+          <option :value="20">20 per page</option>
+          <option :value="50">50 per page</option>
+          <option :value="100">100 per page</option>
+        </select>
+      </div>
+    </div>
+
     <!-- Add/Edit Expense Modal -->
     <div v-if="showModal" class="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50 animate-fadeInModal">
       <div class="bg-white rounded-lg p-6 w-full max-w-[806px] relative shadow-xl transform transition-all scale-95 animate-scaleUp">
@@ -266,6 +312,15 @@ export default {
         start: defaultStart,
         end: today,
       },
+      pagination: {
+        total: 0,
+        pages: 0,
+        current_page: 1,
+        per_page: 10,
+        has_next: false,
+        has_prev: false,
+      },
+      perPage: 10,
       showModal: false,
       editingExpense: false,
       expandedRows: [],
@@ -488,6 +543,8 @@ export default {
     async fetchExpenses() {
       try {
         const params = {
+          page: this.pagination.current_page,
+          per_page: this.perPage,
           search: this.searchQuery || undefined,
           start_date: this.dateRange.start || undefined,
           end_date: this.dateRange.end || undefined,
@@ -498,12 +555,26 @@ export default {
         );
 
         const res = await api.get("/expenses/", { params: cleanParams });
-        this.expenses = res.data.data || [];
 
+        this.expenses = res.data.data || [];
+        this.pagination = {
+          total: res.data.pagination.total || 0,
+          pages: res.data.pagination.pages || 1,
+          current_page: res.data.pagination.current_page || 1,
+          per_page: res.data.pagination.per_page || this.perPage,
+          has_next: res.data.pagination.has_next || false,
+          has_prev: res.data.pagination.has_prev || false,
+        };
       } catch (err) {
         console.error("❌ Error fetching expenses:", err);
         alert("Failed to load expenses. Please try again.");
       }
+    },
+
+    changePage(page) {
+      if (page < 1 || page > this.pagination.pages) return;
+      this.pagination.current_page = page;
+      this.fetchExpenses();
     },
 
     applyFilters() {
@@ -511,6 +582,7 @@ export default {
         alert("Start date cannot be later than end date.");
         return;
       }
+      this.pagination.current_page = 1; // Reset to first page on filter
       this.fetchExpenses();
     },
 
@@ -524,6 +596,7 @@ export default {
         start: oneMonthAgo.toISOString().split("T")[0],
         end: today,
       };
+      this.pagination.current_page = 1;
       this.fetchExpenses();
     },
 
@@ -566,11 +639,11 @@ export default {
         doc.autoTable({
           head: [["ID", "Description", "Total Amount", "Reference", "Expense Date", "Transaction No"]],
           body: this.expenses.map(e => [
-            e.id, 
-            e.description, 
-            e.total_amount, 
-            e.reference, 
-            e.expense_date, 
+            e.id,
+            e.description,
+            e.total_amount,
+            e.reference,
+            e.expense_date,
             e.transaction_no
           ])
         });
@@ -579,6 +652,13 @@ export default {
         console.error("❌ Error exporting PDF:", err);
         alert("Failed to export PDF.");
       }
+    },
+  },
+
+  watch: {
+    perPage() {
+      this.pagination.current_page = 1;
+      this.fetchExpenses();
     },
   },
 
