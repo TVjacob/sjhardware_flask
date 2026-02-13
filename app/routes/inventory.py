@@ -560,8 +560,10 @@ def update_product(id):
 @inventory_bp.route('/products/<int:id>', methods=['DELETE'])
 def delete_product(id):
     product = Product.query.get_or_404(id)
-    db.session.delete(product)          # cascade deletes units
+    product.status = 9
     db.session.commit()
+        # cascade deletes units
+    # db.session.commit()
     return jsonify({"message": "Product deleted", "product_id": id})
 
 
