@@ -17,8 +17,8 @@ import SalesList from '../pages/SalesList.vue';
 // Reports
 // import OutOfStock from '@/pages/reports/OutOfStock.vue';
 // import StockList from '@/pages/reports/StockList.vue';
-import OutOfStock from '@/pages/reports/Outofstock.vue';
-import StockList from '@/pages/reports/Stocklist.vue';
+import OutOfStock from '@/pages/reports/OutOfStock.vue';
+import StockList from '@/pages/reports/StockList.vue';
 import Consumption from '@/pages/reports/ConsumptionList.vue';
 import Performance from '@/pages/reports/Performance.vue';
 import PurchaseReport from '@/pages/reports/PurchaseReport.vue';
@@ -41,6 +41,7 @@ import PurchaseProduct from '@/pages/reports/PurchaseProduct.vue';
 import SalesProfit from '@/pages/reports/SalesProfit.vue';
 import StockAdjustments from '@/pages/StockAdjustments.vue';
 import EditSale from '@/pages/EditSale.vue';
+import CustomerPaymentsReport from '@/pages/reports/CustomerPaymentsReport.vue';
 
 const routes = [
   {
@@ -101,6 +102,8 @@ const routes = [
       { path: 'reports/stock-list', component: StockList, meta: { showGreeting: false, pageName: 'Stock List',requiresAuth: true, } },
       { path: 'reports/out-of-stock', component: OutOfStock, meta: { showGreeting: false, pageName: 'Out Of Stock',requiresAuth: true, } },
       { path: 'reports/sales-profit', component: SalesProfit, meta: { showGreeting: false, pageName: 'Sales Profit',requiresAuth: true, } },
+
+      { path: 'reports/customer-payments', component: CustomerPaymentsReport, meta: { showGreeting: false, pageName: 'Customer Payments',requiresAuth: true, } },
       {
         path:'/stockadjustments',
         name:'StockAdjustments',

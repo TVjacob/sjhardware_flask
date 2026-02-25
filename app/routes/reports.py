@@ -2722,3 +2722,210 @@ def sales_profit_report():
 #         },
 #         "data": data
 #     }), 200
+
+
+# @token_required
+# @reports_bp.route('/customer-payments', methods=['GET'])
+# def customer_payments_report():
+#     start_date_str = request.args.get('start_date')
+#     end_date_str = request.args.get('end_date')
+#     customer_id = request.args.get('customer_id', type=int)
+
+#     filters = [Payment.status == 1]
+
+#     if start_date_str:
+#         try:
+#             start_date = datetime.strptime(start_date_str, '%Y-%m-%d')
+#             filters.append(Payment.payment_date >= start_date)
+#         except ValueError:
+#             return jsonify({"error": "Invalid start_date format. Use YYYY-MM-DD"}), 400
+
+#     if end_date_str:
+#         try:
+#             end_date = datetime.strptime(end_date_str, '%Y-%m-%d')
+#             filters.append(Payment.payment_date <= end_date)
+#         except ValueError:
+#             return jsonify({"error": "Invalid end_date format. Use YYYY-MM-DD"}), 400
+
+#     if customer_id:
+#         filters.append(Sale.customer_id == customer_id)
+
+#     # Base query: Join Payment -> Sale -> Customer
+#     query = db.session.query(
+#         Customer.id.label('customer_id'),
+#         Customer.name,
+#         Customer.phone,
+#         Customer.email,
+#         Customer.address,
+#         func.sum(Payment.amount).label('total_paid'),
+#         Payment.id.label('payment_id'),
+#         Payment.payment_date,
+#         Payment.amount,
+#         Payment.payment_type,
+#         Payment.reference,
+#         Sale.id.label('sale_id'),
+#         Sale.sale_number,
+#         Sale.total_amount.label('sale_total'),
+#         Sale.balance.label('sale_balance')
+#     ).join(Sale, Sale.id == Payment.sale_id
+#     ).join(Customer, Customer.id == Sale.customer_id
+#     ).filter(*filters
+#     ).group_by(Customer.id, Payment.id
+#     ).order_by(Payment.payment_date.desc()
+#     ).all()
+
+#     # Aggregate into structured response
+#     customers = {}
+#     total_received = 0.0
+
+#     for row in query:
+#         cid = row.customer_id
+#         if cid not in customers:
+#             customers[cid] = {
+#                 "id": cid,
+#                 "name": row.name,
+#                 "phone": row.phone or "",
+#                 "email": row.email or "",
+#                 "address": row.address or "",
+#                 "total_paid": float(row.total_paid or 0),
+#                 "payments": []
+#             }
+
+#         customers[cid]["payments"].append({
+#             "payment_id": row.payment_id,
+#             "payment_date": row.payment_date.strftime('%Y-%m-%d %H:%M:%S') if row.payment_date else "",
+#             "amount": float(row.amount or 0),
+#             "payment_type": row.payment_type,
+#             "reference": row.reference or "",
+#             "sale_id": row.sale_id,
+#             "sale_number": row.sale_number or "",
+#             "sale_total": float(row.sale_total or 0),
+#             "sale_balance": float(row.sale_balance or 0)
+#         })
+
+#         total_received += float(row.amount or 0)
+
+#     response = {
+#         "customers": list(customers.values()),
+#         "total_received": total_received,
+#         "period_start": start_date_str or "",
+#         "period_end": end_date_str or ""
+#     }
+
+#     return jsonify(response), 200
+
+
+@token_required
+@reports_bp.route('/customer-payments', methods=['GET'])
+def customer_payments_report():
+    start_date_str = request.args.get('start_date')
+    end_date_str = request.args.get('end_date')
+    customer_id = request.args.get('customer_id', type=int)
+
+    # Base filters
+    filters = [Payment.status == 1]
+
+    if start_date_str:
+        try:
+            start_date = datetime.strptime(start_date_str, '%Y-%m-%d')
+            filters.append(Payment.payment_date >= start_date)
+        except ValueError:
+            return jsonify({"error": "Invalid start_date format. Use YYYY-MM-DD"}), 400
+
+    if end_date_str:
+        try:
+            end_date = datetime.strptime(end_date_str, '%Y-%m-%d')
+            filters.append(Payment.payment_date <= end_date)
+        except ValueError:
+            return jsonify({"error": "Invalid end_date format. Use YYYY-MM-DD"}), 400
+
+    if customer_id is not None:
+        filters.append(Sale.customer_id == customer_id)
+
+    # Query: one row per payment (no GROUP BY needed anymore)
+    payments = (
+        db.session.query(
+            Customer.id.label('customer_id'),
+            Customer.name.label('customer_name'),
+            Customer.phone.label('customer_phone'),
+            Customer.email.label('customer_email'),
+            Customer.address.label('customer_address'),
+            Payment.id.label('payment_id'),
+            Payment.payment_date,
+            Payment.amount.label('payment_amount'),
+            Payment.payment_type,
+            Payment.reference.label('payment_reference'),
+            Sale.id.label('sale_id'),
+            Sale.sale_number,
+            Sale.total_amount.label('sale_total'),
+            Sale.balance.label('sale_balance')
+        )
+        .join(Sale, Sale.id == Payment.sale_id)
+        .join(Customer, Customer.id == Sale.customer_id)
+        .filter(*filters)
+        .order_by(Payment.payment_date.desc())
+        .all()
+    )
+
+    # Group by customer in Python + calculate totals
+    from collections import defaultdict
+
+    customer_map = defaultdict(lambda: {
+        "id": None,
+        "name": "",
+        "phone": "",
+        "email": "",
+        "address": "",
+        "total_paid": 0.0,
+        "payments": []
+    })
+
+    grand_total_received = 0.0
+
+    for row in payments:
+        cid = row.customer_id
+
+        # First time seeing this customer
+        if customer_map[cid]["id"] is None:
+            customer_map[cid].update({
+                "id": cid,
+                "name": row.customer_name,
+                "phone": row.customer_phone or "",
+                "email": row.customer_email or "",
+                "address": row.customer_address or ""
+            })
+
+        amount = float(row.payment_amount or 0)
+
+        customer_map[cid]["total_paid"] += amount
+        grand_total_received += amount
+
+        customer_map[cid]["payments"].append({
+            "payment_id": row.payment_id,
+            "payment_date": (
+                row.payment_date.strftime('%Y-%m-%d %H:%M:%S')
+                if row.payment_date else ""
+            ),
+            "amount": amount,
+            "payment_type": row.payment_type or "Unknown",
+            "reference": row.payment_reference or "",
+            "sale_id": row.sale_id,
+            "sale_number": row.sale_number or "—",
+            "sale_total": float(row.sale_total or 0),
+            "sale_balance": float(row.sale_balance or 0)
+        })
+
+    # Prepare final response
+    customers_list = list(customer_map.values())
+
+    response = {
+        "customers": customers_list,
+        "total_received": grand_total_received,
+        "period_start": start_date_str or "",
+        "period_end": end_date_str or "",
+        "customer_count": len(customers_list),
+        "payment_count": sum(len(c["payments"]) for c in customers_list),
+        "filtered_by_customer": bool(customer_id)
+    }
+
+    return jsonify(response), 200
