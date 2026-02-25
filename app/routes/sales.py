@@ -5,6 +5,7 @@ from app.models import (
     Product, ProductUnit, Customer, Sale, SaleItem,
     InventoryTransaction, Payment, GeneralLedger, PurchaseOrderItem, Account, StockAdjustment
 )
+from flask import current_app   # ← ADD THIS LINE (very important!)
 from app.utils.auth import token_required
 from app.utils.gl_utils import post_to_ledger, generate_transaction_number_partone
 from datetime import datetime
@@ -585,8 +586,8 @@ def get_sale_edit(sale_id):
 
 
 @token_required
-@sales_bp.route('/edit', methods=['POST'])
-def create_or_update_sale():
+@sales_bp.route('/edit_old', methods=['POST'])
+def create_or_update_sale_old():
     data = request.json
 
     try:
@@ -800,4 +801,233 @@ def create_or_update_sale():
     except Exception as e:
         db.session.rollback()
         current_app.logger.error(f"Sale creation/update failed: {str(e)}")
+        return jsonify({"error": "Failed to process sale"}), 500
+    
+
+
+
+
+
+@token_required
+@sales_bp.route('/edit', methods=['POST'])
+def create_or_update_sale():
+    data = request.json
+
+    try:
+        sale_id = data.get("sale_id")  # present when updating
+        items = data.get('items', [])
+        amount_paid = float(data.get('amount_paid', 0))
+        payment_account_id = data.get('payment_account_id')
+        sale_date_str = data.get("sale_date")
+        payment_type = data.get('payment_type', 'Cash')
+        memo = data.get("memo", "")
+        customer_id = data.get("customer_id", 1)
+
+        if not items:
+            return jsonify({"error": "At least one item is required"}), 400
+
+        # Parse sale date
+        try:
+            sale_date = datetime.strptime(sale_date_str, "%Y-%m-%d").date() if sale_date_str else datetime.utcnow().date()
+        except ValueError:
+            return jsonify({"error": "Invalid date format. Use YYYY-MM-DD"}), 400
+
+        if amount_paid > 0 and not payment_account_id:
+            return jsonify({"error": "Payment account required when amount_paid > 0"}), 400
+
+        total_amount = 0.0
+        cogs_total = 0.0
+
+        if sale_id:
+            # === UPDATE MODE ===
+            sale = Sale.query.get_or_404(sale_id)
+
+            # 1. Reverse / clean up old data
+            # Restore stock from old items
+            old_items = SaleItem.query.filter_by(sale_id=sale.id, status=1).all()
+            for old_item in old_items:
+                product = Product.query.get(old_item.product_id)
+                if product:
+                    unit = ProductUnit.query.get(old_item.unit_id)
+                    conv = unit.conversion_quantity if unit else 1
+                    restored_qty = old_item.quantity * conv
+                    product.quantity = float(product.quantity or 0) + restored_qty
+                    db.session.add(product)
+
+                # Soft-delete old sale item
+                old_item.status = 9
+                db.session.add(old_item)
+
+            # Soft-delete old inventory transactions
+            InventoryTransaction.query.filter_by(sale_id=sale.id, status=1).update({"status": 9})
+
+            # Soft-delete old payments (we'll re-create if needed)
+            Payment.query.filter_by(sale_id=sale.id, status=1).update({"status": 9})
+
+            # Optional: reverse GL entries (you can improve this later with proper reversal)
+            # For now we will post new entries below
+
+            # Update sale header
+            sale.customer_id = customer_id
+            sale.sale_date = sale_date
+            sale.memo = memo
+            sale.total_paid = amount_paid  # will be updated after new payment
+            sale.balance = 0  # recalculated later
+            sale.updated_at = datetime.utcnow()
+
+            # Keep original sale_number & transaction_no
+            txn_id = sale.transaction_no
+            txn_str = sale.sale_number
+
+            current_app.logger.info(f"Updating existing sale #{sale_id} - {txn_str}")
+
+        else:
+            # === CREATE MODE ===
+            txn_id, txn_str = generate_transaction_number_partone('INV', transaction_date=sale_date)
+
+            sale = Sale(
+                sale_number=txn_str,
+                customer_id=customer_id,
+                total_amount=0,
+                total_paid=amount_paid,
+                balance=0,
+                sale_date=sale_date,
+                memo=memo,
+                status=1,
+                transaction_no=txn_id
+            )
+            db.session.add(sale)
+            db.session.flush()  # get sale.id
+
+        # === COMMON: Process new items (create or re-create) ===
+        for idx, item_data in enumerate(items, start=1):
+            product_id = item_data.get("product_id")
+            unit_id = item_data.get("unit_id")
+            quantity = float(item_data.get("quantity", 0))
+            unit_price = float(item_data.get("unit_price", 0))
+
+            if not product_id or not unit_id:
+                return jsonify({"error": f"Product ID and Unit ID required for item #{idx}"}), 400
+
+            product = Product.query.get_or_404(product_id)
+
+            unit = ProductUnit.query.filter_by(id=unit_id, product_id=product_id, status=1).first()
+            if not unit:
+                return jsonify({"error": f"Invalid or inactive unit for product {product.name}"}), 400
+
+            base_qty_required = quantity * unit.conversion_quantity
+
+            # In update mode — we already restored old stock, so product.quantity is current + old
+            if product.quantity < base_qty_required:
+                return jsonify({"error": f"Insufficient stock for {product.name} ({unit.unit_name}). "
+                                        f"Available: {product.quantity}, Required: {base_qty_required}"}), 400
+
+            # Deduct new quantity
+            product.quantity -= base_qty_required
+            db.session.add(product)
+
+            latest_cost = get_latest_cost_price(product.id)
+            cogs_amount = latest_cost * base_qty_required
+
+            # Create new SaleItem
+            sale_item = SaleItem(
+                sale_id=sale.id,
+                product_id=product.id,
+                unit_id=unit.id,
+                product_name=product.name,
+                quantity=quantity,
+                unit_price=unit_price,
+                total_price=quantity * unit_price,
+                status=1
+            )
+            db.session.add(sale_item)
+
+            # New inventory transaction
+            inv_txn = InventoryTransaction(
+                transaction_no=txn_id,
+                sale_id=sale.id,
+                product_id=product.id,
+                unit_id=unit.id,
+                quantity=base_qty_required,
+                unit_price=latest_cost,
+                total_price=cogs_amount,
+                transaction_type='Sale',
+                status=1
+            )
+            db.session.add(inv_txn)
+
+            total_amount += sale_item.total_price
+            cogs_total += cogs_amount
+
+        # Update sale totals
+        sale.total_amount = total_amount
+        sale.balance = total_amount - amount_paid
+
+        if amount_paid >= total_amount:
+            sale.status = 1  # Fully paid
+        elif amount_paid > 0:
+            sale.status = 4  # Partial
+        else:
+            sale.status = 3  # Credit
+
+        sale.update_totals()  # if you have this method
+
+        # === General Ledger ===
+        entries = [
+            {"account_id": 4000, "transaction_type": "Credit", "amount": total_amount},     # Sales
+            {"account_id": 5000, "transaction_type": "Debit", "amount": cogs_total},       # COGS
+            {"account_id": 1200, "transaction_type": "Credit", "amount": cogs_total},      # Inventory
+        ]
+
+        if amount_paid > 0:
+            payment_account = Account.query.get(payment_account_id)
+            if not payment_account:
+                raise ValueError("Invalid payment account")
+
+            entries.append({"account_id": payment_account.code, "transaction_type": "Debit", "amount": amount_paid})
+
+            if sale.balance > 0:
+                entries.append({"account_id": 1100, "transaction_type": "Debit", "amount": sale.balance})
+        else:
+            entries.append({"account_id": 1100, "transaction_type": "Debit", "amount": total_amount})
+
+        post_to_ledger(
+            entries,
+            transaction_no_id=txn_id,
+            description=f"Sale Invoice #{txn_str} - {'Update' if sale_id else 'Create'}",
+            transaction_date=sale_date
+        )
+
+        # Record new payment if amount_paid > 0
+        if amount_paid > 0:
+            new_payment = Payment(
+                sale_id=sale.id,
+                amount=amount_paid,
+                payment_type=payment_type,
+                payment_date=sale_date,
+                reference=memo or txn_str,
+                payment_account_id=payment_account_id,
+                transaction_no=txn_id,
+                status=1
+            )
+            db.session.add(new_payment)
+
+        db.session.commit()
+
+        return jsonify({
+            "message": f"Sale {'updated' if sale_id else 'created'} successfully",
+            "sale_id": sale.id,
+            "sale_number": sale.sale_number,
+            "total_amount": total_amount,
+            "amount_paid": amount_paid,
+            "balance": sale.balance,
+            "sale_date": sale.sale_date.strftime("%Y-%m-%d")
+        }), 200 if sale_id else 201
+
+    except ValueError as ve:
+        db.session.rollback()
+        return jsonify({"error": str(ve)}), 400
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Sale {'update' if sale_id else 'create'} failed: {str(e)}", exc_info=True)
         return jsonify({"error": "Failed to process sale"}), 500

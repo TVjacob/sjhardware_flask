@@ -133,6 +133,7 @@
                   </template>
                 </v-autocomplete>
 
+                <!-- Selected Product – Very Clear Green Badge -->
                 <div
                   v-if="item.product_name"
                   class="bg-green-50 border border-green-200 px-4 py-3 rounded-lg text-base font-medium text-green-800 shadow-sm flex justify-between items-center"
@@ -149,9 +150,6 @@
                 <span class="text-lg">{{ item.available_in_unit ? item.available_in_unit.toFixed(3) : '0.000' }}</span>
                 <div v-if="item.unit_id" class="text-xs text-gray-500">
                   {{ selectedUnitName(index) || 'base units' }}
-                </div>
-                <div v-if="isEditMode && item.isExistingItem" class="text-xs text-amber-700 font-medium">
-                  (effective after reversal)
                 </div>
               </div>
             </td>
@@ -172,6 +170,7 @@
                   @update:model-value="() => updateUnitPriceAndStock(index)"
                 ></v-select>
 
+                <!-- Selected Unit – Very Clear Blue Badge -->
                 <div
                   v-if="item.unit_id && selectedUnitName(index)"
                   class="bg-indigo-50 border border-indigo-200 px-4 py-3 rounded-lg text-base font-medium text-indigo-800 text-center shadow-sm"
@@ -181,12 +180,12 @@
               </div>
             </td>
 
-            <!-- Cost Price -->
+            <!-- Cost Price (Last Purchase Price) - Read Only -->
             <td class="p-4 text-center font-medium text-gray-600">
               {{ formatPrice(item.cost_price || 0) }}
             </td>
 
-            <!-- Unit Price -->
+            <!-- Editable Selling Price -->
             <td class="p-4">
               <div class="space-y-1">
                 <input
@@ -225,7 +224,7 @@
               />
             </td>
 
-            <!-- Line Total -->
+            <!-- Editable Line Total -->
             <td class="p-4">
               <input
                 type="number"
@@ -288,7 +287,7 @@
       </button>
     </div>
 
-    <!-- Blocking Overlay -->
+    <!-- Blocking Overlay during save -->
     <div
       v-if="saving"
       class="absolute inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 rounded-xl"
@@ -419,7 +418,7 @@ const selectProduct = (productId, index) => {
   item.line_total = 0
   item.stock_base = product.quantity
   item.has_manual_price = false
-  item.isExistingItem = false
+  item.isExistingItem = false   // New item → use current price logic
 
   item.productSearchResults = []
 }
@@ -431,9 +430,11 @@ const updateUnitPriceAndStock = (index) => {
 
   item.suggested_price = selectedUnit.retail_price || 0
 
+  // For new items (or when user hasn't manually set price): use current retail price
   if (!item.isExistingItem && !item.has_manual_price) {
     item.unit_price = selectedUnit.retail_price || 0
   }
+  // For existing items: keep the historical price unless manually changed
 
   item.available_in_unit = item.stock_base / selectedUnit.conversion_quantity || 0
   calculateLineTotal(index)
@@ -476,7 +477,7 @@ const addItemRow = () => {
     selectedProductObj: null,
     loadingProduct: false,
     has_manual_price: false,
-    isExistingItem: false
+    isExistingItem: false   // New rows always use current price
   })
 }
 
@@ -501,7 +502,6 @@ const saveSale = async () => {
   // Validation
   for (let i = 0; i < saleItems.value.length; i++) {
     const item = saleItems.value[i]
-
     if (!item.product_id) {
       notification.value = `Row ${i + 1}: Select a product`
       return
@@ -514,21 +514,9 @@ const saveSale = async () => {
       notification.value = `Row ${i + 1}: Enter quantity > 0`
       return
     }
-
-    // ────────────────────────────────────────────────
-    // Key change: during EDIT, do NOT block on stock
-    // Backend will restore old qty before deducting new one
-    // ────────────────────────────────────────────────
-    if (!isEditMode.value && item.quantity > item.available_in_unit) {
-      notification.value = `Row ${i + 1}: Not enough stock (available: ${item.available_in_unit.toFixed(3)})`
+    if (item.quantity > item.available_in_unit) {
+      notification.value = `Row ${i + 1}: Not enough stock`
       return
-    }
-
-    // Optional: warn in edit mode if quantity looks unreasonably high
-    if (isEditMode.value && item.isExistingItem && item.quantity > item.available_in_unit * 2) {
-      if (!confirm(`Row ${i + 1}: Quantity ${item.quantity} is much higher than effective stock (${item.available_in_unit.toFixed(3)}). Continue?`)) {
-        return
-      }
     }
   }
 
@@ -548,7 +536,6 @@ const saveSale = async () => {
   }
 
   saving.value = true
-  notification.value = ''
 
   try {
     let res
@@ -557,17 +544,17 @@ const saveSale = async () => {
       notification.value = `Sale #${saleId.value} updated successfully!`
     } else {
       res = await api.post('/sales/', payload)
-      notification.value = `Sale #${res.data.sale_number || res.data.sale_id} created successfully!`
+      notification.value = `Sale #${res.data.sale_id} created successfully!`
     }
 
     await new Promise(resolve => setTimeout(resolve, 1800))
     router.push('/saleslist')
   } catch (err) {
-    console.error('Save failed:', err)
-    notification.value = err.response?.data?.error || 'Failed to save sale. Check stock or server logs.'
+    console.error(err)
+    notification.value = err.response?.data?.error || 'Failed to save sale'
   } finally {
     saving.value = false
-    setTimeout(() => { notification.value = '' }, 6000)
+    setTimeout(() => notification.value = '', 5000)
   }
 }
 
@@ -589,7 +576,7 @@ const loadSaleForEdit = async (id) => {
       category_name: i.category_name,
       units: i.units,
       unit_id: i.unit_id,
-      unit_price: i.unit_price,
+      unit_price: i.unit_price,               // Preserve historical selling price
       suggested_price: i.suggested_price || 0,
       cost_price: i.last_purchase_price || i.cost_price || 0,
       quantity: i.quantity,
@@ -598,26 +585,27 @@ const loadSaleForEdit = async (id) => {
       available_in_unit: i.max_quantity_allowed || 0,
       selectedProductObj: { id: i.product_id, name: i.product_name },
       loadingProduct: false,
-      has_manual_price: true,
-      isExistingItem: true
+      has_manual_price: true,                 // Historical price is considered "manual"
+      isExistingItem: true                    // Flag to prevent price override
     }))
 
-    // Refresh display values
+    // Update display values (suggested price & stock), but keep historical unit_price
     saleItems.value.forEach((item, idx) => {
       if (item.units?.length) {
         const selected = item.units.find(u => u.id === item.unit_id)
         if (selected) {
           item.suggested_price = selected.retail_price || 0
-          updateUnitPriceAndStock(idx)
+          updateUnitPriceAndStock(idx)  // Updates stock only
         }
       }
     })
   } catch (err) {
-    notification.value = 'Failed to load sale for editing'
-    console.error('Load edit failed:', err)
+    notification.value = 'Failed to load sale details'
+    console.error(err)
   }
 }
 
+// Init
 onMounted(async () => {
   await fetchCustomers()
   await fetchPaymentAccounts()
@@ -631,6 +619,7 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+/* Fade in/out animation for notification */
 @keyframes fadeInOut {
   0% { opacity: 0; transform: translateY(20px); }
   10% { opacity: 1; transform: translateY(0); }
@@ -642,11 +631,13 @@ onMounted(async () => {
   animation: fadeInOut 5s forwards;
 }
 
+/* Disabled style enhancement */
 :disabled {
   opacity: 0.65;
   cursor: not-allowed;
 }
 
+/* Make selected badges stand out */
 .bg-green-50 {
   background-color: #f0fdf4 !important;
   border-color: #dcfce7 !important;
