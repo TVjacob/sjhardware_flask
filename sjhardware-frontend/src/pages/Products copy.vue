@@ -30,12 +30,6 @@
         <button @click="fetchProducts" class="btn-gray">Refresh</button>
       </div>
 
-      <!-- Export Buttons -->
-      <div class="mb-6 flex gap-3">
-        <button @click="exportToExcel" class="btn-primary">Export to Excel</button>
-        <button @click="exportToPDF" class="btn-primary">Export to PDF</button>
-      </div>
-
       <!-- Products Table -->
       <div class="bg-white rounded-xl shadow overflow-hidden">
         <table class="min-w-full">
@@ -43,9 +37,9 @@
             <tr>
               <th class="th">ID</th>
               <th class="th">Name</th>
-              <th class="th">Description</th>
               <th class="th">SKU</th>
               <th class="th">Cost Price</th>
+
               <th class="th">Category</th>
               <th class="th text-center">Stock (Base Units)</th>
               <th class="th">Units & Prices</th>
@@ -56,9 +50,9 @@
             <tr v-for="p in displayedProducts" :key="p.id" class="hover:bg-blue-50 transition">
               <td class="td text-center">{{ p.id }}</td>
               <td class="td font-medium">{{ p.name }}</td>
-              <td class="td">{{ p.description || '-' }}</td>
               <td class="td">{{ p.sku }}</td>
               <td class="td">{{formatPrice( p.cost_price )}}</td>
+
               <td class="td">{{ p.category_name || '-' }}</td>
               <td class="td text-center font-bold text-lg">
                 <span :class="p.quantity > 10 ? 'text-green-600' : p.quantity > 0 ? 'text-orange-600' : 'text-red-600'">
@@ -131,14 +125,6 @@
               <div>
                 <label class="block text-sm font-medium mb-1">SKU (Unique) *</label>
                 <input v-model="productForm.sku" placeholder="e.g. MF-001" class="input" required />
-              </div>
-              <div>
-                <label class="block text-sm font-medium mb-1">Cost Price (UGX) *</label>
-                <input v-model.number="productForm.cost_price" type="number" min="0" step="100" placeholder="e.g. 1000" class="input" required />
-              </div>
-              <div class="md:col-span-2">
-                <label class="block text-sm font-medium mb-1">Description (Optional)</label>
-                <textarea v-model="productForm.description" placeholder="Brief product description..." class="input h-24"></textarea>
               </div>
               <div class="md:col-span-2">
                 <label class="block text-sm font-medium mb-1">Category</label>
@@ -261,9 +247,6 @@
 <script setup>
 import { ref, onMounted } from 'vue';
 import api from '../api';
-import jsPDF from 'jspdf';
-import 'jspdf-autotable';
-import * as XLSX from 'xlsx';
 
 const activeTab = ref('products');
 const products = ref([]);
@@ -282,8 +265,6 @@ const productForm = ref({
   id: null,
   name: '',
   sku: '',
-  description: '',
-  cost_price: 0,
   category_id: null,
   units: []
 });
@@ -339,6 +320,38 @@ const debouncedSearch = () => {
   }, 300);
 };
 
+// // Product Modal
+// const openProductModal = (product = null) => {
+//   if (product) {
+//     editingProduct.value = product;
+//     productForm.value = {
+//       id: product.id,
+//       name: product.name,
+//       sku: product.sku,
+//       category_id: product.category_id || null,
+//       units: product.units.length > 0 
+//         ? product.units.map(u => ({
+//             ...u,
+//             conversion_quantity: u.conversion_quantity || 1,
+//             retail_price: u.retail_price || 0
+//           }))
+//         : [{ unit_name: '', conversion_quantity: 1, retail_price: 0 }]
+//     };
+//   } else {
+//     editingProduct.value = null;
+//     productForm.value = {
+//       id: null,
+//       name: '',
+//       sku: '',
+//       category_id: null,
+//       units: [{ unit_name: 'Kilo', conversion_quantity: 1, retail_price: 0 }]
+//     };
+//   }
+//   showProductModal.value = true;
+// };
+
+
+
 // Open edit modal
 const openProductModal = async (product = null) => {
   if (product) {
@@ -354,8 +367,6 @@ const openProductModal = async (product = null) => {
       id: core.id,
       name: core.name,
       sku: core.sku,
-      description: core.description || '',
-      cost_price: core.cost_price || 0,
       category_id: core.category_id,
       units: units.length ? units : [{ unit_name: '', conversion_quantity: 1, retail_price: 0 }]
     };
@@ -366,8 +377,6 @@ const openProductModal = async (product = null) => {
       id: null,
       name: '',
       sku: '',
-      description: '',
-      cost_price: 0,
       category_id: null,
       units: [{ unit_name: 'Kilo', conversion_quantity: 1, retail_price: 0 }]
     };
@@ -401,7 +410,6 @@ const saveProduct = async () => {
   // Validation
   if (!productForm.value.name.trim()) return notify('Product name is required');
   if (!productForm.value.sku.trim()) return notify('SKU is required');
-  if (productForm.value.cost_price < 0) return notify('Cost price cannot be negative');
   if (productForm.value.units.some(u => !u.unit_name.trim())) return notify('All units must have a name');
   if (productForm.value.units.some(u => u.conversion_quantity <= 0)) return notify('Conversion must be > 0');
   if (productForm.value.units.some(u => u.retail_price < 0)) return notify('Price cannot be negative');
@@ -434,46 +442,6 @@ const deleteProduct = async (id) => {
   } catch {
     notify('Failed to delete');
   }
-};
-
-// Export Functions
-const exportToExcel = () => {
-  const data = products.value.map(p => ({
-    ID: p.id,
-    Name: p.name,
-    Description: p.description || '',
-    SKU: p.sku,
-    'Cost Price': p.cost_price,
-    Category: p.category_name || '',
-    'Stock (Base Units)': p.quantity,
-    'Units & Rates': p.units.map(u => `${u.unit_name} (${u.conversion_quantity} base) - ${u.retail_price} UGX`).join('; ')
-  }));
-
-  const ws = XLSX.utils.json_to_sheet(data);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Products');
-  XLSX.writeFile(wb, 'products_inventory.xlsx');
-};
-
-const exportToPDF = () => {
-  const doc = new jsPDF();
-  doc.setFontSize(18);
-  doc.text('Products Inventory', 14, 22);
-
-  const columns = ['ID', 'Name', 'Description', 'SKU', 'Cost Price', 'Category', 'Stock', 'Units & Rates'];
-  const rows = products.value.map(p => [
-    p.id,
-    p.name,
-    p.description || '',
-    p.sku,
-    p.cost_price,
-    p.category_name || '',
-    p.quantity,
-    p.units.map(u => `${u.unit_name} (${u.conversion_quantity} base) ${u.retail_price} UGX`).join('\n')
-  ]);
-
-  doc.autoTable({ head: [columns], body: rows, startY: 30 });
-  doc.save('products_inventory.pdf');
 };
 
 // Category Modal
