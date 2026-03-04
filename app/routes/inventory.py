@@ -180,7 +180,7 @@ def list_products():
 @token_required
 @inventory_bp.route('/products/<int:id>', methods=['GET'])
 def get_product(id):
-    rebuild_product_quantities()
+    # rebuild_product_quantities()
     p = Product.query.get_or_404(id)
     cat = Category.query.filter_by(id=p.category_id, status=1).first()
 
