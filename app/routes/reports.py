@@ -1462,7 +1462,7 @@ def purchase_report():
     # Fetch paginated results
     results = (
         base_query
-        .order_by(PurchaseOrder.purchase_date.desc(), PurchaseOrder.id, Product.name)
+        .order_by(PurchaseOrder.id.desc(), Product.name)
         .limit(per_page)
         .offset((page - 1) * per_page)
         .all()
