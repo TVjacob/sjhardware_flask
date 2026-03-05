@@ -408,6 +408,122 @@ def delete_category(id):
 
 
 
+# @token_required
+# @inventory_bp.route('/products/search', methods=['GET'])
+# def search_products():
+#     query = request.args.get('name', '').strip()
+#     if not query:
+#         return jsonify([])
+
+#     search_pattern = f"%{query}%"
+
+#     # Main product query (active only, limit results)
+#     products = (
+#         Product.query
+#         .filter(
+#             Product.status == 1,
+#             or_(
+#                 Product.name.ilike(search_pattern),
+#                 Product.sku.ilike(search_pattern)
+#             )
+#         )
+#         .options(joinedload(Product.category))
+#         .limit(20)
+#         .all()
+#     )
+
+#     # Subquery: Get the latest purchase date per product
+#     latest_po_subq = (
+#         db.session.query(
+#             PurchaseOrderItem.product_id,
+#             func.max(PurchaseOrder.purchase_date).label('latest_date')
+#         )
+#         .join(PurchaseOrder, PurchaseOrder.id == PurchaseOrderItem.purchase_order_id)
+#         .filter(PurchaseOrder.status == 1, PurchaseOrderItem.status == 1)
+#         .group_by(PurchaseOrderItem.product_id)
+#         .subquery()
+#     )
+
+#     # Subquery: Get latest purchase price + unit for each product
+#     latest_price_subq = (
+#         db.session.query(
+#             PurchaseOrderItem.product_id,
+#             PurchaseOrderItem.unit_id,
+#             PurchaseOrderItem.unit_price,
+#             PurchaseOrderItem.quantity.label('po_quantity')  # optional - can be used for weighted avg later
+#         )
+#         .join(PurchaseOrder, PurchaseOrder.id == PurchaseOrderItem.purchase_order_id)
+#         .join(latest_po_subq, and_(
+#             PurchaseOrderItem.product_id == latest_po_subq.c.product_id,
+#             PurchaseOrder.purchase_date == latest_po_subq.c.latest_date
+#         ))
+#         .filter(PurchaseOrder.status == 1, PurchaseOrderItem.status == 1)
+#         .subquery()
+#     )
+
+#     result = []
+
+#     for product in products:
+#         category = product.category
+
+#         # Get all active units for this product
+#         units = ProductUnit.query.filter_by(product_id=product.id, status=1).all()
+
+#         # Get latest purchase record (if any)
+#         latest_purchase = (
+#             db.session.query(latest_price_subq)
+#             .filter(latest_price_subq.c.product_id == product.id)
+#             .first()
+#         )
+
+#         units_data = []
+
+#         if latest_purchase:
+#             # Latest purchase info
+#             po_unit_id = latest_purchase.unit_id
+#             po_unit_price = float(latest_purchase.unit_price or 0)
+
+#             # Get the conversion quantity of the purchased unit
+#             po_unit = ProductUnit.query.get(po_unit_id)
+#             po_conversion = float(po_unit.conversion_quantity) if po_unit else 1.0
+
+#             # Calculate base-unit purchase price
+#             base_purchase_price = po_unit_price / po_conversion if po_conversion > 0 else po_unit_price
+#         else:
+#             # No purchase history → fallback to 0
+#             base_purchase_price = 0.0
+
+#         for unit in units:
+#             conversion = float(unit.conversion_quantity or 1)
+
+#             # Calculate purchase price for THIS unit
+#             # = base price * this unit's conversion
+#             unit_purchase_price = base_purchase_price * conversion
+
+#             units_data.append({
+#                 "id": unit.id,
+#                 "unit_name": unit.unit_name,
+#                 "conversion_quantity": conversion,
+#                 "retail_price": float(unit.retail_price or 0),
+#                 "wholesale_price": float(unit.wholesale_price or 0),
+#                 "is_returnable": bool(unit.is_returnable),
+#                 "unit_code": unit.unit_code or "",
+#                 "purchase_price": round(unit_purchase_price, 2)  # ← this is what you want!
+#             })
+
+#         result.append({
+#             "id": product.id,
+#             "name": product.name,
+#             "sku": product.sku,
+#             "category_id": product.category_id,
+#             "category_name": category.name if category else None,
+#             "quantity": round(float(product.quantity or 0), 4),
+#             "units": units_data
+#         })
+
+#     return jsonify(result)
+
+
 @token_required
 @inventory_bp.route('/products/search', methods=['GET'])
 def search_products():
@@ -417,7 +533,7 @@ def search_products():
 
     search_pattern = f"%{query}%"
 
-    # Main product query (active only, limit results)
+    # Main product query
     products = (
         Product.query
         .filter(
@@ -432,72 +548,75 @@ def search_products():
         .all()
     )
 
-    # Subquery: Get the latest purchase date per product
-    latest_po_subq = (
-        db.session.query(
-            PurchaseOrderItem.product_id,
-            func.max(PurchaseOrder.purchase_date).label('latest_date')
-        )
-        .join(PurchaseOrder, PurchaseOrder.id == PurchaseOrderItem.purchase_order_id)
-        .filter(PurchaseOrder.status == 1, PurchaseOrderItem.status == 1)
-        .group_by(PurchaseOrderItem.product_id)
-        .subquery()
-    )
+    if not products:
+        return jsonify([])
 
-    # Subquery: Get latest purchase price + unit for each product
-    latest_price_subq = (
+    product_ids = [p.id for p in products]
+
+    # Subquery: Get the single most recent purchase per product
+    # Using ROW_NUMBER() to pick exactly one record when dates are tied
+    latest_po_cte = (
         db.session.query(
             PurchaseOrderItem.product_id,
             PurchaseOrderItem.unit_id,
             PurchaseOrderItem.unit_price,
-            PurchaseOrderItem.quantity.label('po_quantity')  # optional - can be used for weighted avg later
+            PurchaseOrderItem.quantity,
+            PurchaseOrder.purchase_date,
+            func.row_number().over(
+                partition_by=PurchaseOrderItem.product_id,
+                order_by=[
+                    PurchaseOrder.purchase_date.desc(),
+                    PurchaseOrderItem.id.desc()  # deterministic tie-breaker
+                ]
+            ).label('rn')
         )
         .join(PurchaseOrder, PurchaseOrder.id == PurchaseOrderItem.purchase_order_id)
-        .join(latest_po_subq, and_(
-            PurchaseOrderItem.product_id == latest_po_subq.c.product_id,
-            PurchaseOrder.purchase_date == latest_po_subq.c.latest_date
-        ))
-        .filter(PurchaseOrder.status == 1, PurchaseOrderItem.status == 1)
-        .subquery()
+        .filter(
+            PurchaseOrder.status != 9,
+            PurchaseOrderItem.status != 9,
+            PurchaseOrderItem.product_id.in_(product_ids)
+        )
+        .cte('latest_po')
     )
+
+    # Get only the latest row (rn = 1) for each product
+    latest_purchases = (
+        db.session.query(latest_po_cte)
+        .filter(latest_po_cte.c.rn == 1)
+        .all()
+    )
+
+    # Make lookup dict: product_id → latest purchase info
+    latest_dict = {lp.product_id: lp for lp in latest_purchases}
 
     result = []
 
     for product in products:
         category = product.category
 
-        # Get all active units for this product
-        units = ProductUnit.query.filter_by(product_id=product.id, status=1).all()
+        # Get latest purchase for this product (if exists)
+        latest = latest_dict.get(product.id)
 
-        # Get latest purchase record (if any)
-        latest_purchase = (
-            db.session.query(latest_price_subq)
-            .filter(latest_price_subq.c.product_id == product.id)
-            .first()
-        )
-
-        units_data = []
-
-        if latest_purchase:
-            # Latest purchase info
-            po_unit_id = latest_purchase.unit_id
-            po_unit_price = float(latest_purchase.unit_price or 0)
-
-            # Get the conversion quantity of the purchased unit
-            po_unit = ProductUnit.query.get(po_unit_id)
+        # Calculate base-unit purchase price
+        if latest:
+            po_unit = ProductUnit.query.get(latest.unit_id)
             po_conversion = float(po_unit.conversion_quantity) if po_unit else 1.0
+            po_unit_price = float(latest.unit_price or 0)
 
-            # Calculate base-unit purchase price
+            # Base price = price per base unit
             base_purchase_price = po_unit_price / po_conversion if po_conversion > 0 else po_unit_price
         else:
-            # No purchase history → fallback to 0
             base_purchase_price = 0.0
+
+        # Load all active units
+        units = ProductUnit.query.filter_by(product_id=product.id, status=1).all()
+
+        units_data = []
 
         for unit in units:
             conversion = float(unit.conversion_quantity or 1)
 
-            # Calculate purchase price for THIS unit
-            # = base price * this unit's conversion
+            # Purchase price in this unit = base price × conversion factor
             unit_purchase_price = base_purchase_price * conversion
 
             units_data.append({
@@ -508,7 +627,10 @@ def search_products():
                 "wholesale_price": float(unit.wholesale_price or 0),
                 "is_returnable": bool(unit.is_returnable),
                 "unit_code": unit.unit_code or "",
-                "purchase_price": round(unit_purchase_price, 2)  # ← this is what you want!
+                "purchase_price": round(unit_purchase_price, 2),  # ← final value per unit
+                # Optional: show source info (good for debugging)
+                "last_purchase_date": latest.purchase_date.strftime('%Y-%m-%d') if latest else None,
+                "source_unit_id": latest.unit_id if latest else None
             })
 
         result.append({
