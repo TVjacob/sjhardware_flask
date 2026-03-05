@@ -16,7 +16,7 @@
     <!-- Grand Total Card -->
     <div class="bg-white dark:bg-gray-800 rounded-2xl shadow border border-gray-200 dark:border-gray-700 p-6">
       <div class="flex justify-between items-center">
-        <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-200">
+        <h2 class="text-lg font-semibold text-black">
           Total Expenses Recorded
         </h2>
         <p class="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
@@ -30,7 +30,7 @@
       <div class="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-5 gap-5">
         <!-- Search -->
         <div>
-          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Search</label>
+          <label class="block text-sm font-medium text-black mb-1.5">Search</label>
           <input
             v-model="searchQuery"
             placeholder="Description, item, reference..."
@@ -42,7 +42,7 @@
 
         <!-- From Date -->
         <div>
-          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">From Date</label>
+          <label class="block text-sm font-medium text-black mb-1.5">From Date</label>
           <input
             v-model="dateRange.start"
             type="date"
@@ -54,7 +54,7 @@
 
         <!-- To Date -->
         <div>
-          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">To Date</label>
+          <label class="block text-sm font-medium text-black mb-1.5">To Date</label>
           <input
             v-model="dateRange.end"
             type="date"
