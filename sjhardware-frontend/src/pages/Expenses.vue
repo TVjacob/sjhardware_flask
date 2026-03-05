@@ -709,33 +709,117 @@ export default {
       }
     },
 
+    // exportExcel() {
+    //   try {
+    //     const ws = XLSX.utils.json_to_sheet(this.expenses);
+    //     const wb = XLSX.utils.book_new();
+    //     XLSX.utils.book_append_sheet(wb, ws, "Expenses");
+    //     XLSX.writeFile(wb, "expenses.xlsx");
+    //   } catch (err) {
+    //     console.error("❌ Error exporting Excel:", err);
+    //     alert("Failed to export Excel.");
+    //   }
+    // },
+
+    // exportPDF() {
+    //   try {
+    //     const doc = new jsPDF();
+    //     doc.autoTable({
+    //       head: [["ID", "Description", "Total Amount", "Reference", "Expense Date", "Transaction No"]],
+    //       body: this.expenses.map(e => [
+    //         e.id,
+    //         e.description,
+    //         e.total_amount,
+    //         e.reference,
+    //         e.expense_date,
+    //         e.transaction_no
+    //       ])
+    //     });
+    //     doc.save("expenses.pdf");
+    //   } catch (err) {
+    //     console.error("❌ Error exporting PDF:", err);
+    //     alert("Failed to export PDF.");
+    //   }
+    // },
+
+    // ────────────────────────────────────────────────
+    // EXPORT EXCEL – now includes narration per item
+    // ────────────────────────────────────────────────
     exportExcel() {
       try {
-        const ws = XLSX.utils.json_to_sheet(this.expenses);
+        const exportData = [];
+
+        this.expenses.forEach(expense => {
+          // Main expense row
+          exportData.push({
+            ID: expense.id,
+            Description: expense.description,
+            Narration: expense.items?.length === 1 ? (expense.items[0].description || '—') : `Multiple (${expense.items.length})`,
+            "Total Amount": expense.total_amount,
+            Reference: expense.reference || '—',
+            "Expense Date": expense.expense_date,
+            "Transaction No": expense.transaction_no || '—'
+          });
+
+          // Add one row per item with full narration
+          expense.items.forEach(item => {
+            exportData.push({
+              ID: `  └ Item ${item.id}`,
+              Description: `  └ ${item.item_name}`,
+              Narration: item.description || '—',
+              "Total Amount": item.amount,
+              Reference: '',
+              "Expense Date": '',
+              "Transaction No": ''
+            });
+          });
+        });
+
+        const ws = XLSX.utils.json_to_sheet(exportData);
         const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "Expenses");
-        XLSX.writeFile(wb, "expenses.xlsx");
+        XLSX.utils.book_append_sheet(wb, ws, "Expenses with Narration");
+        XLSX.writeFile(wb, "expenses_with_narration.xlsx");
       } catch (err) {
         console.error("❌ Error exporting Excel:", err);
         alert("Failed to export Excel.");
       }
     },
 
+    // ────────────────────────────────────────────────
+    // EXPORT PDF – now includes narration column
+    // ────────────────────────────────────────────────
     exportPDF() {
       try {
         const doc = new jsPDF();
+        doc.setFontSize(16);
+        doc.text("Expenses Report with Narration", 14, 20);
+
+        const tableData = this.expenses.map(expense => [
+          expense.id,
+          expense.description,
+          expense.items?.length === 1 
+            ? (expense.items[0].description || '—') 
+            : `Multiple narrations (${expense.items.length})`,
+          expense.total_amount,
+          expense.reference || '—',
+          expense.expense_date,
+          expense.transaction_no || '—'
+        ]);
+
         doc.autoTable({
-          head: [["ID", "Description", "Total Amount", "Reference", "Expense Date", "Transaction No"]],
-          body: this.expenses.map(e => [
-            e.id,
-            e.description,
-            e.total_amount,
-            e.reference,
-            e.expense_date,
-            e.transaction_no
-          ])
+          head: [["ID", "Description", "Narration", "Total Amount", "Reference", "Date", "Trans. #"]],
+          body: tableData,
+          startY: 30,
+          styles: { fontSize: 9, cellPadding: 3 },
+          headStyles: { fillColor: [79, 70, 229] }, // indigo
+          alternateRowStyles: { fillColor: [243, 244, 246] },
+          columnStyles: {
+            2: { cellWidth: 60 } // wider narration column
+          },
+          margin: { top: 30 }
         });
-        doc.save("expenses.pdf");
+
+        doc.save("expenses_report.pdf");
       } catch (err) {
         console.error("❌ Error exporting PDF:", err);
         alert("Failed to export PDF.");
