@@ -1,10 +1,13 @@
 
 from flask import Blueprint, request, jsonify
 from app import db
-from app.models import Product, Category, ProductUnit, PurchaseOrderItem
+from app.models import Product, Category, ProductUnit, PurchaseOrder, PurchaseOrderItem
 from datetime import datetime
 from sqlalchemy import or_, text
 from app.utils.auth import token_required
+from flask import Blueprint, request, jsonify
+from sqlalchemy import func, and_
+from sqlalchemy.orm import joinedload
 
 inventory_bp = Blueprint('inventory', __name__, url_prefix='/inventory')
 
@@ -353,6 +356,58 @@ def delete_category(id):
 # ----------------------------------------------------------------------
 # SEARCH PRODUCTS (for autocomplete in sales)
 # ----------------------------------------------------------------------
+# @token_required
+# @inventory_bp.route('/products/search', methods=['GET'])
+# def search_products():
+#     query = request.args.get('name', '').strip()
+#     if not query:
+#         return jsonify([])
+
+#     # Search by name or SKU (case-insensitive)
+#     search_pattern = f"%{query}%"
+#     products = Product.query.filter(
+#         Product.status == 1,
+#         or_(
+#             Product.name.ilike(search_pattern),
+#             Product.sku.ilike(search_pattern)
+#         )
+#     ).limit(20).all()  # limit results for performance
+#     # details = db.session.query(PurchaseOrderItem.unit_price).filter(PurchaseOrderItem.product_id).first()
+
+
+#     result = []
+#     for p in products:
+#         cat = Category.query.get(p.category_id)
+
+#         # Load units
+#         units = ProductUnit.query.filter_by(product_id=p.id, status=1).all()
+#         purchase_price = PurchaseOrderItem.query.filter_by(product_id=p.id, status=1).first()
+
+#         units_data = [{
+#             "id": u.id,
+#             "unit_name": u.unit_name,
+#             "conversion_quantity": float(u.conversion_quantity),
+#             "retail_price": float(u.retail_price or 0),
+#             "wholesale_price": float(u.wholesale_price or 0),
+#             "is_returnable": bool(u.is_returnable),
+#             "unit_code": u.unit_code,
+#             "purchase_price":purchase_price.unit_price if purchase_price else 0
+#         } for u in units]
+
+#         result.append({
+#             "id": p.id,
+#             "name": p.name,
+#             "sku": p.sku,
+#             "category_id": p.category_id,
+#             "category_name": cat.name if cat else None,
+#             "quantity": round(float(p.quantity), 4),
+#             "units": units_data  # ← Critical for sales page!
+#         })
+
+#     return jsonify(result)
+
+
+
 @token_required
 @inventory_bp.route('/products/search', methods=['GET'])
 def search_products():
@@ -360,45 +415,110 @@ def search_products():
     if not query:
         return jsonify([])
 
-    # Search by name or SKU (case-insensitive)
     search_pattern = f"%{query}%"
-    products = Product.query.filter(
-        Product.status == 1,
-        or_(
-            Product.name.ilike(search_pattern),
-            Product.sku.ilike(search_pattern)
-        )
-    ).limit(20).all()  # limit results for performance
-    # details = db.session.query(PurchaseOrderItem.unit_price).filter(PurchaseOrderItem.product_id).first()
 
+    # Main product query (active only, limit results)
+    products = (
+        Product.query
+        .filter(
+            Product.status == 1,
+            or_(
+                Product.name.ilike(search_pattern),
+                Product.sku.ilike(search_pattern)
+            )
+        )
+        .options(joinedload(Product.category))
+        .limit(20)
+        .all()
+    )
+
+    # Subquery: Get the latest purchase date per product
+    latest_po_subq = (
+        db.session.query(
+            PurchaseOrderItem.product_id,
+            func.max(PurchaseOrder.purchase_date).label('latest_date')
+        )
+        .join(PurchaseOrder, PurchaseOrder.id == PurchaseOrderItem.purchase_order_id)
+        .filter(PurchaseOrder.status == 1, PurchaseOrderItem.status == 1)
+        .group_by(PurchaseOrderItem.product_id)
+        .subquery()
+    )
+
+    # Subquery: Get latest purchase price + unit for each product
+    latest_price_subq = (
+        db.session.query(
+            PurchaseOrderItem.product_id,
+            PurchaseOrderItem.unit_id,
+            PurchaseOrderItem.unit_price,
+            PurchaseOrderItem.quantity.label('po_quantity')  # optional - can be used for weighted avg later
+        )
+        .join(PurchaseOrder, PurchaseOrder.id == PurchaseOrderItem.purchase_order_id)
+        .join(latest_po_subq, and_(
+            PurchaseOrderItem.product_id == latest_po_subq.c.product_id,
+            PurchaseOrder.purchase_date == latest_po_subq.c.latest_date
+        ))
+        .filter(PurchaseOrder.status == 1, PurchaseOrderItem.status == 1)
+        .subquery()
+    )
 
     result = []
-    for p in products:
-        cat = Category.query.get(p.category_id)
 
-        # Load units
-        units = ProductUnit.query.filter_by(product_id=p.id, status=1).all()
-        purchase_price = PurchaseOrderItem.query.filter_by(product_id=p.id, status=1).first()
+    for product in products:
+        category = product.category
 
-        units_data = [{
-            "id": u.id,
-            "unit_name": u.unit_name,
-            "conversion_quantity": float(u.conversion_quantity),
-            "retail_price": float(u.retail_price or 0),
-            "wholesale_price": float(u.wholesale_price or 0),
-            "is_returnable": bool(u.is_returnable),
-            "unit_code": u.unit_code,
-            "purchase_price":purchase_price.unit_price if purchase_price else 0
-        } for u in units]
+        # Get all active units for this product
+        units = ProductUnit.query.filter_by(product_id=product.id, status=1).all()
+
+        # Get latest purchase record (if any)
+        latest_purchase = (
+            db.session.query(latest_price_subq)
+            .filter(latest_price_subq.c.product_id == product.id)
+            .first()
+        )
+
+        units_data = []
+
+        if latest_purchase:
+            # Latest purchase info
+            po_unit_id = latest_purchase.unit_id
+            po_unit_price = float(latest_purchase.unit_price or 0)
+
+            # Get the conversion quantity of the purchased unit
+            po_unit = ProductUnit.query.get(po_unit_id)
+            po_conversion = float(po_unit.conversion_quantity) if po_unit else 1.0
+
+            # Calculate base-unit purchase price
+            base_purchase_price = po_unit_price / po_conversion if po_conversion > 0 else po_unit_price
+        else:
+            # No purchase history → fallback to 0
+            base_purchase_price = 0.0
+
+        for unit in units:
+            conversion = float(unit.conversion_quantity or 1)
+
+            # Calculate purchase price for THIS unit
+            # = base price * this unit's conversion
+            unit_purchase_price = base_purchase_price * conversion
+
+            units_data.append({
+                "id": unit.id,
+                "unit_name": unit.unit_name,
+                "conversion_quantity": conversion,
+                "retail_price": float(unit.retail_price or 0),
+                "wholesale_price": float(unit.wholesale_price or 0),
+                "is_returnable": bool(unit.is_returnable),
+                "unit_code": unit.unit_code or "",
+                "purchase_price": round(unit_purchase_price, 2)  # ← this is what you want!
+            })
 
         result.append({
-            "id": p.id,
-            "name": p.name,
-            "sku": p.sku,
-            "category_id": p.category_id,
-            "category_name": cat.name if cat else None,
-            "quantity": round(float(p.quantity), 4),
-            "units": units_data  # ← Critical for sales page!
+            "id": product.id,
+            "name": product.name,
+            "sku": product.sku,
+            "category_id": product.category_id,
+            "category_name": category.name if category else None,
+            "quantity": round(float(product.quantity or 0), 4),
+            "units": units_data
         })
 
     return jsonify(result)
