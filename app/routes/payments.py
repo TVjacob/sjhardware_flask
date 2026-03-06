@@ -249,7 +249,7 @@ def get_sale_details(sale_id, doc_type='invoice'):
 
     # Total amount paid
     total_paid = db.session.query(db.func.coalesce(db.func.sum(Payment.amount), 0)) \
-                            .filter(Payment.sale_id == sale.id).scalar()
+                            .filter(Payment.sale_id == sale.id, Payment.status!=9).scalar()
 
     balance = total_amount - total_paid
     change = abs(balance) if balance < 0 else 0
@@ -276,7 +276,7 @@ def get_sale_details(sale_id, doc_type='invoice'):
             "payment_account": Account.query.filter(Account.id == payment.payment_account_id).first().name if payment.payment_account_id else "",
             "reference": payment.reference
         }
-        for payment in Payment.query.filter_by(sale_id=sale.id).order_by(Payment.payment_date).all()
+        for payment in Payment.query.filter(Payment.sale_id==sale.id, Payment.status!=9).order_by(Payment.payment_date).all()
     ]
 
     return {

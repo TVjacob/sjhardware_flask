@@ -203,7 +203,7 @@ class Sale(db.Model, StatusMixin):
 
     def update_totals(self):
         """Recalculate total_amount, balance, and update payment_status automatically."""
-        self.total_amount = sum(item.total_price for item in self.items)
+        self.total_amount = sum(item.total_price if item.status !=9 else 0 for item in self.items)
         self.balance = self.total_amount - self.total_paid
 
         if self.balance <= 0:
@@ -255,6 +255,7 @@ class Payment(db.Model, StatusMixin):
 # ------------------ Transaction Log ------------------
 class InventoryTransaction(db.Model, StatusMixin):
     __tablename__ = 'inventory_transaction'
+    
 
     id = db.Column(db.Integer, primary_key=True)
     transaction_no = db.Column(db.Integer, db.ForeignKey('transaction_number.id'), nullable=False)  # link to GL
