@@ -154,10 +154,10 @@
         <!-- Invoice Header -->
         <div class="p-5 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/40 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
-            <h2 class="text-xl font-bold text-gray-900 dark:text-white">
+            <h2 class="text-xl font-bold ">
               {{ invoice.invoice }}
             </h2>
-            <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">
+            <p class="text-sm  mt-1">
               {{ invoice.date }} • {{ invoice.customer }}
             </p>
           </div>

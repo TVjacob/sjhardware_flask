@@ -1798,6 +1798,9 @@ def sales_profit_report():
     search = request.args.get("search", "").strip()
     start_date = request.args.get("start_date")
     end_date = request.args.get("end_date")
+    print("search ..   ", search)
+    print("start_date ..   ", start_date)
+    print("end_date ..   ", end_date)
 
     # ===================================================================
     # 1. Latest purchase per product (exactly ONE most recent record)
@@ -1857,7 +1860,7 @@ def sales_profit_report():
             latest_purchase,
             latest_purchase.c.product_id == Product.id
         )
-        .filter(Sale.status != 9)
+        .filter(Sale.status != 9 , SaleItem.status != 9)
     )
 
     # Search
@@ -1871,10 +1874,19 @@ def sales_profit_report():
         )
 
     # Date filter
+    # if start_date:
+    #     print("Filtering from date: ", start_date)
+    #     query = query.filter(cast(Sale.sale_date, String) >= start_date)
+    # if end_date:
+    #     print("Filtering to date: ", end_date)
+    #     query = query.filter(cast(Sale.sale_date, String) <= end_date)
     if start_date:
-        query = query.filter(cast(Sale.sale_date, String) >= start_date)
+        start_date = datetime.strptime(start_date, "%Y-%m-%d").date()
+        query = query.filter(func.date(Sale.sale_date) >= start_date)
+
     if end_date:
-        query = query.filter(cast(Sale.sale_date, String) <= end_date)
+        end_date = datetime.strptime(end_date, "%Y-%m-%d").date()
+        query = query.filter(func.date(Sale.sale_date) <= end_date)
 
     total_records = query.count()
     results = query.order_by(Sale.sale_date.desc()).paginate(
