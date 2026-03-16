@@ -1537,9 +1537,13 @@ def purchase_report():
             Category.name.label("category_name"),
             PurchaseOrderItem.quantity.label("quantity"),
             PurchaseOrderItem.unit_price.label("unit_price"),
-            PurchaseOrderItem.total_price.label("total_price")
+            PurchaseOrderItem.total_price.label("total_price"),
+            ProductUnit.unit_name.label("unit_name"),
+
         )
         .join(PurchaseOrderItem, PurchaseOrder.id == PurchaseOrderItem.purchase_order_id)
+        .join(ProductUnit, ProductUnit.id == PurchaseOrderItem.unit_id)
+
         .join(Product, Product.id == PurchaseOrderItem.product_id)
         .outerjoin(Category, Category.id == Product.category_id)
         .outerjoin(Supplier, Supplier.id == PurchaseOrder.supplier_id)
@@ -1602,7 +1606,9 @@ def purchase_report():
             "category": row.category_name or None,
             "quantity": float(qty),
             "unit_price": round(float(row.unit_price or 0), 2),
-            "total_price": float(total)
+            "total_price": float(total),
+            "unit_name": row.unit_name,
+
         })
 
     return jsonify({

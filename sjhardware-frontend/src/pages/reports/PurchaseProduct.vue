@@ -94,6 +94,8 @@
               <tr>
                 <th class="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">PO ID</th>
                 <th class="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Product</th>
+                <th class="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Unit</th>
+
                 <th class="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Category</th>
                 <th class="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Supplier</th>
                 <th class="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Invoice</th>
@@ -131,6 +133,8 @@
                 >
                   <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ row.purchase_id }}</td>
                   <td class="px-6 py-4 text-sm text-gray-900">{{ row.product }}</td>
+                  <td class="px-6 py-4 text-sm text-gray-900">{{ row.unit_name }}</td>
+
                   <td class="px-6 py-4 text-sm text-gray-600">{{ row.category || '—' }}</td>
                   <td class="px-6 py-4 text-sm text-gray-900">{{ row.supplier }}</td>
                   <td class="px-6 py-4 text-sm text-gray-900">{{ row.invoice_number }}</td>
