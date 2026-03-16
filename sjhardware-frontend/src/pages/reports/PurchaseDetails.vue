@@ -17,9 +17,9 @@
           Print
         </button>
       </div>
-  
+
       <div v-if="loading" class="text-gray-500">Loading...</div>
-  
+
       <!-- Printable Section -->
       <div id="print-section" v-else>
         <!-- Supplier Info -->
@@ -31,7 +31,7 @@
           <p><strong>Invoice #:</strong> {{ purchaseOrder.invoice_number }}</p>
           <p><strong>Purchase Date:</strong> {{ formatDate(purchaseOrder.purchase_date) }}</p>
         </div>
-  
+
         <!-- Items Table -->
         <div class="mb-6">
           <h2 class="text-lg font-bold mb-2">Ordered Items</h2>
@@ -39,6 +39,7 @@
             <thead>
               <tr class="bg-gray-200">
                 <th class="p-2 border">Product</th>
+                <th class="p-2 border">Unit</th>
                 <th class="p-2 border">Quantity</th>
                 <th class="p-2 border">Unit Price</th>
                 <th class="p-2 border">Total Price</th>
@@ -47,6 +48,7 @@
             <tbody>
               <tr v-for="item in purchaseOrder.items" :key="item.product_id">
                 <td class="p-2 border">{{ item.product_name }}</td>
+                <td class="p-2 border">{{ item.unit_name }}</td>
                 <td class="p-2 border">{{ item.quantity }}</td>
                 <td class="p-2 border">{{ formatCurrency(item.unit_price) }}</td>
                 <td class="p-2 border">{{ formatCurrency(item.total_price) }}</td>
@@ -54,7 +56,7 @@
             </tbody>
           </table>
         </div>
-  
+
         <!-- Payments Table -->
         <div class="mb-6">
           <h2 class="text-lg font-bold mb-2">Payments Made</h2>
@@ -84,7 +86,7 @@
             </tbody>
           </table>
         </div>
-  
+
         <!-- Summary -->
         <div class="bg-gray-100 p-4 rounded shadow">
           <h2 class="text-lg font-bold mb-2">Summary</h2>
@@ -102,12 +104,12 @@
       </div>
     </div>
   </template>
-  
+
   <script setup>
   import { ref, onMounted } from 'vue';
   import { useRoute,useRouter } from 'vue-router';
   import api from '@/api';
-  
+
   const route = useRoute();
   const purchaseOrder = ref(null);
   const loading = ref(true);
@@ -119,7 +121,7 @@
   const goBack = () => {
   router.push('/purchaselist'); // navigate to /purchaselist
 };
-  
+
   const fetchPurchaseOrderDetails = async () => {
     try {
       const res = await api.get(`/suppliers/purchase-order/${route.params.id}`);
@@ -130,13 +132,13 @@
       loading.value = false;
     }
   };
-  
+
   const formatDate = (dateStr) => {
     if (!dateStr) return '-';
     const d = new Date(dateStr);
     return d.toLocaleDateString();
   };
-  
+
   const formatCurrency = (value) => {
     if (value == null) return 'UGX 0';
     return new Intl.NumberFormat('en-UG', {
@@ -146,14 +148,14 @@
       minimumFractionDigits: 0,
     }).format(value);
   };
-  
+
   const printPage = () => {
     window.print();
   };
-  
+
   onMounted(fetchPurchaseOrderDetails);
   </script>
-  
+
   <style>
   /* Hide all elements except print-section during printing */
   @media print {
@@ -176,4 +178,3 @@
     }
   }
   </style>
-  

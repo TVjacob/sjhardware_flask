@@ -1183,6 +1183,8 @@ def get_purchase_order_details(purchase_order_id):
             "product_id": item.product_id,
             "product_name": item.product.name if item.product else None,
             "quantity": item.quantity,
+            "unit_name": item.unit.unit_name if item.unit else None,
+            "unit_id": item.unit.id if item.unit else None,
             "unit_price": item.unit_price,
             "total_price": item.total_price
         }

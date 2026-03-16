@@ -1396,6 +1396,118 @@ def balance_sheet_report():
 
 
 
+# from sqlalchemy import or_, cast, String, func, distinct
+# from sqlalchemy import or_
+# from flask import jsonify, request
+# # assuming db, PurchaseOrder, PurchaseOrderItem, Product, Category, Supplier are already imported
+
+# @reports_bp.route("/purchased-product", methods=["GET"])
+# @token_required
+# def purchase_report():
+#     page = int(request.args.get("page", 1))
+#     per_page = 100
+
+#     search = request.args.get("search", "").strip()
+#     start_date = request.args.get("start_date")
+#     end_date = request.args.get("end_date")
+
+#     # ────────────────────────────────────────────────────────────────
+#     # Detailed query — one row per purchased item
+#     # ────────────────────────────────────────────────────────────────
+#     base_query = (
+#         db.session.query(
+#             PurchaseOrder.id.label("purchase_id"),
+#             PurchaseOrder.invoice_number,
+#             PurchaseOrder.purchase_date,
+#             PurchaseOrder.memo,
+#             Supplier.name.label("supplier_name"),
+#             Product.name.label("product_name"),
+#             Category.name.label("category_name"),
+#             PurchaseOrderItem.quantity.label("quantity"),
+#             PurchaseOrderItem.unit_price.label("unit_price"),
+#             PurchaseOrderItem.total_price.label("total_price")
+#         )
+#         .join(PurchaseOrderItem, PurchaseOrder.id == PurchaseOrderItem.purchase_order_id)
+#         .join(Product, Product.id == PurchaseOrderItem.product_id)
+#         .outerjoin(Category, Category.id == Product.category_id)
+#         .outerjoin(Supplier, Supplier.id == PurchaseOrder.supplier_id)
+#         .filter(PurchaseOrder.status != 9)
+#     )
+
+#     # Search filter ───────────────────────────────────────────────────
+#     if search:
+#         base_query = base_query.filter(
+#             or_(
+#                 PurchaseOrder.invoice_number.ilike(f"%{search}%"),
+#                 Supplier.name.ilike(f"%{search}%"),
+#                 Product.name.ilike(f"%{search}%"),
+#                 Category.name.ilike(f"%{search}%"),
+#                 PurchaseOrder.memo.ilike(f"%{search}%"),
+#             )
+#         )
+
+#     # Date filter ─────────────────────────────────────────────────────
+#     if start_date:
+#         base_query = base_query.filter(
+#             PurchaseOrder.purchase_date >= f"{start_date} 00:00:00"
+#         )
+#     if end_date:
+#         base_query = base_query.filter(
+#             PurchaseOrder.purchase_date <= f"{end_date} 23:59:59"
+#         )
+
+#     # Get total count for pagination
+#     total_records = base_query.count()
+
+#     # Fetch paginated results
+#     results = (
+#         base_query
+#         .order_by(PurchaseOrder.id.desc(), Product.name)
+#         .limit(per_page)
+#         .offset((page - 1) * per_page)
+#         .all()
+#     )
+
+#     # Prepare response data
+#     data = []
+#     grand_total_qty = 0
+#     grand_total_amount = 0
+
+#     for row in results:
+#         qty = row.quantity or 0
+#         total = row.total_price or 0
+
+#         grand_total_qty += qty
+#         grand_total_amount += total
+
+#         data.append({
+#             "purchase_id": row.purchase_id,
+#             "invoice_number": row.invoice_number,
+#             "purchase_date": row.purchase_date.isoformat() if row.purchase_date else None,
+#             "memo": row.memo,
+#             "supplier": row.supplier_name,
+#             "product": row.product_name,
+#             "category": row.category_name or None,
+#             "quantity": float(qty),
+#             "unit_price": round(float(row.unit_price or 0), 2),
+#             "total_price": float(total)
+#         })
+
+#     return jsonify({
+#         "page": page,
+#         "per_page": per_page,
+#         "total_records": total_records,
+#         "totals": {
+#             "total_quantity": float(grand_total_qty),
+#             "total_amount": float(grand_total_amount)
+#         },
+#         "data": data
+#     }), 200
+
+
+
+
+
 from sqlalchemy import or_, cast, String, func, distinct
 from sqlalchemy import or_
 from flask import jsonify, request
@@ -1431,7 +1543,7 @@ def purchase_report():
         .join(Product, Product.id == PurchaseOrderItem.product_id)
         .outerjoin(Category, Category.id == Product.category_id)
         .outerjoin(Supplier, Supplier.id == PurchaseOrder.supplier_id)
-        .filter(PurchaseOrder.status != 9)
+        .filter(PurchaseOrder.status != 9, PurchaseOrderItem.status != 9)
     )
 
     # Search filter ───────────────────────────────────────────────────
@@ -1462,7 +1574,7 @@ def purchase_report():
     # Fetch paginated results
     results = (
         base_query
-        .order_by(PurchaseOrder.id.desc(), Product.name)
+        .order_by(PurchaseOrder.purchase_date.desc(), PurchaseOrder.id, Product.name)
         .limit(per_page)
         .offset((page - 1) * per_page)
         .all()

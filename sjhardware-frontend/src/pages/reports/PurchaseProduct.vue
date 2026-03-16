@@ -3,7 +3,7 @@
     <!-- Header -->
     <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
       <h1 class="text-3xl font-bold text-gray-900">Purchase History Report</h1>
-      
+
       <button
         @click="clearFilters"
         class="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium transition"
@@ -139,6 +139,14 @@
                   <td class="px-6 py-4 text-sm text-right text-gray-900">{{ formatCurrency(row.unit_price) }}</td>
                   <td class="px-6 py-4 text-sm text-right font-medium text-gray-900">{{ formatCurrency(row.total_price) }}</td>
                   <td class="px-6 py-4 text-center">
+                    <router-link
+                      :to="`/purchase-orders/${row.purchase_id}/edit`"
+                      class="inline-flex items-center px-3 py-1.5 bg-yellow-500 text-white text-sm rounded-md hover:bg-indigo-700 transition"
+                      title="Edit"
+                    >
+                      Edit
+                    </router-link>
+
                     <router-link
                       :to="`/purchase-orders/${row.purchase_id}`"
                       class="inline-flex items-center px-3 py-1.5 bg-indigo-600 text-white text-sm rounded-md hover:bg-indigo-700 transition"
