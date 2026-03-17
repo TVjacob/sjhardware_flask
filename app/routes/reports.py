@@ -1,5 +1,5 @@
 from flask import Blueprint, jsonify
-from app.models import AccountTypeEnum, Category, GeneralLedger, Payment, ProductUnit, PurchaseOrderItem, SaleItem, PurchaseOrder, Expense,Customer, Supplier, Sale, PurchaseOrder, Product, Account
+from app.models import AccountTypeEnum, Category, GeneralLedger, Payment, ProductUnit, PurchaseOrderItem, SaleItem, PurchaseOrder, Expense,Customer, StockAdjustment, Supplier, Sale, PurchaseOrder, Product, Account
 from app import db
 from sqlalchemy import func
 from datetime import datetime, timedelta
@@ -846,53 +846,212 @@ def stock_list():
     return jsonify(result)
 
 # ------------------ Consumption List ------------------
+# @token_required
+# @reports_bp.route('/consumption-list', methods=['GET'])
+# def consumption_list():
+#     seven_days_ago = datetime.utcnow() - timedelta(days=7)
+    
+#     # Get sales in the last 7 days that are active
+#     sales = db.session.query(Sale).filter(Sale.status != 9, Sale.sale_date >= seven_days_ago).all()
+    
+#     result = []
+
+#     for sale in sales:
+#         for item in sale.items:  # Loop through SaleItems
+#             result.append({
+#                 "id": item.id,
+#                 "product_name": item.product_name or (item.product.name if item.product else "N/A"),
+#                 "quantity_sold": item.quantity,
+#                 "total_amount": float(item.total_price),
+#                 "sale_date": sale.sale_date.strftime('%Y-%m-%d')
+#             })
+    
+#     return jsonify(result)
+
+# @token_required
+@reports_bp.route('/consumption', methods=['GET'])
 @token_required
-@reports_bp.route('/consumption-list', methods=['GET'])
-def consumption_list():
-    seven_days_ago = datetime.utcnow() - timedelta(days=7)
-    
-    # Get sales in the last 7 days that are active
-    sales = db.session.query(Sale).filter(Sale.status != 9, Sale.sale_date >= seven_days_ago).all()
-    
+def consumption_report():
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
+    search = request.args.get('search', '').strip()
+
+    # Sales consumption
+    sales_query = SaleItem.query.join(Sale).filter(Sale.status != 9)
+    if start_date: sales_query = sales_query.filter(Sale.sale_date >= start_date)
+    if end_date: sales_query = sales_query.filter(Sale.sale_date <= end_date)
+
+    # Stock adjustments
+    adjustments = StockAdjustment.query.filter(StockAdjustment.status == 1)
+    if start_date: adjustments = adjustments.filter(StockAdjustment.adjusted_at >= start_date)
+    if end_date: adjustments = adjustments.filter(StockAdjustment.adjusted_at <= end_date)
+
     result = []
 
-    for sale in sales:
-        for item in sale.items:  # Loop through SaleItems
-            result.append({
-                "id": item.id,
-                "product_name": item.product_name or (item.product.name if item.product else "N/A"),
-                "quantity_sold": item.quantity,
-                "total_amount": float(item.total_price),
-                "sale_date": sale.sale_date.strftime('%Y-%m-%d')
-            })
-    
+    # Sales
+    for item in sales_query.all():
+        result.append({
+            "date": item.sale.sale_date.strftime('%Y-%m-%d'),
+            "product_name": item.product_name,
+            "unit": item.unit.unit_name if item.unit else "piece",
+            "quantity": float(item.quantity),
+            "selling_price": float(item.unit_price),
+            "total_amount": float(item.total_price),
+            "type": "Sale",
+            "reason": f"Sale #{item.sale.sale_number}"
+        })
+
+    # Adjustments
+    for adj in adjustments.all():
+        result.append({
+            "date": adj.adjusted_at.strftime('%Y-%m-%d'),
+            "product_name": adj.product.name,
+            "unit": adj.unit.unit_name if adj.unit else "piece",
+            "quantity": float(adj.quantity) if adj.adjustment_type == "INCREASE" else -float(adj.quantity),
+            "selling_price": 0,
+            "total_amount": 0,
+            "type": "Adjustment",
+            "reason": adj.reason
+        })
+
     return jsonify(result)
 
+
+
+
 # ------------------ Performance List ------------------
+
 @token_required
 @reports_bp.route('/performance-list', methods=['GET'])
 def performance_list():
-    # Best performing products by revenue
-    performance = (
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
+    search = request.args.get('search', '').strip()
+
+    query = (
         db.session.query(
-            Product.id,
-            Product.name,
+            Product.id.label('product_id'),
+            Product.name.label('product_name'),
+            ProductUnit.id.label('unit_id'),
+            ProductUnit.unit_name.label('unit_name'),
+            func.coalesce(func.sum(SaleItem.quantity), 0).label('quantity_sold'),
             func.coalesce(func.sum(SaleItem.total_price), 0).label('total_revenue')
         )
         .join(SaleItem, SaleItem.product_id == Product.id)
-        .filter(Product.status != 9, SaleItem.status != 9)
-        .group_by(Product.id)
+        .join(Sale, Sale.id == SaleItem.sale_id)
+        .join(ProductUnit, ProductUnit.id == SaleItem.unit_id)
+        .filter(
+            Product.status != 9,
+            SaleItem.status != 9,
+            Sale.status != 9,
+            ProductUnit.status == 1
+        )
+        .group_by(Product.id, Product.name, ProductUnit.id, ProductUnit.unit_name)
         .order_by(func.sum(SaleItem.total_price).desc())
-        .all()
     )
 
-    result = [{
-        "product_id": p.id,
-        "product_name": p.name,
-        "total_revenue": float(p.total_revenue)
-    } for p in performance]
+    if start_date:
+        query = query.filter(Sale.sale_date >= start_date)
+    if end_date:
+        query = query.filter(Sale.sale_date <= end_date)
+    if search:
+        query = query.filter(Product.name.ilike(f"%{search}%"))
 
-    return jsonify(result)
+    results = query.all()
+
+    data = []
+    for row in results:
+        qty = float(row.quantity_sold or 0)
+        revenue = float(row.total_revenue or 0)
+        avg_price = revenue / qty if qty > 0 else 0
+
+        data.append({
+            "product_id": row.product_id,
+            "product_name": row.product_name,
+            "unit_id": row.unit_id,
+            "unit_name": row.unit_name,
+            "quantity_sold": round(qty, 2),
+            "total_revenue": round(revenue, 2),
+            "avg_price": round(avg_price, 2)
+        })
+
+    return jsonify(data)
+
+
+# @token_required
+# @reports_bp.route('/performance-list', methods=['GET'])
+# def performance_list():
+#     start_date = request.args.get('start_date')
+#     end_date = request.args.get('end_date')
+#     search = request.args.get('search', '').strip()
+
+#     query = (
+#         db.session.query(
+#             Product.id,
+#             Product.name,
+#             func.coalesce(func.sum(SaleItem.total_price), 0).label('total_revenue'),
+#             func.coalesce(func.sum(SaleItem.quantity), 0).label('quantity_sold')
+#         )
+#         .join(SaleItem, SaleItem.product_id == Product.id)
+#         .join(Sale, Sale.id == SaleItem.sale_id)
+#         .filter(Product.status != 9, SaleItem.status != 9, Sale.status != 9)
+#         .group_by(Product.id)
+#         .order_by(func.sum(SaleItem.total_price).desc())
+#     )
+
+#     if start_date:
+#         query = query.filter(Sale.sale_date >= start_date)
+#     if end_date:
+#         query = query.filter(Sale.sale_date <= end_date)
+#     if search:
+#         query = query.filter(Product.name.ilike(f"%{search}%"))
+
+#     performance = query.all()
+
+#     result = []
+#     for p in performance:
+#         qty = float(p.quantity_sold or 0)
+#         revenue = float(p.total_revenue or 0)
+#         avg = revenue / qty if qty > 0 else 0
+
+#         result.append({
+#             "product_id": p.id,
+#             "product_name": p.name,
+#             "quantity_sold": qty,
+#             "total_revenue": revenue,
+#             "avg_price": round(avg, 2)
+#         })
+
+#     return jsonify(result)
+
+
+
+# @token_required
+# @reports_bp.route('/performance-list', methods=['GET'])
+# def performance_list():
+#     # Best performing products by revenue
+#     performance = (
+#         db.session.query(
+#             Product.id,
+#             Product.name,
+#             func.coalesce(func.sum(SaleItem.total_price), 0).label('total_revenue')
+#         )
+#         .join(SaleItem, SaleItem.product_id == Product.id)
+#         .filter(Product.status != 9, SaleItem.status != 9)
+#         .group_by(Product.id)
+#         .order_by(func.sum(SaleItem.total_price).desc())
+#         .all()
+#     )
+
+#     result = [{
+#         "product_id": p.id,
+#         "product_name": p.name,
+#         "total_revenue": float(p.total_revenue)
+#     } for p in performance]
+
+#     return jsonify(result)
+
+
 
 # ------------------ Sales List ------------------
 @token_required
