@@ -812,18 +812,91 @@ def creditors_aging_report():
 
 
 # ------------------ Out of Stock ------------------
+
 @token_required
 @reports_bp.route('/out-of-stock', methods=['GET'])
 def out_of_stock():
-    products = db.session.query(Product,Category).join(Category,Product.category_id==Category.id).filter(Product.status != 9, Product.quantity <= 0).all()
-    result = [{
-        "id": p.id,
-        "name": p.name,
-        "sku": p.sku,
-        "category_name": cat.name if cat.id else "N/A",
-        "quantity": p.quantity
-    } for p,cat in products]
+    search = request.args.get('search', '').strip()
+
+    # Subquery: weighted average cost price per base unit
+    weighted_cost_subq = (
+        db.session.query(
+            ProductUnit.product_id,
+            func.sum(ProductUnit.cost_price * ProductUnit.conversion_quantity).label('total_cost_base'),
+            func.sum(ProductUnit.conversion_quantity).label('total_base_units')
+        )
+        .filter(ProductUnit.status != 9, ProductUnit.cost_price > 0,ProductUnit.conversion_quantity==1)
+        .group_by(ProductUnit.product_id)
+        .subquery()
+    )
+
+    query = (
+        db.session.query(
+            Product.id,
+            Product.name,
+            Product.sku,
+            Product.quantity,
+            Product.price.label('default_price'),
+            Product.wholesale_price.label('default_wholesale'),
+            Category.name.label('category_name'),
+            weighted_cost_subq.c.total_cost_base,
+            weighted_cost_subq.c.total_base_units
+        )
+        .outerjoin(Category, Category.id == Product.category_id)
+        .outerjoin(weighted_cost_subq, weighted_cost_subq.c.product_id == Product.id)
+        .filter(Product.status != 9, Product.quantity <= 0)
+    )
+
+    if search:
+        query = query.filter(
+            db.or_(
+                Product.name.ilike(f"%{search}%"),
+                Product.sku.ilike(f"%{search}%"),
+                Category.name.ilike(f"%{search}%")
+            )
+        )
+
+    products = query.all()
+
+    result = []
+    for p in products:
+        qty = float(p.quantity or 0)
+
+        # Weighted average cost price per base unit
+        if p.total_base_units and p.total_base_units > 0:
+            avg_cost_base = float(p.total_cost_base or 0) / float(p.total_base_units)
+        else:
+            # Fallback: use wholesale price → retail price → 0
+            avg_cost_base = float(p.default_wholesale or p.default_price or 0)
+
+        lost_value = qty * avg_cost_base  # qty negative → lost value positive
+
+        result.append({
+            "id": p.id,
+            "name": p.name,
+            "sku": p.sku or "—",
+            "category_name": p.category_name or "N/A",
+            "quantity": round(qty, 2),
+            "avg_cost_price_base": round(avg_cost_base, 2),
+            "estimated_lost_value": round(lost_value, 2)
+        })
+
     return jsonify(result)
+
+# @token_required
+# @reports_bp.route('/out-of-stock', methods=['GET'])
+# def out_of_stock():
+#     products = db.session.query(Product,Category).join(Category,Product.category_id==Category.id).filter(Product.status != 9, Product.quantity <= 0).all()
+#     result = [{
+#         "id": p.id,
+#         "name": p.name,
+#         "sku": p.sku,
+#         "category_name": cat.name if cat.id else "N/A",
+#         "quantity": p.quantity
+#     } for p,cat in products]
+#     return jsonify(result)
+
+
 
 # ------------------ Stock List ------------------
 @token_required
