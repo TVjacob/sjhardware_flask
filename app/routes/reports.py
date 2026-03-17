@@ -827,23 +827,92 @@ def out_of_stock():
 
 # ------------------ Stock List ------------------
 @token_required
-
 @reports_bp.route('/stock-list', methods=['GET'])
 def stock_list():
-    # Use joinedload to avoid N+1 queries
-    products = db.session.query(Product,Category).join(Category,Product.category_id==Category.id).filter(Product.status != 9).all()
+    search = request.args.get('search', '').strip()
 
-    result = []
-    for p, cat in products:
-        result.append({
-            "id": p.id,
-            "name": p.name,
-            "sku": p.sku,
-            "category_name": cat.name if cat.id else "N/A",
-            "quantity": p.quantity
+    # Subquery: calculate weighted average retail price per base unit for each product
+    weighted_price_subq = (
+        db.session.query(
+            ProductUnit.product_id,
+            func.sum(ProductUnit.retail_price * ProductUnit.conversion_quantity).label('total_value_base'),
+            func.sum(ProductUnit.conversion_quantity).label('total_base_units')
+        )
+        .filter(ProductUnit.status == 1, ProductUnit.retail_price > 0,ProductUnit.conversion_quantity==1)
+        .group_by(ProductUnit.product_id)
+        .subquery()
+    )
+
+    query = (
+        db.session.query(
+            Product.id,
+            Product.name,
+            Product.sku,
+            Product.quantity,
+            Product.price.label('default_price'),
+            Category.name.label('category_name'),
+            weighted_price_subq.c.total_value_base,
+            weighted_price_subq.c.total_base_units
+        )
+        .outerjoin(Category, Category.id == Product.category_id)
+        .outerjoin(weighted_price_subq, weighted_price_subq.c.product_id == Product.id)
+        .filter(Product.status != 9)
+    )
+
+    if search:
+        query = query.filter(
+            db.or_(
+                Product.name.ilike(f"%{search}%"),
+                Product.sku.ilike(f"%{search}%"),
+                Category.name.ilike(f"%{search}%")
+            )
+        )
+
+    results = query.all()
+
+    stock_list = []
+    for row in results:
+        base_qty = float(row.quantity or 0)
+
+        # Weighted average retail price per base unit
+        if row.total_base_units and row.total_base_units > 0:
+            avg_price_base = float(row.total_value_base or 0) / float(row.total_base_units)
+        else:
+            # Fallback: use product's default price if no units defined
+            avg_price_base = float(row.default_price or 0)
+
+        estimated_value = base_qty * avg_price_base
+
+        stock_list.append({
+            "id": row.id,
+            "name": row.name,
+            "sku": row.sku or "—",
+            "category_name": row.category_name or "—",
+            "quantity": round(base_qty, 2),               # base units
+            "avg_retail_price_base": round(avg_price_base, 2),
+            "estimated_value": round(estimated_value, 2),
+            "low_stock": base_qty <= 10                    # optional flag
         })
 
-    return jsonify(result)
+    return jsonify(stock_list)
+# @token_required
+
+# @reports_bp.route('/stock-list', methods=['GET'])
+# def stock_list():
+#     # Use joinedload to avoid N+1 queries
+#     products = db.session.query(Product,Category).join(Category,Product.category_id==Category.id).filter(Product.status != 9).all()
+
+#     result = []
+#     for p, cat in products:
+#         result.append({
+#             "id": p.id,
+#             "name": p.name,
+#             "sku": p.sku,
+#             "category_name": cat.name if cat.id else "N/A",
+#             "quantity": p.quantity
+#         })
+
+#     return jsonify(result)
 
 # ------------------ Consumption List ------------------
 # @token_required
