@@ -25,8 +25,8 @@
             v-model="search"
             @input="debouncedFetchData"
             placeholder="Invoice #, product, customer..."
-            class="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg 
-                   bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 
+            class="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg
+                   bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100
                    focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition"
           />
         </div>
@@ -37,8 +37,8 @@
             type="date"
             v-model="startDate"
             @change="fetchData"
-            class="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg 
-                   bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 
+            class="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg
+                   bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100
                    focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition"
           />
         </div>
@@ -49,8 +49,8 @@
             type="date"
             v-model="endDate"
             @change="fetchData"
-            class="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg 
-                   bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 
+            class="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg
+                   bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100
                    focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition"
           />
         </div>
@@ -60,8 +60,8 @@
           <select
             v-model="quickRange"
             @change="applyQuickRange"
-            class="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg 
-                   bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 
+            class="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg
+                   bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100
                    focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition"
           >
             <option value="">Custom</option>
@@ -97,52 +97,88 @@
     </div>
 
     <!-- Summary Cards -->
-    <div v-else class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-6">
-      <div class="bg-white dark:bg-gray-800 rounded-xl shadow border border-gray-200 dark:border-gray-700 p-5 text-center">
-        <p class="text-sm font-medium text-black ">Invoices</p>
-        <p class="text-3xl font-bold text-indigo-600 dark:text-indigo-400 mt-2">
-          {{ groupedData.length }}
+    <!-- Summary Cards – Expanded -->
+<div v-else-if="!loading" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
+  <!-- Invoices -->
+  <div class="bg-white dark:bg-gray-800 rounded-xl shadow border border-gray-200 dark:border-gray-700 p-5 text-center transition-transform hover:scale-[1.02]">
+    <p class="text-sm font-medium text-gray-600 dark:text-gray-400">Invoices</p>
+    <p class="text-3xl md:text-4xl font-bold text-indigo-600 dark:text-indigo-400 mt-2">
+      {{ groupedData.length }}
+    </p>
+  </div>
+
+  <!-- Total Sales -->
+  <div class="bg-white dark:bg-gray-800 rounded-xl shadow border p-5 text-center transition-transform hover:scale-[1.02]">
+    <p class="text-sm font-medium text-gray-600 dark:text-gray-400">Total Sales</p>
+    <p class="text-3xl md:text-4xl font-bold text-blue-600 dark:text-blue-400 mt-2">
+      {{ formatNumber(summary.total_sales) }}
+    </p>
+  </div>
+
+  <!-- Credit Sales -->
+  <div class="bg-white dark:bg-gray-800 rounded-xl shadow border p-5 text-center transition-transform hover:scale-[1.02]">
+    <p class="text-sm font-medium text-gray-600 dark:text-gray-400">Credit Sales</p>
+    <p class="text-3xl md:text-4xl font-bold text-purple-600 dark:text-purple-400 mt-2">
+      {{ formatNumber(summary.total_credit_sales) }}
+    </p>
+  </div>
+
+  <!-- Outstanding Balance -->
+  <div class="bg-white dark:bg-gray-800 rounded-xl shadow border p-5 text-center transition-transform hover:scale-[1.02]">
+    <p class="text-sm font-medium text-gray-600 dark:text-gray-400">Outstanding</p>
+    <p class="text-3xl md:text-4xl font-bold text-amber-600 dark:text-amber-400 mt-2">
+      {{ formatNumber(summary.outstanding_balance) }}
+    </p>
+  </div>
+
+  <!-- Cash Received -->
+  <div class="bg-white dark:bg-gray-800 rounded-xl shadow border p-5 text-center transition-transform hover:scale-[1.02]">
+    <p class="text-sm font-medium text-gray-600 dark:text-gray-400">Cash Received</p>
+    <p class="text-3xl md:text-4xl font-bold text-emerald-700 dark:text-emerald-400 mt-2">
+      {{ formatNumber(summary.total_cash_received) }}
+    </p>
+  </div>
+
+  <!-- COGS -->
+  <div class="bg-white dark:bg-gray-800 rounded-xl shadow border p-5 text-center transition-transform hover:scale-[1.02]">
+    <p class="text-sm font-medium text-gray-600 dark:text-gray-400">COGS</p>
+    <p class="text-3xl md:text-4xl font-bold text-red-600 dark:text-red-400 mt-2">
+      {{ formatNumber(summary.total_cogs) }}
+    </p>
+  </div>
+
+  <!-- Gross Profit -->
+  <div class="bg-white dark:bg-gray-800 rounded-xl shadow border p-5 text-center transition-transform hover:scale-[1.02]">
+    <p class="text-sm font-medium text-gray-600 dark:text-gray-400">Gross Profit</p>
+    <p
+      class="text-3xl md:text-4xl font-bold mt-2"
+      :class="summary.gross_profit >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'"
+    >
+      {{ formatNumber(summary.gross_profit) }}
+    </p>
+  </div>
+
+  <!-- Expenses + Net Profit – full width on small, 2 columns on md+ -->
+  <div class="md:col-span-2 bg-gradient-to-br from-gray-50 to-white dark:from-gray-800 dark:to-gray-900 rounded-xl shadow border p-6 text-center transition-transform hover:scale-[1.02]">
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+      <div>
+        <p class="text-sm font-medium text-gray-600 dark:text-gray-400">Expenses</p>
+        <p class="text-3xl md:text-4xl font-bold text-violet-600 dark:text-violet-400 mt-2">
+          {{ formatNumber(summary.total_expenses) }}
         </p>
       </div>
-
-      <div class="bg-white dark:bg-gray-800 rounded-xl shadow border border-gray-200 dark:border-gray-700 p-5 text-center">
-        <p class="text-sm font-medium text-black ">Total Sales</p>
-        <p class="text-3xl font-bold text-blue-600 dark:text-blue-400 mt-2">
-          {{ formatNumber(totals.total_sales) }}
-        </p>
-      </div>
-
-      <div class="bg-white dark:bg-gray-800 rounded-xl shadow border border-gray-200 dark:border-gray-700 p-5 text-center">
-        <p class="text-sm font-medium text-black ">Total Cost</p>
-        <p class="text-3xl font-bold text-red-600 dark:text-red-400 mt-2">
-          {{ formatNumber(totals.total_cost) }}
-        </p>
-      </div>
-
-      <div class="bg-white dark:bg-gray-800 rounded-xl shadow border border-gray-200 dark:border-gray-700 p-5 text-center">
-        <p class="text-sm font-medium text-black ">Total Profit</p>
+      <div>
+        <p class="text-sm font-medium text-gray-600 dark:text-gray-400">Net Profit</p>
         <p
-          class="text-3xl font-bold mt-2"
-          :class="totals.total_profit >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'"
+          class="text-3xl md:text-4xl font-bold mt-2 font-extrabold"
+          :class="summary.net_profit >= 0 ? 'text-emerald-700 dark:text-emerald-300' : 'text-red-700 dark:text-red-300'"
         >
-          {{ formatNumber(totals.total_profit) }}
-        </p>
-      </div>
-
-      <div class="bg-white dark:bg-gray-800 rounded-xl shadow border border-gray-200 dark:border-gray-700 p-5 text-center">
-        <p class="text-sm font-medium text-black ">Cash Received</p>
-        <p class="text-3xl font-bold text-emerald-700 dark:text-emerald-400 mt-2">
-          {{ formatNumber(totals.total_cash_received) }}
-        </p>
-      </div>
-
-      <div class="bg-white dark:bg-gray-800 rounded-xl shadow border border-gray-200 dark:border-gray-700 p-5 text-center">
-        <p class="text-sm font-medium text-black ">Outstanding Credit</p>
-        <p class="text-3xl font-bold text-amber-600 dark:text-amber-400 mt-2">
-          {{ formatNumber(totals.total_credit_outstanding) }}
+          {{ formatNumber(summary.net_profit) }}
         </p>
       </div>
     </div>
+  </div>
+</div>
 
     <!-- Invoice Groups -->
     <div v-if="!loading && groupedData.length > 0" class="space-y-8">
@@ -214,7 +250,7 @@
                 <td class="p-4 text-black ">{{ item.category || '—' }}</td>
                 <td class="p-4 text-right text-black ">{{ formatQty(item.qty) }}</td>
                 <td class="p-4 text-right text-black ">{{ formatNumber(item.selling_price) }}</td>
-                <td class="p-4 text-right text-black ">{{ formatNumber(item.purchase_price_per_unit) }}</td>
+                <td class="p-4 text-right text-black ">{{ formatNumber(item.cost_price) }}</td>
                 <td class="p-4 text-right font-medium text-blue-700 dark:text-blue-400">{{ formatNumber(item.line_sales) }}</td>
                 <td class="p-4 text-right font-medium text-red-700 dark:text-red-400">{{ formatNumber(item.line_cost) }}</td>
                 <td class="p-4 text-right font-bold" :class="item.profit >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'">
@@ -290,6 +326,16 @@ const currentPage = ref(1)
 const itemsPerPage = ref(10)
 
 const debouncedFetchData = debounce(fetchData, 500)
+const summary = ref({
+  total_sales: 0,
+  total_credit_sales: 0,
+  outstanding_balance: 0,
+  total_cash_received: 0,
+  total_cogs: 0,
+  gross_profit: 0,
+  total_expenses: 0,
+  net_profit: 0
+})
 
 async function fetchData() {
   loading.value = true
@@ -305,6 +351,8 @@ async function fetchData() {
 
     rawData.value = res.data.data || []
     totals.value = res.data.totals || {}
+    summary.value = res.data.summary || {}   // ← new key from backend
+
   } catch (err) {
     console.error('Failed to load sales profit report:', err)
     rawData.value = []
@@ -312,7 +360,16 @@ async function fetchData() {
     loading.value = false
   }
 }
-
+// const displaySummary = computed(() => ({
+//   total_sales: summary.value.total_sales ?? 0,
+//   total_credit_sales: summary.value.total_credit_sales ?? 0,
+//   outstanding_balance: summary.value.outstanding_balance ?? 0,
+//   total_cash_received: summary.value.total_cash_received ?? 0,
+//   total_cogs: summary.value.total_cogs ?? 0,
+//   gross_profit: summary.value.gross_profit ?? 0,
+//   total_expenses: summary.value.total_expenses ?? 0,
+//   net_profit: summary.value.net_profit ?? 0
+// }))
 const groupedData = computed(() => {
   const groups = {}
   rawData.value.forEach(row => {
@@ -360,7 +417,16 @@ const paginatedGroupedData = computed(() => {
   const end = start + itemsPerPage.value
   return groupedData.value.slice(start, end)
 })
-
+// const displaySummary = computed(() => ({
+//   total_sales: summary.value.total_sales ?? 0,
+//   total_credit_sales: summary.value.total_credit_sales ?? 0,
+//   outstanding_balance: summary.value.outstanding_balance ?? 0,
+//   total_cash_received: summary.value.total_cash_received ?? 0,
+//   total_cogs: summary.value.total_cogs ?? 0,
+//   gross_profit: summary.value.gross_profit ?? 0,
+//   total_expenses: summary.value.total_expenses ?? 0,
+//   net_profit: summary.value.net_profit ?? 0
+// }))
 function applyQuickRange() {
   const today = new Date()
   let start = ''

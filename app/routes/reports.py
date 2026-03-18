@@ -2208,195 +2208,991 @@ def customer_payments_report():
 
 
 
+# @reports_bp.route("/sales-profit-old", methods=["GET"])
+# @token_required
+# def sales_profit_report_old():
+#     page = int(request.args.get("page", 1))
+#     per_page = 100
+
+#     search = request.args.get("search", "").strip()
+#     start_date = request.args.get("start_date")
+#     end_date = request.args.get("end_date")
+#     print("search ..   ", search)
+#     print("start_date ..   ", start_date)
+#     print("end_date ..   ", end_date)
+
+#     # ===================================================================
+#     # 1. Latest purchase per product (exactly ONE most recent record)
+#     # ===================================================================
+#     latest_po = (
+#         db.session.query(
+#             PurchaseOrderItem.product_id,
+#             PurchaseOrderItem.unit_id.label("purchase_unit_id"),
+#             PurchaseOrderItem.unit_price.label("purchase_unit_price"),
+#             func.row_number()
+#             .over(
+#                 partition_by=PurchaseOrderItem.product_id,
+#                 order_by=[PurchaseOrder.purchase_date.desc(), PurchaseOrderItem.id.desc()]
+#             )
+#             .label("rn")
+#         )
+#         .join(PurchaseOrder, PurchaseOrder.id == PurchaseOrderItem.purchase_order_id)
+#         .filter(PurchaseOrder.status != 9, PurchaseOrderItem.status != 9, PurchaseOrderItem.unit_price > 0)
+#         .subquery()
+#     )
+
+#     latest_purchase = (
+#         db.session.query(latest_po)
+#         .filter(latest_po.c.rn == 1)
+#         .subquery()
+#     )
+
+#     # ===================================================================
+#     # Main Query
+#     # ===================================================================
+#     query = (
+#         db.session.query(
+#             Sale.id.label("sale_id"),
+#             Sale.sale_number,
+#             Sale.sale_date,
+#             Sale.total_amount,
+#             Sale.total_paid,
+#             Sale.balance,
+#             Customer.name.label("customer_name"),
+#             Product.id.label("product_id"),
+#             Product.name.label("product_name"),
+#             Category.name.label("category_name"),
+#             SaleItem.quantity,
+#             SaleItem.unit_price.label("selling_price"),
+#             SaleItem.unit_id.label("sold_unit_id"),
+#             ProductUnit.unit_name.label("sold_unit_name"),
+#             ProductUnit.conversion_quantity.label("sold_conversion"),
+#             latest_purchase.c.purchase_unit_price,
+#             latest_purchase.c.purchase_unit_id,
+#         )
+#         .join(SaleItem, Sale.id == SaleItem.sale_id)
+#         .join(Product, SaleItem.product_id == Product.id)
+#         .join(Customer, Sale.customer_id == Customer.id)
+#         .outerjoin(Category, Product.category_id == Category.id)
+#         .outerjoin(ProductUnit, SaleItem.unit_id == ProductUnit.id)
+#         .outerjoin(
+#             latest_purchase,
+#             latest_purchase.c.product_id == Product.id
+#         )
+#         .filter(Sale.status != 9 , SaleItem.status != 9)
+#     )
+
+#     # Search
+#     if search:
+#         query = query.filter(
+#             or_(
+#                 Product.name.ilike(f"%{search}%"),
+#                 Sale.sale_number.ilike(f"%{search}%"),
+#                 Customer.name.ilike(f"%{search}%"),
+#             )
+#         )
+
+#     # Date filter
+#     # if start_date:
+#     #     print("Filtering from date: ", start_date)
+#     #     query = query.filter(cast(Sale.sale_date, String) >= start_date)
+#     # if end_date:
+#     #     print("Filtering to date: ", end_date)
+#     #     query = query.filter(cast(Sale.sale_date, String) <= end_date)
+#     if start_date:
+#         start_date = datetime.strptime(start_date, "%Y-%m-%d").date()
+#         query = query.filter(func.date(Sale.sale_date) >= start_date)
+
+#     if end_date:
+#         end_date = datetime.strptime(end_date, "%Y-%m-%d").date()
+#         query = query.filter(func.date(Sale.sale_date) <= end_date)
+
+#     total_records = query.count()
+#     results = query.order_by(Sale.sale_date.desc()).paginate(
+#         page=page, per_page=per_page, error_out=False
+#     )
+
+#     # ===================================================================
+#     # Process data with correct cost calculation
+#     # ===================================================================
+#     raw_data = []
+#     sale_summary = {}
+
+#     for row in results.items:
+#         sold_qty = float(row.quantity or 0)
+#         selling_price = float(row.selling_price or 0)
+#         line_sales = selling_price * sold_qty
+
+#         # ====================== COST CALCULATION ======================
+#         if row.purchase_unit_price is not None:
+#             purchase_price = float(row.purchase_unit_price)
+#             purchase_unit_id = row.purchase_unit_id
+#             sold_unit_id = row.sold_unit_id
+
+#             if purchase_unit_id == sold_unit_id:
+#                 # Same unit → direct price
+#                 cost_per_unit = purchase_price
+#             else:
+#                 # Different unit → convert through base
+#                 purchase_unit = ProductUnit.query.get(purchase_unit_id)
+#                 sold_unit = ProductUnit.query.get(sold_unit_id)
+
+#                 purchase_conv = float(purchase_unit.conversion_quantity) if purchase_unit else 1
+#                 sold_conv = float(sold_unit.conversion_quantity) if sold_unit else 1
+
+#                 base_cost = purchase_price / purchase_conv
+#                 cost_per_unit = base_cost * sold_conv
+#         else:
+#             cost_per_unit = 0.0
+
+#         line_cost = cost_per_unit * sold_qty
+#         profit = line_sales - line_cost
+#         # ============================================================
+
+#         # Sale-level summary
+#         if row.sale_id not in sale_summary:
+#             sale_summary[row.sale_id] = {
+#                 "sale_total": float(row.total_amount or 0),
+#                 "amount_paid": float(row.total_paid or 0),
+#                 "balance": float(row.balance or 0),
+#                 "profit_total": 0.0,
+#                 "cost_total": 0.0
+#             }
+
+#         sale_summary[row.sale_id]["profit_total"] += profit
+#         sale_summary[row.sale_id]["cost_total"] += line_cost
+
+#         raw_data.append({
+#             "sale_id": row.sale_id,
+#             "invoice_number": row.sale_number,
+#             "sale_date": row.sale_date.strftime('%Y-%m-%d') if row.sale_date else None,
+#             "customer": row.customer_name,
+#             "product": row.product_name,
+#             "category": row.category_name,
+#             "unit": row.sold_unit_name or "piece",
+#             "qty": sold_qty,
+#             "selling_price": selling_price,
+#             "purchase_price_per_unit": round(cost_per_unit, 2),   # ← this is what you wanted
+#             "line_sales": round(line_sales, 2),
+#             "line_cost": round(line_cost, 2),
+#             "profit": round(profit, 2),
+#         })
+
+#     # Overall totals
+#     total_sales = total_cost = total_profit = total_cash = total_credit = 0.0
+#     for s in sale_summary.values():
+#         total_sales += s["sale_total"]
+#         total_cost += s["cost_total"]
+#         total_profit += s["profit_total"]
+#         total_cash += s["amount_paid"]
+#         total_credit += s["balance"] if s["balance"] > 0 else 0
+
+#     return jsonify({
+#         "page": page,
+#         "per_page": per_page,
+#         "total_records": total_records,
+#         "totals": {
+#             "total_sales": round(total_sales, 2),
+#             "total_cost": round(total_cost, 2),
+#             "total_profit": round(total_profit, 2),
+#             "total_cash_received": round(total_cash, 2),
+#             "total_credit_outstanding": round(total_credit, 2)
+#         },
+#         "data": raw_data
+#     }), 200
+
+
+# @reports_bp.route("/sales-profit", methods=["GET"])
+# @token_required
+# def sales_profit_report():
+#     page = int(request.args.get("page", 1))
+#     per_page = int(request.args.get("per_page", 100))
+
+#     search = (request.args.get("search") or "").strip()
+#     start_str = request.args.get("start_date")
+#     end_str   = request.args.get("end_date")
+
+#     start_date = end_date = None
+#     if start_str:
+#         try:
+#             start_date = datetime.strptime(start_str, "%Y-%m-%d").date()
+#         except:
+#             pass
+#     if end_str:
+#         try:
+#             end_date = datetime.strptime(end_str, "%Y-%m-%d").date()
+#         except:
+#             pass
+
+#     # ─────────────────────────────────────────────
+#     # A. Latest purchase cost subquery
+#     # ─────────────────────────────────────────────
+#     latest_po = (
+#         db.session.query(
+#             PurchaseOrderItem.product_id,
+#             PurchaseOrderItem.unit_id.label("pu_unit_id"),
+#             PurchaseOrderItem.unit_price.label("pu_price"),
+#             func.row_number().over(
+#                 partition_by=PurchaseOrderItem.product_id,
+#                 order_by=[PurchaseOrder.purchase_date.desc(), PurchaseOrderItem.id.desc()]
+#             ).label("rn")
+#         )
+#         .join(PurchaseOrder)
+#         .filter(
+#             PurchaseOrder.status != 1,
+#             PurchaseOrderItem.status == 1,
+#             PurchaseOrderItem.unit_price > 0
+#         )
+#         .subquery()
+#     )
+
+#     latest_cost = db.session.query(latest_po).filter(latest_po.c.rn == 1).subquery()
+
+#     # ─────────────────────────────────────────────
+#     # B. Base query (used for both aggregates and pagination)
+#     # ─────────────────────────────────────────────
+#     base_q = (
+#         db.session.query(
+#             Sale.id.label("sale_id"),
+#             Sale.sale_number.label("invoice_number"),
+#             Sale.sale_date,
+#             Sale.total_amount,
+#             Sale.total_paid,
+#             Sale.balance,
+#             Customer.name.label("customer"),
+#             Product.name.label("product"),
+#             Category.name.label("category"),
+#             SaleItem.quantity,
+#             SaleItem.unit_price.label("selling_price"),
+#             SaleItem.unit_id,
+#             ProductUnit.unit_name.label("unit_name"),
+#             ProductUnit.conversion_quantity.label("conv_qty"),
+#             latest_cost.c.pu_price.label("latest_purchase_price"),
+#             latest_cost.c.pu_unit_id.label("latest_purchase_unit_id"),
+#         )
+#         .join(SaleItem, Sale.id == SaleItem.sale_id)
+#         .join(Product, SaleItem.product_id == Product.id)
+#         .outerjoin(Customer, Sale.customer_id == Customer.id)
+#         .outerjoin(Category, Product.category_id == Category.id)
+#         .outerjoin(ProductUnit, SaleItem.unit_id == ProductUnit.id)
+#         .outerjoin(latest_cost, latest_cost.c.product_id == Product.id)
+#         .filter(Sale.status.in_([1, 3, 4]), SaleItem.status == 1)
+#     )
+
+#     if search:
+#         base_q = base_q.filter(
+#             or_(
+#                 Product.name.ilike(f"%{search}%"),
+#                 Sale.sale_number.ilike(f"%{search}%"),
+#                 Customer.name.ilike(f"%{search}%"),
+#                 Category.name.ilike(f"%{search}%")
+#             )
+#         )
+
+#     if start_date:
+#         base_q = base_q.filter(func.date(Sale.sale_date) >= start_date)
+#     if end_date:
+#         base_q = base_q.filter(func.date(Sale.sale_date) <= end_date)
+
+#     # ─────────────────────────────────────────────
+#     # C. Aggregates from ALL matching records
+#     # ─────────────────────────────────────────────
+#     full_results = base_q.all()
+
+#     sale_dict = {}  # sale_id → summary
+
+#     for row in full_results:
+#         qty = float(row.quantity or 0)
+#         sell_price = float(row.selling_price or 0)
+#         line_sales = qty * sell_price
+
+#         # ── COGS: latest purchase price ÷ purchase conv × sold conv ───────
+#         cost_per_sold_unit = 0.0
+
+#         if row.latest_purchase_price is not None:
+#             purchase_price = float(row.latest_purchase_price)
+#             purchase_unit_id = row.latest_purchase_unit_id
+#             sold_unit_id = row.unit_id
+
+#             purchase_to_base = 1.0
+#             sold_to_base = 1.0
+
+#             if purchase_unit_id and sold_unit_id:
+#                 pu = ProductUnit.query.get(purchase_unit_id)
+#                 su = ProductUnit.query.get(sold_unit_id)
+#                 if pu and su:
+#                     purchase_to_base = float(pu.conversion_quantity or 1)
+#                     sold_to_base = float(su.conversion_quantity or 1)
+
+#             # Cost per base unit
+#             base_cost = purchase_price / purchase_to_base if purchase_to_base != 0 else 0.0
+#             # Cost per sold unit
+#             cost_per_sold_unit = base_cost * sold_to_base
+
+#         line_cogs = cost_per_sold_unit * qty
+#         line_profit = line_sales - line_cogs
+
+#         sid = row.sale_id
+#         if sid not in sale_dict:
+#             sale_dict[sid] = {
+#                 "total_amount": float(row.total_amount or 0),
+#                 "total_paid": float(row.total_paid or 0),
+#                 "balance": float(row.balance or 0),
+#                 "cogs": 0.0,
+#                 "profit": 0.0
+#             }
+
+#         sale_dict[sid]["cogs"] += line_cogs
+#         sale_dict[sid]["profit"] += line_profit
+
+#     # Protected aggregates (handle overpayment / change)
+#     total_sales = total_cash_received = total_outstanding = total_credit_sales = 0.0
+#     total_cogs = gross_profit = 0.0
+
+#     for s in sale_dict.values():
+#         sale_total = s["total_amount"]
+#         paid = s["total_paid"]
+#         raw_balance = s["balance"]
+
+#         effective_paid = min(paid, sale_total)
+#         effective_balance = max(raw_balance, 0)
+#         is_credit = effective_balance > 0
+
+#         total_sales += sale_total
+#         total_cash_received += effective_paid
+#         total_outstanding += effective_balance
+#         total_cogs += s["cogs"]
+#         gross_profit += s["profit"]
+
+#         if is_credit:
+#             total_credit_sales += sale_total
+
+#     # Expenses
+#     expense_q = db.session.query(func.coalesce(func.sum(Expense.total_amount), 0))
+#     if start_date:
+#         expense_q = expense_q.filter(func.date(Expense.expense_date) >= start_date)
+#     if end_date:
+#         expense_q = expense_q.filter(func.date(Expense.expense_date) <= end_date)
+#     expense_q = expense_q.filter(Expense.status == 1)
+#     total_expenses = float(expense_q.scalar() or 0.0)
+
+#     net_profit = gross_profit - total_expenses
+
+#     # ─────────────────────────────────────────────
+#     # D. Paginated line items (display only)
+#     # ─────────────────────────────────────────────
+#     paginated_q = base_q.order_by(Sale.sale_date.desc(), Sale.id.desc())
+#     paginated_rows = paginated_q.offset((page - 1) * per_page).limit(per_page).all()
+
+#     line_items = []
+#     for row in paginated_rows:
+#         qty = float(row.quantity or 0)
+#         sell_price = float(row.selling_price or 0)
+#         line_sales = qty * sell_price
+
+#         cost_per_sold_unit = 0.0
+#         if row.latest_purchase_price is not None:
+#             purchase_price = float(row.latest_purchase_price)
+#             purchase_unit_id = row.latest_purchase_unit_id
+#             sold_unit_id = row.unit_id
+
+#             purchase_to_base = 1.0
+#             sold_to_base = 1.0
+
+#             if purchase_unit_id and sold_unit_id:
+#                 pu = ProductUnit.query.get(purchase_unit_id)
+#                 su = ProductUnit.query.get(sold_unit_id)
+#                 if pu and su:
+#                     purchase_to_base = float(pu.conversion_quantity or 1)
+#                     sold_to_base = float(su.conversion_quantity or 1)
+
+#             base_cost = purchase_price / purchase_to_base if purchase_to_base != 0 else 0.0
+#             cost_per_sold_unit = base_cost * sold_to_base
+
+#         line_cogs = cost_per_sold_unit * qty
+#         line_profit = line_sales - line_cogs
+
+#         line_items.append({
+#             "sale_id": row.sale_id,
+#             "invoice_number": row.invoice_number,
+#             "sale_date": row.sale_date.strftime("%Y-%m-%d") if row.sale_date else None,
+#             "customer": row.customer or "Walk-in",
+#             "product": row.product,
+#             "category": row.category or "—",
+#             "unit": row.unit_name or "piece",
+#             "qty": round(qty, 3),
+#             "selling_price": round(sell_price, 2),
+#             "cost_price": round(cost_per_sold_unit, 2),
+#             "line_sales": round(line_sales, 2),
+#             "line_cost": round(line_cogs, 2),
+#             "profit": round(line_profit, 2),
+#         })
+
+#     # ─────────────────────────────────────────────
+#     # Response
+#     # ─────────────────────────────────────────────
+#     return jsonify({
+#         "page": page,
+#         "per_page": per_page,
+#         "total_records": base_q.count(),
+#         "summary": {
+#             "total_sales": round(total_sales, 2),
+#             "total_credit_sales": round(total_credit_sales, 2),
+#             "outstanding_balance": round(total_outstanding, 2),
+#             "total_cash_received": round(total_cash_received, 2),
+#             "total_cogs": round(total_cogs, 2),
+#             "gross_profit": round(gross_profit, 2),
+#             "total_expenses": round(total_expenses, 2),
+#             "net_profit": round(net_profit, 2),
+#         },
+#         "data": line_items
+#     }), 200
+
+
 @reports_bp.route("/sales-profit", methods=["GET"])
 @token_required
 def sales_profit_report():
     page = int(request.args.get("page", 1))
-    per_page = 100
+    per_page = int(request.args.get("per_page", 100))
 
-    search = request.args.get("search", "").strip()
-    start_date = request.args.get("start_date")
-    end_date = request.args.get("end_date")
-    print("search ..   ", search)
-    print("start_date ..   ", start_date)
-    print("end_date ..   ", end_date)
+    search = (request.args.get("search") or "").strip()
+    start_str = request.args.get("start_date")
+    end_str   = request.args.get("end_date")
 
-    # ===================================================================
-    # 1. Latest purchase per product (exactly ONE most recent record)
-    # ===================================================================
+    start_date = end_date = None
+    if start_str:
+        try:
+            start_date = datetime.strptime(start_str, "%Y-%m-%d").date()
+        except:
+            pass
+    if end_str:
+        try:
+            end_date = datetime.strptime(end_str, "%Y-%m-%d").date()
+        except:
+            pass
+
+    # ─────────────────────────────────────────────
+    # A. Latest purchase cost subquery – FIXED THE STATUS FILTER
+    # ─────────────────────────────────────────────
     latest_po = (
         db.session.query(
             PurchaseOrderItem.product_id,
-            PurchaseOrderItem.unit_id.label("purchase_unit_id"),
-            PurchaseOrderItem.unit_price.label("purchase_unit_price"),
-            func.row_number()
-            .over(
+            PurchaseOrderItem.unit_id.label("pu_unit_id"),
+            PurchaseOrderItem.unit_price.label("pu_price"),
+            func.row_number().over(
                 partition_by=PurchaseOrderItem.product_id,
                 order_by=[PurchaseOrder.purchase_date.desc(), PurchaseOrderItem.id.desc()]
-            )
-            .label("rn")
+            ).label("rn")
         )
-        .join(PurchaseOrder, PurchaseOrder.id == PurchaseOrderItem.purchase_order_id)
-        .filter(PurchaseOrder.status != 9, PurchaseOrderItem.status != 9, PurchaseOrderItem.unit_price > 0)
+        .join(PurchaseOrder)
+        .filter(
+            PurchaseOrder.status != 9,           # ← FIXED: was != 1 → no records matched
+            PurchaseOrderItem.status == 1,
+            PurchaseOrderItem.unit_price > 0
+        )
         .subquery()
     )
 
-    latest_purchase = (
-        db.session.query(latest_po)
-        .filter(latest_po.c.rn == 1)
-        .subquery()
-    )
+    latest_cost = db.session.query(latest_po).filter(latest_po.c.rn == 1).subquery()
 
-    # ===================================================================
-    # Main Query
-    # ===================================================================
-    query = (
+    # ─────────────────────────────────────────────
+    # B. Base query
+    # ─────────────────────────────────────────────
+    base_q = (
         db.session.query(
             Sale.id.label("sale_id"),
-            Sale.sale_number,
+            Sale.sale_number.label("invoice_number"),
             Sale.sale_date,
             Sale.total_amount,
             Sale.total_paid,
             Sale.balance,
-            Customer.name.label("customer_name"),
-            Product.id.label("product_id"),
-            Product.name.label("product_name"),
-            Category.name.label("category_name"),
+            Sale.status,
+            Customer.name.label("customer"),
+            Product.name.label("product"),
+            Category.name.label("category"),
             SaleItem.quantity,
             SaleItem.unit_price.label("selling_price"),
-            SaleItem.unit_id.label("sold_unit_id"),
-            ProductUnit.unit_name.label("sold_unit_name"),
-            ProductUnit.conversion_quantity.label("sold_conversion"),
-            latest_purchase.c.purchase_unit_price,
-            latest_purchase.c.purchase_unit_id,
+            SaleItem.unit_id,
+            ProductUnit.unit_name.label("unit_name"),
+            ProductUnit.conversion_quantity.label("conv_qty"),
+            latest_cost.c.pu_price.label("latest_purchase_price"),
+            latest_cost.c.pu_unit_id.label("latest_purchase_unit_id"),
         )
         .join(SaleItem, Sale.id == SaleItem.sale_id)
         .join(Product, SaleItem.product_id == Product.id)
-        .join(Customer, Sale.customer_id == Customer.id)
+        .outerjoin(Customer, Sale.customer_id == Customer.id)
         .outerjoin(Category, Product.category_id == Category.id)
         .outerjoin(ProductUnit, SaleItem.unit_id == ProductUnit.id)
-        .outerjoin(
-            latest_purchase,
-            latest_purchase.c.product_id == Product.id
-        )
-        .filter(Sale.status != 9 , SaleItem.status != 9)
+        .outerjoin(latest_cost, latest_cost.c.product_id == Product.id)
+        .filter(Sale.status.in_([1, 3, 4]), SaleItem.status == 1)
     )
 
-    # Search
     if search:
-        query = query.filter(
+        base_q = base_q.filter(
             or_(
                 Product.name.ilike(f"%{search}%"),
                 Sale.sale_number.ilike(f"%{search}%"),
                 Customer.name.ilike(f"%{search}%"),
+                Category.name.ilike(f"%{search}%")
             )
         )
 
-    # Date filter
-    # if start_date:
-    #     print("Filtering from date: ", start_date)
-    #     query = query.filter(cast(Sale.sale_date, String) >= start_date)
-    # if end_date:
-    #     print("Filtering to date: ", end_date)
-    #     query = query.filter(cast(Sale.sale_date, String) <= end_date)
     if start_date:
-        start_date = datetime.strptime(start_date, "%Y-%m-%d").date()
-        query = query.filter(func.date(Sale.sale_date) >= start_date)
-
+        base_q = base_q.filter(func.date(Sale.sale_date) >= start_date)
     if end_date:
-        end_date = datetime.strptime(end_date, "%Y-%m-%d").date()
-        query = query.filter(func.date(Sale.sale_date) <= end_date)
+        base_q = base_q.filter(func.date(Sale.sale_date) <= end_date)
 
-    total_records = query.count()
-    results = query.order_by(Sale.sale_date.desc()).paginate(
-        page=page, per_page=per_page, error_out=False
-    )
+    # ─────────────────────────────────────────────
+    # C. Aggregates from ALL matching records
+    # ─────────────────────────────────────────────
+    full_results = base_q.all()
 
-    # ===================================================================
-    # Process data with correct cost calculation
-    # ===================================================================
-    raw_data = []
-    sale_summary = {}
+    sale_dict = {}  # sale_id → summary
 
-    for row in results.items:
-        sold_qty = float(row.quantity or 0)
-        selling_price = float(row.selling_price or 0)
-        line_sales = selling_price * sold_qty
+    for row in full_results:
+        qty = float(row.quantity or 0)
+        sell_price = float(row.selling_price or 0)
+        line_sales = qty * sell_price
 
-        # ====================== COST CALCULATION ======================
-        if row.purchase_unit_price is not None:
-            purchase_price = float(row.purchase_unit_price)
-            purchase_unit_id = row.purchase_unit_id
-            sold_unit_id = row.sold_unit_id
+        # ── Step-by-step COGS exactly as you described ─────────────────────
+        cost_per_sold_unit = 0.0
 
-            if purchase_unit_id == sold_unit_id:
-                # Same unit → direct price
-                cost_per_unit = purchase_price
-            else:
-                # Different unit → convert through base
-                purchase_unit = ProductUnit.query.get(purchase_unit_id)
-                sold_unit = ProductUnit.query.get(sold_unit_id)
+        if row.latest_purchase_price is not None:
+            # Step 1: Latest purchase price + unit details
+            purchase_price = float(row.latest_purchase_price)
+            purchase_unit_id = row.latest_purchase_unit_id
+            sold_unit_id = row.unit_id
 
-                purchase_conv = float(purchase_unit.conversion_quantity) if purchase_unit else 1
-                sold_conv = float(sold_unit.conversion_quantity) if sold_unit else 1
+            # Defaults if units missing
+            purchase_to_base = 1.0
+            sold_to_base = 1.0
 
-                base_cost = purchase_price / purchase_conv
-                cost_per_unit = base_cost * sold_conv
-        else:
-            cost_per_unit = 0.0
+            # Step 2: Divide purchase price by its own conversion qty → price of one base unit
+            if purchase_unit_id:
+                pu = ProductUnit.query.get(purchase_unit_id)
+                if pu:
+                    purchase_to_base = float(pu.conversion_quantity or 1)
 
-        line_cost = cost_per_unit * sold_qty
-        profit = line_sales - line_cost
-        # ============================================================
+            base_unit_cost = purchase_price / purchase_to_base if purchase_to_base != 0 else 0.0
 
-        # Sale-level summary
-        if row.sale_id not in sale_summary:
-            sale_summary[row.sale_id] = {
-                "sale_total": float(row.total_amount or 0),
-                "amount_paid": float(row.total_paid or 0),
-                "balance": float(row.balance or 0),
-                "profit_total": 0.0,
-                "cost_total": 0.0
+            # Step 3: Get sold unit conversion qty and multiply → cost price per sold unit
+            if sold_unit_id:
+                su = ProductUnit.query.get(sold_unit_id)
+                if su:
+                    sold_to_base = float(su.conversion_quantity or 1)
+
+            cost_per_sold_unit = base_unit_cost * sold_to_base
+
+        # Step 4: Multiply by qty sold → total line COGS
+        line_cogs = cost_per_sold_unit * qty
+        line_profit = line_sales - line_cogs
+
+        sid = row.sale_id
+        if sid not in sale_dict:
+            sale_dict[sid] = {
+                "total_amount": float(row.total_amount or 0),
+                "total_paid": float(row.total_paid or 0),
+                "balance": float(row.balance) if row.status in [3, 4] else 0.0,  # Treat returns as fully paid
+                "cogs": 0.0,
+                "profit": 0.0
             }
 
-        sale_summary[row.sale_id]["profit_total"] += profit
-        sale_summary[row.sale_id]["cost_total"] += line_cost
+        sale_dict[sid]["cogs"] += line_cogs
+        sale_dict[sid]["profit"] += line_profit
 
-        raw_data.append({
+    # ── Protected aggregates (handle overpayment/change) ────────────────
+    total_sales = total_cash_received = total_outstanding = total_credit_sales = 0.0
+    total_cogs = gross_profit = 0.0
+
+    for s in sale_dict.values():
+        sale_total = s["total_amount"]
+        paid = s["total_paid"]
+        raw_balance = s["balance"]
+
+        effective_paid = min(paid, sale_total)
+        effective_balance = max(raw_balance, 0)
+        is_credit = effective_balance > 0
+
+        total_sales += sale_total
+        total_cash_received += effective_paid
+        total_outstanding += effective_balance
+        total_cogs += s["cogs"]
+        gross_profit += s["profit"]
+
+        if is_credit:
+            total_credit_sales += sale_total
+
+    # Expenses
+    expense_q = db.session.query(func.coalesce(func.sum(Expense.total_amount), 0))
+    if start_date:
+        expense_q = expense_q.filter(func.date(Expense.expense_date) >= start_date)
+    if end_date:
+        expense_q = expense_q.filter(func.date(Expense.expense_date) <= end_date)
+    expense_q = expense_q.filter(Expense.status == 1)
+    total_expenses = float(expense_q.scalar() or 0.0)
+
+    net_profit = gross_profit - total_expenses
+
+    # ─────────────────────────────────────────────
+    # D. Paginated line items (display only)
+    # ─────────────────────────────────────────────
+    paginated_q = base_q.order_by(Sale.sale_date.desc(), Sale.id.desc())
+    paginated_rows = paginated_q.offset((page - 1) * per_page).limit(per_page).all()
+
+    line_items = []
+    for row in paginated_rows:
+        qty = float(row.quantity or 0)
+        sell_price = float(row.selling_price or 0)
+        line_sales = qty * sell_price
+
+        # Same COGS logic as above
+        cost_per_sold_unit = 0.0
+        if row.latest_purchase_price is not None:
+            purchase_price = float(row.latest_purchase_price)
+            purchase_unit_id = row.latest_purchase_unit_id
+            sold_unit_id = row.unit_id
+
+            purchase_to_base = 1.0
+            sold_to_base = 1.0
+
+            if purchase_unit_id:
+                pu = ProductUnit.query.get(purchase_unit_id)
+                if pu:
+                    purchase_to_base = float(pu.conversion_quantity or 1)
+
+            base_unit_cost = purchase_price / purchase_to_base if purchase_to_base != 0 else 0.0
+
+            if sold_unit_id:
+                su = ProductUnit.query.get(sold_unit_id)
+                if su:
+                    sold_to_base = float(su.conversion_quantity or 1)
+
+            cost_per_sold_unit = base_unit_cost * sold_to_base
+
+        line_cogs = cost_per_sold_unit * qty
+        line_profit = line_sales - line_cogs
+
+        line_items.append({
             "sale_id": row.sale_id,
-            "invoice_number": row.sale_number,
-            "sale_date": row.sale_date.strftime('%Y-%m-%d') if row.sale_date else None,
-            "customer": row.customer_name,
-            "product": row.product_name,
-            "category": row.category_name,
-            "unit": row.sold_unit_name or "piece",
-            "qty": sold_qty,
-            "selling_price": selling_price,
-            "purchase_price_per_unit": round(cost_per_unit, 2),   # ← this is what you wanted
+            "invoice_number": row.invoice_number,
+            "sale_date": row.sale_date.strftime("%Y-%m-%d") if row.sale_date else None,
+            "customer": row.customer or "Walk-in",
+            "product": row.product,
+            "category": row.category or "—",
+            "unit": row.unit_name or "piece",
+            "qty": round(qty, 3),
+            "selling_price": round(sell_price, 2),
+            "cost_price": round(cost_per_sold_unit, 2),
             "line_sales": round(line_sales, 2),
-            "line_cost": round(line_cost, 2),
-            "profit": round(profit, 2),
+            "line_cost": round(line_cogs, 2),
+            "profit": round(line_profit, 2),
         })
 
-    # Overall totals
-    total_sales = total_cost = total_profit = total_cash = total_credit = 0.0
-    for s in sale_summary.values():
-        total_sales += s["sale_total"]
-        total_cost += s["cost_total"]
-        total_profit += s["profit_total"]
-        total_cash += s["amount_paid"]
-        total_credit += s["balance"] if s["balance"] > 0 else 0
-
+    # ─────────────────────────────────────────────
+    # Response
+    # ─────────────────────────────────────────────
     return jsonify({
         "page": page,
         "per_page": per_page,
-        "total_records": total_records,
-        "totals": {
+        "total_records": base_q.count(),
+        "summary": {
             "total_sales": round(total_sales, 2),
-            "total_cost": round(total_cost, 2),
-            "total_profit": round(total_profit, 2),
-            "total_cash_received": round(total_cash, 2),
-            "total_credit_outstanding": round(total_credit, 2)
+            "total_credit_sales": round(total_credit_sales, 2),
+            "outstanding_balance": round(total_outstanding, 2),
+            "total_cash_received": round(total_cash_received, 2),
+            "total_cogs": round(total_cogs, 2),
+            "gross_profit": round(gross_profit, 2),
+            "total_expenses": round(total_expenses, 2),
+            "net_profit": round(net_profit, 2),
         },
-        "data": raw_data
+        "data": line_items
     }), 200
+
+
+    # ─────────────────────────────────────────────
+    #  it worked but not cogs 
+    # ─────────────────────────────────────────────
+
+# @reports_bp.route("/sales-profit", methods=["GET"])
+# @token_required
+# def sales_profit_report():
+#     page = int(request.args.get("page", 1))
+#     per_page = int(request.args.get("per_page", 100))
+
+#     search = (request.args.get("search") or "").strip()
+#     start_str = request.args.get("start_date")
+#     end_str   = request.args.get("end_date")
+
+#     start_date = None
+#     end_date   = None
+#     if start_str:
+#         try:
+#             start_date = datetime.strptime(start_str, "%Y-%m-%d").date()
+#         except:
+#             pass
+#     if end_str:
+#         try:
+#             end_date = datetime.strptime(end_str, "%Y-%m-%d").date()
+#         except:
+#             pass
+
+#     # ─────────────────────────────────────────────
+#     #   A. Latest purchase cost subquery
+#     # ─────────────────────────────────────────────
+#     latest_po = (
+#         db.session.query(
+#             PurchaseOrderItem.product_id,
+#             PurchaseOrderItem.unit_id.label("pu_unit_id"),
+#             PurchaseOrderItem.unit_price.label("pu_price"),
+#             func.row_number().over(
+#                 partition_by=PurchaseOrderItem.product_id,
+#                 order_by=[PurchaseOrder.purchase_date.desc(), PurchaseOrderItem.id.desc()]
+#             ).label("rn")
+#         )
+#         .join(PurchaseOrder)
+#         .filter(
+#             PurchaseOrder.status == 1,
+#             PurchaseOrderItem.status == 1,
+#             PurchaseOrderItem.unit_price > 0
+#         )
+#         .subquery()
+#     )
+
+#     latest_cost = db.session.query(latest_po).filter(latest_po.c.rn == 1).subquery()
+
+#     # ─────────────────────────────────────────────
+#     #   B. Main sales line items query
+#     # ─────────────────────────────────────────────
+#     sales_q = (
+#         db.session.query(
+#             Sale.id.label("sale_id"),
+#             Sale.sale_number.label("invoice_number"),
+#             Sale.sale_date,
+#             Sale.total_amount,
+#             Sale.total_paid,
+#             Sale.balance,
+#             Customer.name.label("customer"),
+#             Product.name.label("product"),
+#             Category.name.label("category"),
+#             SaleItem.quantity,
+#             SaleItem.unit_price.label("selling_price"),
+#             SaleItem.unit_id,
+#             ProductUnit.unit_name.label("unit_name"),
+#             ProductUnit.conversion_quantity.label("conv_qty"),
+#             latest_cost.c.pu_price.label("latest_purchase_price"),
+#             latest_cost.c.pu_unit_id.label("latest_purchase_unit_id"),
+#         )
+#         .join(SaleItem, Sale.id == SaleItem.sale_id)
+#         .join(Product, SaleItem.product_id == Product.id)
+#         .outerjoin(Customer, Sale.customer_id == Customer.id)
+#         .outerjoin(Category, Product.category_id == Category.id)
+#         .outerjoin(ProductUnit, SaleItem.unit_id == ProductUnit.id)
+#         .outerjoin(latest_cost, latest_cost.c.product_id == Product.id)
+#         .filter(Sale.status.in_([1,3,4]), SaleItem.status == 1)
+#     )
+
+#     if search:
+#         sales_q = sales_q.filter(
+#             or_(
+#                 Product.name.ilike(f"%{search}%"),
+#                 Sale.sale_number.ilike(f"%{search}%"),
+#                 Customer.name.ilike(f"%{search}%"),
+#                 Category.name.ilike(f"%{search}%")
+#             )
+#         )
+
+#     if start_date:
+#         sales_q = sales_q.filter(func.date(Sale.sale_date) >= start_date)
+#     if end_date:
+#         sales_q = sales_q.filter(func.date(Sale.sale_date) <= end_date)
+
+#     # ─────────────────────────────────────────────
+#     #   C. Fetch line items + calculate COGS
+#     # ─────────────────────────────────────────────
+#     line_items = []
+#     sale_dict = {}          # sale_id → summary
+
+#     for row in sales_q.order_by(Sale.sale_date.desc(), Sale.id).offset((page-1)*per_page).limit(per_page).all():
+#         qty = float(row.quantity or 0)
+#         sell_price = float(row.selling_price or 0)
+#         line_sales = qty * sell_price
+
+#         # COGS calculation
+#         cost_unit = 0.0
+#         if row.latest_purchase_price is not None:
+#             pu_price = float(row.latest_purchase_price)
+#             pu_unit  = row.latest_purchase_unit_id
+#             su_unit  = row.unit_id
+
+#             if pu_unit == su_unit or not pu_unit or not su_unit:
+#                 cost_unit = pu_price
+#             else:
+#                 pu = ProductUnit.query.get(pu_unit)
+#                 su = ProductUnit.query.get(su_unit)
+#                 if pu and su:
+#                     base_cost = pu_price / (pu.conversion_quantity or 1)
+#                     cost_unit = base_cost * (su.conversion_quantity or 1)
+
+#         line_cogs = cost_unit * qty
+#         line_profit = line_sales - line_cogs
+
+#         if row.sale_id not in sale_dict:
+#             sale_dict[row.sale_id] = {
+#                 "total_amount": float(row.total_amount or 0),
+#                 "total_paid":   float(row.total_paid or 0),
+#                 "balance":      float(row.balance or 0),
+#                 "cogs": 0.0,
+#                 "profit": 0.0
+#             }
+
+#         sale_dict[row.sale_id]["cogs"]  += line_cogs
+#         sale_dict[row.sale_id]["profit"] += line_profit
+
+#         line_items.append({
+#             "sale_id": row.sale_id,
+#             "invoice_number": row.invoice_number,
+#             "sale_date": row.sale_date.strftime("%Y-%m-%d") if row.sale_date else None,
+#             "customer": row.customer or "Walk-in",
+#             "product": row.product,
+#             "category": row.category or "—",
+#             "unit": row.unit_name or "piece",
+#             "qty": round(qty, 3),
+#             "selling_price": round(sell_price, 2),
+#             "cost_price": round(cost_unit, 2),
+#             "line_sales": round(line_sales, 2),
+#             "line_cost": round(line_cogs, 2),
+#             "profit": round(line_profit, 2),
+#         })
+
+#     # ─────────────────────────────────────────────
+#     #   D. Overall aggregates – protect against overpayment/change
+#     # ─────────────────────────────────────────────
+#     total_sales = 0.0
+#     total_cash_received = 0.0
+#     total_outstanding = 0.0
+#     total_credit_sales = 0.0
+#     total_cogs = 0.0
+#     gross_profit = 0.0
+
+#     for s in sale_dict.values():
+#         sale_total   = s["total_amount"]
+#         paid         = s["total_paid"]
+#         raw_balance  = s["balance"]   # what is stored in DB (can be negative)
+
+#         # ── Core protection logic ───────────────────────────────────────
+#         # 1. Effective cash received = never more than the actual sale value
+#         effective_paid = min(paid, sale_total)
+
+#         # 2. Effective balance for reporting = never negative
+#         effective_balance = max(raw_balance, 0)
+
+#         # 3. If the sale is effectively fully paid (after capping), it is not credit
+#         is_credit_sale = effective_balance > 0
+
+#         total_sales         += sale_total
+#         total_cash_received += effective_paid           # ← this is the main fix
+#         total_outstanding   += effective_balance
+#         total_cogs          += s["cogs"]
+#         gross_profit        += s["profit"]
+
+#         if is_credit_sale:
+#             total_credit_sales += sale_total
+
+#     # Expenses in the period (unchanged)
+#     expense_q = db.session.query(func.coalesce(func.sum(Expense.total_amount), 0))
+#     if start_date:
+#         expense_q = expense_q.filter(func.date(Expense.expense_date) >= start_date)
+#     if end_date:
+#         expense_q = expense_q.filter(func.date(Expense.expense_date) <= end_date)
+#     expense_q = expense_q.filter(Expense.status == 1)
+#     total_expenses = float(expense_q.scalar() or 0.0)
+
+#     net_profit = gross_profit - total_expenses
+
+#     # ─────────────────────────────────────────────
+#     #   Response (unchanged)
+#     # ─────────────────────────────────────────────
+#     return jsonify({
+#         "page": page,
+#         "per_page": per_page,
+#         "total_records": sales_q.count(),
+#         "summary": {
+#             "total_sales": round(total_sales, 2),
+#             "total_credit_sales": round(total_credit_sales, 2),
+#             "outstanding_balance": round(total_outstanding, 2),
+#             "total_cash_received": round(total_cash_received, 2),
+#             "total_cogs": round(total_cogs, 2),
+#             "gross_profit": round(gross_profit, 2),
+#             "total_expenses": round(total_expenses, 2),
+#             "net_profit": round(net_profit, 2),
+#         },
+#         "data": line_items
+#     }), 200
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    # # ─────────────────────────────────────────────
+    # #   D. Overall aggregates
+    # # ─────────────────────────────────────────────
+    # total_sales = 0.0
+    # total_cash_received = 0.0
+    # total_outstanding = 0.0
+    # total_credit_sales = 0.0
+    # total_cogs = 0.0
+    # gross_profit = 0.0
+
+    # for s in sale_dict.values():
+    #     total_sales += s["total_amount"]
+    #     total_cash_received += s["total_paid"]
+    #     total_outstanding += max(s["balance"], 0)
+    #     total_cogs += s["cogs"]
+    #     gross_profit += s["profit"]
+
+    #     # Credit sale = sale had remaining balance > 0
+    #     if s["balance"] > 0:
+    #         total_credit_sales += s["total_amount"]
+
+    # # Expenses in the period
+    # expense_q = db.session.query(func.coalesce(func.sum(Expense.total_amount), 0))
+    # if start_date:
+    #     expense_q = expense_q.filter(func.date(Expense.expense_date) >= start_date)
+    # if end_date:
+    #     expense_q = expense_q.filter(func.date(Expense.expense_date) <= end_date)
+    # expense_q = expense_q.filter(Expense.status == 1)
+    # total_expenses = float(expense_q.scalar() or 0)
+
+    # net_profit = gross_profit - total_expenses
+
+    # # ─────────────────────────────────────────────
+    # #   Response
+    # # ─────────────────────────────────────────────
+    # return jsonify({
+    #     "page": page,
+    #     "per_page": per_page,
+    #     "total_records": sales_q.count(),
+    #     "summary": {
+    #         "total_sales": round(total_sales, 2),
+    #         "total_credit_sales": round(total_credit_sales, 2),
+    #         "outstanding_balance": round(total_outstanding, 2),
+    #         "total_cash_received": round(total_cash_received, 2),   # money actually collected
+    #         "total_cogs": round(total_cogs, 2),
+    #         "gross_profit": round(gross_profit, 2),
+    #         "total_expenses": round(total_expenses, 2),
+    #         "net_profit": round(net_profit, 2),
+    #     },
+    #     "data": line_items
+    # }), 200
+
