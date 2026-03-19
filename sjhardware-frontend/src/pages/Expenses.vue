@@ -34,8 +34,8 @@
           <input
             v-model="searchQuery"
             placeholder="Description, item, reference..."
-            class="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg 
-                   bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 
+            class="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg
+                   bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100
                    focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition"
           />
         </div>
@@ -46,8 +46,8 @@
           <input
             v-model="dateRange.start"
             type="date"
-            class="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg 
-                   bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 
+            class="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg
+                   bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100
                    focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition"
           />
         </div>
@@ -58,8 +58,8 @@
           <input
             v-model="dateRange.end"
             type="date"
-            class="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg 
-                   bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 
+            class="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg
+                   bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100
                    focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition"
           />
         </div>
@@ -114,7 +114,7 @@
           </tr>
         </thead>
         <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-          <template v-for="expense in expenses" :key="expense.id">
+          <template v-for="expense in filteredExpenses" :key="expense.id">
             <!-- Main Row -->
             <tr
               class="hover:bg-indigo-50/40 dark:hover:bg-gray-800/50 transition-colors cursor-pointer"
@@ -126,10 +126,9 @@
                 </span>
               </td>
               <td class="p-4 text-black font-medium">{{ expense.id }}</td>
-              <td class="p-4 text-black  font-medium">{{ expense.description }}</td>
+              <td class="p-4 text-black font-medium">{{ expense.description }}</td>
 
-              <!-- Improved Narration Column – wider + tooltip on hover -->
-              <td 
+              <td
                 class="p-4 text-black text-sm max-w-md group relative line-clamp-3 hover:line-clamp-none transition-all duration-200"
                 :title="getFullNarration(expense.items)"
               >
@@ -144,10 +143,9 @@
                     </span>
                   </div>
                 </div>
-                <span v-else class="text-black  italic">No narration provided</span>
+                <span v-else class="text-black italic">No narration provided</span>
 
-                <!-- Tooltip on hover for long text -->
-                <div v-if="expense.items?.length > 0 && expense.items.some(i => i.description?.length > 80)" 
+                <div v-if="expense.items?.length > 0 && expense.items.some(i => i.description?.length > 80)"
                      class="absolute hidden group-hover:block z-20 bg-gray-900 text-white text-sm rounded p-3 shadow-xl w-96 -mt-2 left-0 top-full border border-gray-700">
                   <div class="space-y-2">
                     <div v-for="(item, idx) in expense.items" :key="idx" class="border-b border-gray-700 pb-2 last:border-0">
@@ -188,7 +186,7 @@
               </td>
             </tr>
 
-            <!-- Expanded Row with full details -->
+            <!-- Expanded Row -->
             <tr v-if="expandedRows.includes(expense.id)">
               <td colspan="9" class="p-0">
                 <div class="p-6 bg-gray-50 dark:bg-gray-900/40 border-t border-gray-200 dark:border-gray-700">
@@ -226,7 +224,7 @@
             </tr>
           </template>
 
-          <tr v-if="expenses.length === 0">
+          <tr v-if="filteredExpenses.length === 0">
             <td colspan="9" class="p-16 text-center text-gray-500 dark:text-gray-400 text-lg">
               No expenses found in the selected period.<br />
               <span class="text-sm mt-2 block">Try adjusting your filters or add a new expense.</span>
@@ -281,7 +279,7 @@
       </div>
     </div>
 
-    <!-- Add/Edit Expense Modal -->
+    <!-- Add/Edit Modal (unchanged – keeping your original structure) -->
     <div v-if="showModal" class="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50 animate-fadeInModal">
       <div class="bg-white rounded-lg p-6 w-full max-w-[806px] relative shadow-xl transform transition-all scale-95 animate-scaleUp">
         <h2 class="text-xl font-bold mb-4">{{ editingExpense ? 'Edit Expense' : 'Add Expense' }}</h2>
@@ -290,11 +288,11 @@
         <div class="grid grid-cols-2 gap-4 mb-4">
           <input v-model="expenseForm.description" placeholder="Expense Description" class="border p-2 rounded shadow-sm focus:ring-2 focus:ring-indigo-400 transition" />
           <input v-model="expenseForm.reference" placeholder="Reference" class="border p-2 rounded shadow-sm focus:ring-2 focus:ring-indigo-400 transition" />
-          <input 
-            list="paymentAccounts" 
-            v-model="expenseForm.payment_account_name" 
-            placeholder="Payment Account (Cash/Bank)" 
-            class="border p-2 rounded shadow-sm focus:ring-2 focus:ring-indigo-400 transition" 
+          <input
+            list="paymentAccounts"
+            v-model="expenseForm.payment_account_name"
+            placeholder="Payment Account (Cash/Bank)"
+            class="border p-2 rounded shadow-sm focus:ring-2 focus:ring-indigo-400 transition"
             @focus="fetchCashBankAccounts('')"
           />
           <datalist id="paymentAccounts">
@@ -305,11 +303,11 @@
 
         <h3 class="font-bold mb-2">Expense Items</h3>
         <div v-for="(item, index) in expenseForm.items" :key="`item-${index}`" class="grid grid-cols-5 gap-2 mb-2">
-          <input 
-            list="expenseAccounts" 
-            v-model="item.account_name" 
-            placeholder="Select Expense Account" 
-            class="border p-2 rounded shadow-sm focus:ring-2 focus:ring-indigo-400 transition" 
+          <input
+            list="expenseAccounts"
+            v-model="item.account_name"
+            placeholder="Select Expense Account"
+            class="border p-2 rounded shadow-sm focus:ring-2 focus:ring-indigo-400 transition"
             @focus="fetchExpenseAccounts('')"
           />
           <datalist id="expenseAccounts">
@@ -336,7 +334,7 @@
       </div>
     </div>
 
-    <!-- Add Expense Item Modal -->
+    <!-- Add Expense Item Modal (if you still use it) -->
     <div v-if="showItemModal" class="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50 animate-fadeInModal">
       <div class="bg-white rounded-lg p-6 w-full max-w-md relative shadow-xl transform transition-all scale-95 animate-scaleUp">
         <h2 class="text-xl font-bold mb-4">Add Expense Item</h2>
@@ -344,7 +342,6 @@
 
         <div class="grid gap-4 mb-4">
           <input v-model="expenseItemForm.name" placeholder="Expense Item Name" class="border p-2 rounded shadow-sm focus:ring-2 focus:ring-indigo-400 transition" />
-
           <select v-model="expenseItemForm.account_subtype" class="border p-2 rounded shadow-sm focus:ring-2 focus:ring-indigo-400 transition">
             <option value="" disabled>Select Expense Type</option>
             <option v-for="acc in expenseSubtypes" :key="acc" :value="acc">{{ acc }}</option>
@@ -375,7 +372,8 @@ export default {
     const defaultStart = oneMonthAgo.toISOString().split("T")[0];
 
     return {
-      expenses: [],
+      filteredExpenses: [],
+      grandTotal: 0,
       searchQuery: "",
       dateRange: {
         start: defaultStart,
@@ -414,9 +412,6 @@ export default {
   },
 
   computed: {
-    grandTotal() {
-      return this.expenses.reduce((sum, expense) => sum + Number(expense.total_amount || 0), 0);
-    },
     amountPaid() {
       return this.expenseForm.items.reduce((total, item) => total + Number(item.amount || 0), 0);
     },
@@ -424,37 +419,23 @@ export default {
 
   methods: {
     formatCurrency(value) {
-      if (!value && value !== 0) return "UGX 0";
-      return new Intl.NumberFormat('en-US', {
-        style: 'currency',
-        currency: 'UGX',
+      if (value == null) return "UGX 0";
+      return new Intl.NumberFormat("en-US", {
+        style: "currency",
+        currency: "UGX",
         minimumFractionDigits: 0,
-        maximumFractionDigits: 0
+        maximumFractionDigits: 0,
       }).format(value);
-
-      
     },
-    // Helper for full narration tooltip (shown on hover)
+
     getFullNarration(items) {
-      if (!items?.length) return '';
-      return items.map(i => i.description || '—').join('\n\n');
+      if (!items?.length) return "";
+      return items.map(i => i.description || "—").join("\n\n");
     },
-
-    // Optional: if you want to show more than first narration in main row
-    getNarrationPreview(items) {
-      if (!items?.length) return '—';
-      if (items.length === 1) return items[0].description || 'No narration';
-      return items.map(i => i.description || '—').join(' • ');
-    },
-    // getNarrationPreview(items) {
-    //   if (!items?.length) return '—';
-    //   if (items.length === 1) return items[0].description || 'No narration';
-    //   return `${items[0]?.description || 'Multiple items'} (+${items.length - 1})`;
-    // },
 
     getAccountName(accountId) {
       const acc = this.expenseAccounts.find(a => a.id === accountId);
-      return acc ? acc.name : "Unknown Account";
+      return acc ? acc.name : "Unknown";
     },
 
     async fetchCashBankAccounts(search = "") {
@@ -498,53 +479,27 @@ export default {
     },
 
     validateExpense() {
-      if (!this.expenseForm.description.trim()) {
-        alert("Expense description is required.");
-        return false;
-      }
-      if (!this.expenseForm.payment_account_id) {
-        alert("Please select a valid payment account.");
-        return false;
-      }
-      if (!this.expenseForm.expense_date) {
-        alert("Expense date is required.");
-        return false;
-      }
-      if (this.expenseForm.items.length === 0) {
-        alert("At least one expense item is required.");
-        return false;
-      }
+      if (!this.expenseForm.description.trim()) return alert("Expense description is required."), false;
+      if (!this.expenseForm.payment_account_id) return alert("Please select a valid payment account."), false;
+      if (!this.expenseForm.expense_date) return alert("Expense date is required."), false;
+      if (this.expenseForm.items.length === 0) return alert("At least one expense item is required."), false;
+
       for (const [i, item] of this.expenseForm.items.entries()) {
-        if (!item.account_id) {
-          alert(`Item ${i + 1}: Valid expense account is required.`);
-          return false;
-        }
-        if (!item.item_name.trim()) {
-          alert(`Item ${i + 1}: Item name is required.`);
-          return false;
-        }
-        if (!item.amount || item.amount <= 0) {
-          alert(`Item ${i + 1}: Amount must be greater than 0.`);
-          return false;
-        }
+        if (!item.account_id) return alert(`Item ${i + 1}: Valid expense account is required.`), false;
+        if (!item.item_name.trim()) return alert(`Item ${i + 1}: Item name is required.`), false;
+        if (!item.amount || item.amount <= 0) return alert(`Item ${i + 1}: Amount must be greater than 0.`), false;
       }
       return true;
     },
 
     async submitExpense() {
       const paymentAcc = this.cashBankAccounts.find(a => a.name === this.expenseForm.payment_account_name);
-      if (!paymentAcc) {
-        alert("Please select a valid Cash/Bank account!");
-        return;
-      }
+      if (!paymentAcc) return alert("Please select a valid Cash/Bank account!"), false;
       this.expenseForm.payment_account_id = paymentAcc.id;
 
       for (const item of this.expenseForm.items) {
         const acc = this.expenseAccounts.find(a => a.name === item.account_name);
-        if (!acc) {
-          alert(`Invalid expense account for item "${item.item_name}"`);
-          return;
-        }
+        if (!acc) return alert(`Invalid expense account for item "${item.item_name}"`), false;
         item.account_id = acc.id;
       }
 
@@ -561,31 +516,27 @@ export default {
         this.closeModal();
         this.fetchExpenses();
       } catch (err) {
-        console.error("❌ Error submitting expense:", err);
+        console.error("Error submitting expense:", err);
         alert("Failed to submit expense. " + (err.response?.data?.error || err.message));
       }
     },
 
     async submitExpenseItem() {
       if (!this.expenseItemForm.name.trim() || !this.expenseItemForm.account_subtype) {
-        alert("Expense Item Name and Type are required!");
-        return;
+        return alert("Expense Item Name and Type are required!");
       }
 
       try {
-        const payload = {
+        await api.post("/accounts/expense-items", {
           name: this.expenseItemForm.name.trim(),
           account_subtype: this.expenseItemForm.account_subtype
-        };
-
-        await api.post("/accounts/expense-items", payload);
-        alert(`✅ Expense Item "${this.expenseItemForm.name}" created successfully!`);
-
+        });
+        alert(`✅ Expense Item "${this.expenseItemForm.name}" created!`);
         await this.fetchExpenseAccounts();
         this.closeItemModal();
       } catch (err) {
-        console.error("❌ Error creating expense item:", err);
-        alert("Failed to create expense item. " + (err.response?.data?.error || err.message));
+        console.error("Error creating expense item:", err);
+        alert("Failed to create expense item.");
       }
     },
 
@@ -639,23 +590,26 @@ export default {
         };
 
         const cleanParams = Object.fromEntries(
-          Object.entries(params).filter(([_, value]) => value !== undefined)
+          Object.entries(params).filter(([_, v]) => v !== undefined)
         );
 
         const res = await api.get("/expenses/", { params: cleanParams });
 
-        this.expenses = res.data.data || [];
+        this.filteredExpenses = res.data.data || [];
+        this.grandTotal = res.data.grand_total?.total_expenses || 0;
+
+        const p = res.data.pagination || {};
         this.pagination = {
-          total: res.data.pagination.total || 0,
-          pages: res.data.pagination.pages || 1,
-          current_page: res.data.pagination.current_page || 1,
-          per_page: res.data.pagination.per_page || this.perPage,
-          has_next: res.data.pagination.has_next || false,
-          has_prev: res.data.pagination.has_prev || false,
+          total: p.total_records || 0,
+          pages: p.total_pages || 1,
+          current_page: p.current_page || 1,
+          per_page: p.per_page || this.perPage,
+          has_next: p.has_next || false,
+          has_prev: p.has_prev || false,
         };
       } catch (err) {
-        console.error("❌ Error fetching expenses:", err);
-        alert("Failed to load expenses. Please try again.");
+        console.error("Error fetching expenses:", err);
+        alert("Failed to load expenses.");
       }
     },
 
@@ -670,7 +624,7 @@ export default {
         alert("Start date cannot be later than end date.");
         return;
       }
-      this.pagination.current_page = 1; // Reset to first page on filter
+      this.pagination.current_page = 1;
       this.fetchExpenses();
     },
 
@@ -679,7 +633,6 @@ export default {
       const today = new Date().toISOString().split("T")[0];
       const oneMonthAgo = new Date();
       oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
-
       this.dateRange = {
         start: oneMonthAgo.toISOString().split("T")[0],
         end: today,
@@ -690,141 +643,125 @@ export default {
 
     async deleteExpense(id) {
       if (!confirm("Are you sure you want to delete this expense?")) return;
-
       try {
         await api.delete(`/expenses/${id}`);
         alert("🗑️ Expense deleted successfully!");
         this.fetchExpenses();
       } catch (err) {
-        console.error("❌ Error deleting expense:", err);
+        console.error("Error deleting expense:", err);
         alert("Failed to delete expense.");
       }
     },
 
     toggleExpand(id) {
       if (this.expandedRows.includes(id)) {
-        this.expandedRows = this.expandedRows.filter(rowId => rowId !== id);
+        this.expandedRows = this.expandedRows.filter(r => r !== id);
       } else {
         this.expandedRows.push(id);
       }
     },
 
-    // exportExcel() {
-    //   try {
-    //     const ws = XLSX.utils.json_to_sheet(this.expenses);
-    //     const wb = XLSX.utils.book_new();
-    //     XLSX.utils.book_append_sheet(wb, ws, "Expenses");
-    //     XLSX.writeFile(wb, "expenses.xlsx");
-    //   } catch (err) {
-    //     console.error("❌ Error exporting Excel:", err);
-    //     alert("Failed to export Excel.");
-    //   }
-    // },
-
-    // exportPDF() {
-    //   try {
-    //     const doc = new jsPDF();
-    //     doc.autoTable({
-    //       head: [["ID", "Description", "Total Amount", "Reference", "Expense Date", "Transaction No"]],
-    //       body: this.expenses.map(e => [
-    //         e.id,
-    //         e.description,
-    //         e.total_amount,
-    //         e.reference,
-    //         e.expense_date,
-    //         e.transaction_no
-    //       ])
-    //     });
-    //     doc.save("expenses.pdf");
-    //   } catch (err) {
-    //     console.error("❌ Error exporting PDF:", err);
-    //     alert("Failed to export PDF.");
-    //   }
-    // },
-
-    // ────────────────────────────────────────────────
-    // EXPORT EXCEL – now includes narration per item
-    // ────────────────────────────────────────────────
     exportExcel() {
       try {
-        const exportData = [];
+        const rows = [];
 
-        this.expenses.forEach(expense => {
-          // Main expense row
-          exportData.push({
-            ID: expense.id,
-            Description: expense.description,
-            Narration: expense.items?.length === 1 ? (expense.items[0].description || '—') : `Multiple (${expense.items.length})`,
-            "Total Amount": expense.total_amount,
-            Reference: expense.reference || '—',
-            "Expense Date": expense.expense_date,
-            "Transaction No": expense.transaction_no || '—'
-          });
-
-          // Add one row per item with full narration
-          expense.items.forEach(item => {
-            exportData.push({
-              ID: `  └ Item ${item.id}`,
-              Description: `  └ ${item.item_name}`,
-              Narration: item.description || '—',
-              "Total Amount": item.amount,
-              Reference: '',
-              "Expense Date": '',
-              "Transaction No": ''
+        this.filteredExpenses.forEach(exp => {
+          exp.items.forEach(item => {
+            rows.push({
+              "Exp ID": exp.id,
+              "Date": exp.expense_date,
+              "Description": exp.description,
+              "Reference": exp.reference || "—",
+              "Trans #": exp.transaction_no || "—",
+              "Item Name": item.item_name || "—",
+              "Narration": item.description || "—",
+              "Account": this.getAccountName(item.account_id),
+              "Amount (UGX)": Number(item.amount || 0),
             });
           });
         });
 
-        const ws = XLSX.utils.json_to_sheet(exportData);
+        rows.push({
+          "Exp ID": "GRAND TOTAL",
+          "Date": "",
+          "Description": "",
+          "Reference": "",
+          "Trans #": "",
+          "Item Name": "",
+          "Narration": "",
+          "Account": "",
+          "Amount (UGX)": this.grandTotal,
+        });
+
+        const ws = XLSX.utils.json_to_sheet(rows);
+        ws["!cols"] = [
+          { wch: 10 }, { wch: 12 }, { wch: 35 }, { wch: 15 },
+          { wch: 12 }, { wch: 28 }, { wch: 45 }, { wch: 30 }, { wch: 16 }
+        ];
+
         const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "Expenses with Narration");
-        XLSX.writeFile(wb, "expenses_with_narration.xlsx");
+        XLSX.utils.book_append_sheet(wb, ws, "Expense Details");
+        XLSX.writeFile(wb, `expenses_${new Date().toISOString().slice(0,10)}.xlsx`);
       } catch (err) {
-        console.error("❌ Error exporting Excel:", err);
-        alert("Failed to export Excel.");
+        console.error("Excel export failed:", err);
+        alert("Failed to export to Excel.");
       }
     },
 
-
-    
-    // ────────────────────────────────────────────────
-    // EXPORT PDF – now includes narration column
-    // ────────────────────────────────────────────────
     exportPDF() {
       try {
         const doc = new jsPDF();
-        doc.setFontSize(16);
-        doc.text("Expenses Report with Narration", 14, 20);
 
-        const tableData = this.expenses.map(expense => [
-          expense.id,
-          expense.description,
-          expense.items?.length === 1 
-            ? (expense.items[0].description || '—') 
-            : `Multiple narrations (${expense.items.length})`,
-          expense.total_amount,
-          expense.reference || '—',
-          expense.expense_date,
-          expense.transaction_no || '—'
-        ]);
+        doc.setFontSize(16);
+        doc.text("Expense Report – Itemized Breakdown", 14, 18);
+
+        doc.setFontSize(11);
+        doc.text(`Period: ${this.dateRange.start} to ${this.dateRange.end}`, 14, 26);
+        doc.text(`Generated: ${new Date().toLocaleDateString()}`, 14, 32);
+
+        const body = this.filteredExpenses.flatMap(exp =>
+          exp.items.map(item => [
+            exp.id,
+            exp.expense_date,
+            exp.description.length > 55 ? exp.description.substring(0, 52) + "..." : exp.description,
+            exp.reference || "—",
+            item.item_name,
+            item.description?.length > 65 ? item.description.substring(0, 62) + "..." : (item.description || "—"),
+            this.getAccountName(item.account_id),
+            Number(item.amount).toLocaleString("en-US"),
+          ])
+        );
 
         doc.autoTable({
-          head: [["ID", "Description", "Narration", "Total Amount", "Reference", "Date", "Trans. #"]],
-          body: tableData,
-          startY: 30,
-          styles: { fontSize: 9, cellPadding: 3 },
-          headStyles: { fillColor: [79, 70, 229] }, // indigo
-          alternateRowStyles: { fillColor: [243, 244, 246] },
+          head: [["ID", "Date", "Description", "Ref", "Item", "Narration", "Account", "Amount (UGX)"]],
+          body,
+          startY: 38,
+          styles: { fontSize: 8, cellPadding: 3 },
+          headStyles: { fillColor: [79, 70, 229], textColor: 255 },
+          alternateRowStyles: { fillColor: [245, 247, 250] },
           columnStyles: {
-            2: { cellWidth: 60 } // wider narration column
+            0: { cellWidth: 14 },
+            1: { cellWidth: 22 },
+            2: { cellWidth: 38 },
+            3: { cellWidth: 16 },
+            4: { cellWidth: 28 },
+            5: { cellWidth: 45 },
+            6: { cellWidth: 30 },
+            7: { cellWidth: 24, halign: "right" },
           },
-          margin: { top: 30 }
+          margin: { top: 38, left: 14, right: 14 },
         });
 
-        doc.save("expenses_report.pdf");
+        const finalY = doc.lastAutoTable.finalY + 10;
+        doc.setFontSize(12);
+        doc.setFont("helvetica", "bold");
+        doc.text("Grand Total:", 140, finalY);
+        doc.text(this.formatCurrency(this.grandTotal), 190, finalY, { align: "right" });
+
+        doc.save(`expenses_detailed_${new Date().toISOString().slice(0,10)}.pdf`);
       } catch (err) {
-        console.error("❌ Error exporting PDF:", err);
-        alert("Failed to export PDF.");
+        console.error("PDF export failed:", err);
+        alert("Failed to export to PDF.");
       }
     },
   },
@@ -841,7 +778,7 @@ export default {
     this.fetchCashBankAccounts();
     this.fetchExpenseAccounts();
     this.fetchExpenseSubtypes();
-  }
+  },
 };
 </script>
 
@@ -858,26 +795,6 @@ export default {
 }
 .animate-scaleUp { animation: scaleUp 0.3s ease-out forwards; }
 
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(-10px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-.animate-fadeIn { animation: fadeIn 0.5s ease-in-out forwards; }
-.dark {
-  --tw-bg-opacity: 1;
-  background-color: #111827;
-}
-
-tr {
-  transition: background-color 0.2s ease;
-  color:black;
-}
-
-td, th {
-  vertical-align: middle;
-}
-
-/* Tooltip style for long narration */
 .group:hover .group-hover\:block {
   display: block;
 }
