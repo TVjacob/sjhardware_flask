@@ -590,115 +590,234 @@ def debtors_report_old():
 
     return jsonify(result)
 
+
 @token_required
 @reports_bp.route('/debtors-aging', methods=['GET'])
 def debtors_aging_report():
     """
-    Returns a professional Debtors Aging Report:
-    - Buckets: 0-30, 31-60, 61-90, >90 days
-    - Includes per-customer invoice list with days outstanding
-    - Only customers with outstanding balances > 0
-    - Supports pagination: ?page=1&page_size=10
+    Debtors Aging Report - Only status 3 (Credit) and 4 (Partial)
     """
-    # --- Optional "as of" date ---
+    # Optional "as of" date
     as_of_str = request.args.get("as_of")
-    as_of = datetime.strptime(as_of_str, "%Y-%m-%d") if as_of_str else datetime.utcnow()
+    try:
+        as_of = datetime.strptime(as_of_str, "%Y-%m-%d").date() if as_of_str else datetime.utcnow().date()
+    except ValueError:
+        return jsonify({"error": "Invalid as_of date. Use YYYY-MM-DD"}), 400
 
-    # --- Pagination parameters ---
     page = int(request.args.get("page", 1))
-    page_size = int(request.args.get("page_size", 10))
-    offset = (page - 1) * page_size
+    page_size = int(request.args.get("page_size", 20))
 
-    # --- Subquery: customers with outstanding balances ---
-    subq = (
-        db.session.query(
-            Sale.customer_id,
-            func.coalesce(func.sum(Sale.balance), 0).label('total_balance')
-        )
-        .filter(Sale.status != 9, Sale.balance > 0)
-        .group_by(Sale.customer_id)
-        .subquery()
-    )
+    # Days outstanding
+    days_outstanding = func.date_part('day', func.age(as_of, Sale.sale_date)).label('days_outstanding')
 
-    # --- Total count for pagination metadata ---
-    total_customers = db.session.query(func.count(subq.c.customer_id)).scalar()
-
-    # --- Fetch paginated customers ---
-    customers = (
-        db.session.query(
-            Customer.id.label('customer_id'),
-            Customer.name,
-            Customer.phone,
-            Customer.email,
-            Customer.address,
-            func.coalesce(subq.c.total_balance, 0).label('balance')
-        )
-        .outerjoin(subq, subq.c.customer_id == Customer.id)
-        .filter(Customer.status != 9, subq.c.total_balance > 0)
-        .order_by(Customer.name)
-        .offset(offset)
-        .limit(page_size)
-        .all()
-    )
-
-    # --- Prepare aging buckets ---
-    bucket_case = case(
-        (func.date_part('day', func.age(as_of, Sale.sale_date)) <= 30, '0-30'),
-        (func.date_part('day', func.age(as_of, Sale.sale_date)) <= 60, '31-60'),
-        (func.date_part('day', func.age(as_of, Sale.sale_date)) <= 90, '61-90'),
+    # Aging bucket
+    aging_bucket = case(
+        (days_outstanding <= 30, '0-30'),
+        (days_outstanding <= 60, '31-60'),
+        (days_outstanding <= 90, '61-90'),
         else_='>90'
-    )
+    ).label('aging_bucket')
 
-    report = []
-    for c in customers:
-        # Fetch invoices per customer
-        invoices = db.session.query(
-            Sale.id.label('invoice_id'),
-            Sale.sale_number,
-            Sale.sale_date,
-            Sale.total_amount,
-            Sale.total_paid,
-            Sale.balance,
-            func.date_part('day', func.age(as_of, Sale.sale_date)).label('days_outstanding'),
-            bucket_case.label('aging_bucket')
-        ).filter(
-            Sale.customer_id == c.customer_id,
-            Sale.status != 9,
-            Sale.balance > 0
-        ).order_by(Sale.sale_date).all()
+    # Main Query - Only status 3 and 4 + balance > 0
+    query = db.session.query(
+        Customer.id.label('customer_id'),
+        Customer.name,
+        Customer.phone,
+        Customer.email,
+        Customer.address,
+        Sale.id.label('invoice_id'),
+        Sale.sale_number,
+        Sale.sale_date,
+        Sale.total_amount,
+        Sale.total_paid,
+        Sale.balance,
+        days_outstanding,
+        aging_bucket
+    ).join(Sale, Sale.customer_id == Customer.id)\
+     .filter(
+        Sale.status.in_([3, 4]),           # ← This is what you wanted
+        Sale.balance > 0,
+        Sale.status != 9,
+        Customer.status != 9
+    ).order_by(Customer.name, Sale.sale_date.desc())
 
-        invoice_list = [{
-            "invoice_id": inv.invoice_id,
-            "sale_number": inv.sale_number,
-            "sale_date": inv.sale_date.strftime("%Y-%m-%d"),
-            "total_amount": float(inv.total_amount),
-            "total_paid": float(inv.total_paid),
-            "balance": float(inv.balance),
-            "days_outstanding": int(inv.days_outstanding),
-            "aging_bucket": inv.aging_bucket
-        } for inv in invoices]
+    # Pagination
+    total_records = query.count()
+    total_pages = (total_records + page_size - 1) // page_size
 
-        # Compute total balance per customer
-        total_balance = sum(inv["balance"] for inv in invoice_list)
+    results = query.offset((page - 1) * page_size).limit(page_size).all()
 
-        report.append({
-            "customer_id": c.customer_id,
-            "name": c.name,
-            "phone": c.phone,
-            "email": c.email,
-            "address": c.address,
-            "total_balance": total_balance,
-            "invoices": invoice_list
-        })
+    # Group by customer
+    from collections import defaultdict
+    customer_dict = defaultdict(lambda: {
+        "customer_id": None,
+        "name": "",
+        "phone": "",
+        "email": "",
+        "address": "",
+        "total_balance": 0.0,
+        "invoices": []
+    })
+
+    for row in results:
+        cid = row.customer_id
+
+        if customer_dict[cid]["customer_id"] is None:
+            customer_dict[cid].update({
+                "customer_id": cid,
+                "name": row.name,
+                "phone": row.phone,
+                "email": row.email,
+                "address": row.address,
+            })
+
+        invoice = {
+            "invoice_id": row.invoice_id,
+            "sale_number": row.sale_number,
+            "sale_date": row.sale_date.strftime("%Y-%m-%d"),
+            "total_amount": float(row.total_amount),
+            "total_paid": float(row.total_paid),
+            "balance": float(row.balance),
+            "days_outstanding": int(row.days_outstanding or 0),
+            "aging_bucket": row.aging_bucket
+        }
+
+        customer_dict[cid]["invoices"].append(invoice)
+        customer_dict[cid]["total_balance"] += float(row.balance)
+
+    report = list(customer_dict.values())
+
+    # Summary totals
+    bucket_totals = {'0-30': 0.0, '31-60': 0.0, '61-90': 0.0, '>90': 0.0}
+    grand_total = 0.0
+
+    for cust in report:
+        for inv in cust["invoices"]:
+            bucket = inv["aging_bucket"]
+            bucket_totals[bucket] += inv["balance"]
+        grand_total += cust["total_balance"]
 
     return jsonify({
         "as_of": as_of.strftime("%Y-%m-%d"),
         "page": page,
         "page_size": page_size,
-        "total_customers": total_customers,
-        "total_pages": (total_customers + page_size - 1) // page_size,
+        "total_customers": len(report),
+        "total_pages": total_pages,
+        "total_records": total_records,
+        "bucket_totals": {k: round(v, 2) for k, v in bucket_totals.items()},
+        "grand_total": round(grand_total, 2),
         "report": report
     })
+
+# @token_required
+# @reports_bp.route('/debtors-aging', methods=['GET'])
+# def debtors_aging_report():
+#     """
+#     Returns a professional Debtors Aging Report:
+#     - Buckets: 0-30, 31-60, 61-90, >90 days
+#     - Includes per-customer invoice list with days outstanding
+#     - Only customers with outstanding balances > 0
+#     - Supports pagination: ?page=1&page_size=10
+#     """
+#     # --- Optional "as of" date ---
+#     as_of_str = request.args.get("as_of")
+#     as_of = datetime.strptime(as_of_str, "%Y-%m-%d") if as_of_str else datetime.utcnow()
+
+#     # --- Pagination parameters ---
+#     page = int(request.args.get("page", 1))
+#     page_size = int(request.args.get("page_size", 10))
+#     offset = (page - 1) * page_size
+
+#     # --- Subquery: customers with outstanding balances ---
+#     subq = (
+#         db.session.query(
+#             Sale.customer_id,
+#             func.coalesce(func.sum(Sale.balance), 0).label('total_balance')
+#         )
+#         .filter(Sale.status != 9, Sale.balance > 0)
+#         .group_by(Sale.customer_id)
+#         .subquery()
+#     )
+
+#     # --- Total count for pagination metadata ---
+#     total_customers = db.session.query(func.count(subq.c.customer_id)).scalar()
+
+#     # --- Fetch paginated customers ---
+#     customers = (
+#         db.session.query(
+#             Customer.id.label('customer_id'),
+#             Customer.name,
+#             Customer.phone,
+#             Customer.email,
+#             Customer.address,
+#             func.coalesce(subq.c.total_balance, 0).label('balance')
+#         )
+#         .outerjoin(subq, subq.c.customer_id == Customer.id)
+#         .filter(Customer.status != 9, subq.c.total_balance > 0)
+#         .order_by(Customer.name)
+#         .offset(offset)
+#         .limit(page_size)
+#         .all()
+#     )
+
+#     # --- Prepare aging buckets ---
+#     bucket_case = case(
+#         (func.date_part('day', func.age(as_of, Sale.sale_date)) <= 30, '0-30'),
+#         (func.date_part('day', func.age(as_of, Sale.sale_date)) <= 60, '31-60'),
+#         (func.date_part('day', func.age(as_of, Sale.sale_date)) <= 90, '61-90'),
+#         else_='>90'
+#     )
+
+#     report = []
+#     for c in customers:
+#         # Fetch invoices per customer
+#         invoices = db.session.query(
+#             Sale.id.label('invoice_id'),
+#             Sale.sale_number,
+#             Sale.sale_date,
+#             Sale.total_amount,
+#             Sale.total_paid,
+#             Sale.balance,
+#             func.date_part('day', func.age(as_of, Sale.sale_date)).label('days_outstanding'),
+#             bucket_case.label('aging_bucket')
+#         ).filter(
+#             Sale.customer_id == c.customer_id,
+#             Sale.status in (1, 2),  # Only consider completed or partially paid sales
+#             Sale.balance > 0
+#         ).order_by(Sale.sale_date).all()
+
+#         invoice_list = [{
+#             "invoice_id": inv.invoice_id,
+#             "sale_number": inv.sale_number,
+#             "sale_date": inv.sale_date.strftime("%Y-%m-%d"),
+#             "total_amount": float(inv.total_amount),
+#             "total_paid": float(inv.total_paid),
+#             "balance": float(inv.balance),
+#             "days_outstanding": int(inv.days_outstanding),
+#             "aging_bucket": inv.aging_bucket
+#         } for inv in invoices]
+
+#         # Compute total balance per customer
+#         total_balance = sum(inv["balance"] for inv in invoice_list)
+
+#         report.append({
+#             "customer_id": c.customer_id,
+#             "name": c.name,
+#             "phone": c.phone,
+#             "email": c.email,
+#             "address": c.address,
+#             "total_balance": total_balance,
+#             "invoices": invoice_list
+#         })
+
+#     return jsonify({
+#         "as_of": as_of.strftime("%Y-%m-%d"),
+#         "page": page,
+#         "page_size": page_size,
+#         "total_customers": total_customers,
+#         "total_pages": (total_customers + page_size - 1) // page_size,
+#         "report": report
+#     })
 
 @token_required
 @reports_bp.route('/creditors-aging', methods=['GET'])
@@ -725,7 +844,7 @@ def creditors_aging_report():
             PurchaseOrder.supplier_id,
             func.coalesce(func.sum(PurchaseOrder.total_balance), 0).label("total_balance")
         )
-        .filter(PurchaseOrder.status != 9, PurchaseOrder.total_balance > 0)
+        .filter(PurchaseOrder.status.in_([2,3,4,5]), PurchaseOrder.total_balance > 0)
         .group_by(PurchaseOrder.supplier_id)
         .subquery()
     )
@@ -773,7 +892,7 @@ def creditors_aging_report():
             aging_case.label("aging_bucket")
         ).filter(
             PurchaseOrder.supplier_id == s.supplier_id,
-            PurchaseOrder.status != 9,
+            PurchaseOrder.status.in_([2,3,4,5]),
             PurchaseOrder.total_balance > 0
         ).order_by(PurchaseOrder.purchase_date).all()
 
