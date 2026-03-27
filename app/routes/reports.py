@@ -1139,13 +1139,13 @@ def consumption_report():
 
     # Sales consumption
     sales_query = SaleItem.query.join(Sale).filter(Sale.status != 9)
-    if start_date: sales_query = sales_query.filter(Sale.sale_date >= start_date)
-    if end_date: sales_query = sales_query.filter(Sale.sale_date <= end_date)
+    if start_date: sales_query = sales_query.filter(func.date(Sale.sale_date) >= start_date)
+    if end_date: sales_query = sales_query.filter(func.date(Sale.sale_date) <= end_date)
 
     # Stock adjustments
     adjustments = StockAdjustment.query.filter(StockAdjustment.status == 1)
-    if start_date: adjustments = adjustments.filter(StockAdjustment.adjusted_at >= start_date)
-    if end_date: adjustments = adjustments.filter(StockAdjustment.adjusted_at <= end_date)
+    if start_date: adjustments = adjustments.filter(func.date(StockAdjustment.adjusted_at) >= start_date)
+    if end_date: adjustments = adjustments.filter(func.date(StockAdjustment.adjusted_at) <= end_date)
 
     result = []
 
@@ -1212,9 +1212,9 @@ def performance_list():
     )
 
     if start_date:
-        query = query.filter(Sale.sale_date >= start_date)
+        query = query.filter(func.date(Sale.sale_date) >= start_date)
     if end_date:
-        query = query.filter(Sale.sale_date <= end_date)
+        query = query.filter(func.date(Sale.sale_date)<= end_date)
     if search:
         query = query.filter(Product.name.ilike(f"%{search}%"))
 
