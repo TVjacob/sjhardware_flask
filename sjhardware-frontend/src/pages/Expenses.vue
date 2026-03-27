@@ -365,6 +365,7 @@ import jsPDF from "jspdf";
 import "jspdf-autotable";
 
 export default {
+  name: 'ExpenseManagement',
   data() {
     const today = new Date().toISOString().split("T")[0];
     const oneMonthAgo = new Date();
@@ -590,7 +591,7 @@ export default {
         };
 
         const cleanParams = Object.fromEntries(
-          Object.entries(params).filter(([_, v]) => v !== undefined)
+          Object.entries(params).filter(([, v]) => v !== undefined)
         );
 
         const res = await api.get("/expenses/", { params: cleanParams });

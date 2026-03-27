@@ -436,29 +436,33 @@ function applyQuickRange() {
     case 'today':
       start = end
       break
-    case 'yesterday':
+    case 'yesterday': {
       const yest = new Date(today)
       yest.setDate(today.getDate() - 1)
       start = end = yest.toISOString().split('T')[0]
       break
-    case 'this-week':
+    }
+    case 'this-week': {
       const first = new Date(today)
       first.setDate(today.getDate() - today.getDay())
       start = first.toISOString().split('T')[0]
       break
-    case 'last-7-days':
+    }
+    case 'last-7-days': {
       const last7 = new Date(today)
       last7.setDate(today.getDate() - 7)
       start = last7.toISOString().split('T')[0]
       break
+    }
     case 'this-month':
       start = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0]
       break
-    case 'last-30-days':
+    case 'last-30-days': {
       const last30 = new Date(today)
       last30.setDate(today.getDate() - 30)
       start = last30.toISOString().split('T')[0]
       break
+    }
   }
 
   startDate.value = start

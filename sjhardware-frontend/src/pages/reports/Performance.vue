@@ -210,7 +210,7 @@
   </div>
 </template>
 
-<script setup>
+<script setup name="ProductPerformanceReport">
 import { ref, computed, onMounted } from 'vue'
 import debounce from 'lodash.debounce'
 import api from '@/api'
