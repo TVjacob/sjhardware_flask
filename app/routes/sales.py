@@ -165,6 +165,9 @@ def create_sale():
                 {"account_id": 1200, "transaction_type": "Credit", "amount": cogs_total},  # Inventory
             ]
         else:
+
+
+            
             # Full credit sale
             entries = [
                 {"account_id": 1100, "transaction_type": "Debit", "amount": total_amount},  # A/R

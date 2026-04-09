@@ -21,7 +21,7 @@ env = load_env()
 # ------------------------------------------------------------------
 class Config:
     SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL', 
-        'postgresql://postgres:password1@localhost:5432/retail_shop')
+        'postgresql://postgres:password1@localhost:5432/sjhardware_new_db')
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
     # THIS IS THE ONLY LINE THAT MATTERS
@@ -33,7 +33,7 @@ class Config:
         # or env.get("DOCKER_DB_URL")             # ← for local docker-compose
         # or 
         env.get("LOCAL_DB_URL")              # ← for running locally without Docker
-        or "postgresql://postgres:password1@localhost:5432/sjhardware"
+        or "postgresql://postgres:password1@localhost:5432/sjhardware_new_db"
     )
 
     # Optional: make sure PostgreSQL driver is used (Render needs this format)

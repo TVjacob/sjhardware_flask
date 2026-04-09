@@ -95,6 +95,8 @@ permissions = [
 
     # --- Financial Reports ---
     ("view_balance_sheet", "View balance sheet report"),
+    ("view_general_ledger", "View general ledger report"),
+
     ("view_income_statement", "View income statement (P&L)"),
     ("view_cash_flow", "View cash flow statement"),
     ("view_trial_balance", "View trial balance"),
@@ -236,6 +238,74 @@ def update_all_accounts():
             db.session.rollback()
             print(f"Non-fatal error in accounts (continuing): {e}")
 
+
+def cleanup_unused_permissions():
+    """
+    Removes ALL permissions from the database that are NOT actively used 
+    in your current Sidebar menu.
+    """
+    with app.app_context():
+        # === PERMISSIONS CURRENTLY USED IN YOUR SIDEBAR ===
+        active_permissions = {
+            "view_dashboard",
+            "view_ledger",
+            "view_inventory",
+            "view_customers",
+            "create_invoice",      # Enter Sale
+            "view_invoices",       # Sales List
+            "view_suppliers",
+            "create_purchase",
+            "view_purchases",
+            "adjust_stock",        # Stock Adjustments
+            "view_expense",
+            "view_reports",
+            "view_permissions",
+            "assign_permissions",
+            "delete_user",
+            "edit_user",
+            "create_user",
+            "create_journal_entry",
+            "delete_journal_entry",
+            "view_ledger",
+            "view_stock",
+            "view_sales",
+            "view_expenses",
+            "view_accounts",
+            "view_balance_sheet",
+            "view_general_ledger", 
+            "view_income_statement", 
+            "view_cash_flow", 
+            "view_trial_balance",
+            "view_debtors_aging",
+            "view_creditors_aging", 
+            "export_reports", 
+            "view_users"
+        }
+
+        # Get all permissions in database
+        all_db_permissions = Permission.query.all()
+
+        to_delete = []
+        kept = 0
+
+        for perm in all_db_permissions:
+            if perm.name not in active_permissions:
+                to_delete.append(perm)
+            else:
+                kept += 1
+
+        if to_delete:
+            print(f"🗑️ Found {len(to_delete)} unused permissions. Removing them...")
+            for perm in to_delete:
+                perm.users = []          # Clear user relationships first
+                db.session.delete(perm)
+            
+            db.session.commit()
+            print(f"✅ Successfully removed {len(to_delete)} unused permissions.")
+        else:
+            print("✅ Database is already clean. No unused permissions found.")
+
+        print(f"Kept {kept} active permissions.")
 
 def normalize_account_type_enum_uppercase():
     with app.app_context():
@@ -416,4 +486,5 @@ if __name__ == "__main__":
         normalize_account_type_enum_uppercase()
         seed_permissions()
         create_default_admin()
+        cleanup_unused_permissions()
     app.run(host="0.0.0.0", port=5005, debug=True)

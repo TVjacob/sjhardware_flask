@@ -2,9 +2,7 @@
   <div class="p-6 space-y-8 bg-gray-50 dark:bg-gray-950 min-h-screen">
     <!-- Header -->
     <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6 mb-6">
-      <h1 class="text-3xl font-bold  tracking-tight">
-        Dashboard Overview
-      </h1>
+      <h1 class="text-3xl font-bold tracking-tight">Dashboard Overview</h1>
       <button
         @click="fetchDashboard"
         :disabled="loading"
@@ -24,7 +22,7 @@
       <span class="ml-4 text-xl text-gray-600 dark:text-gray-400">Loading dashboard data...</span>
     </div>
 
-    <!-- Dashboard Content -->
+    <!-- Error -->
     <div v-else-if="error" class="text-center py-20 text-red-600 dark:text-red-400">
       <p class="text-xl font-semibold">Failed to load dashboard</p>
       <p class="mt-2">{{ error }}</p>
@@ -34,82 +32,144 @@
     </div>
 
     <div v-else class="space-y-10">
-      <!-- Primary Metrics -->
+      <!-- Primary Metrics - Permission Controlled -->
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6">
-        <div
-          v-for="card in primaryMetrics"
-          :key="card.title"
-          class="bg-white dark:bg-gray-800 rounded-xl shadow border border-gray-200 dark:border-gray-700 p-6 hover:shadow-xl transition-all duration-300"
-        >
+
+        <div v-if="canView('view_inventory')" class="metric-card">
           <div class="flex items-center justify-between">
             <div>
-              <p class="text-sm font-medium ">{{ card.title }}</p>
-              <p class="text-3xl font-bold  mt-2">
-                {{ card.value }}
-              </p>
+              <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Products</p>
+              <p class="text-3xl font-bold mt-2">{{ totalProducts }}</p>
             </div>
-            <div :class="card.iconClass" class="text-4xl opacity-80">
-              {{ card.icon }}
-            </div>
+            <span class="text-4xl">📦</span>
           </div>
-          <p class="text-xs text-gray-400 dark:text-gray-500 mt-2">{{ card.subtitle }}</p>
+          <p class="text-xs text-gray-400 mt-2">Active in inventory</p>
+        </div>
+
+        <div v-if="canView('view_customers')" class="metric-card">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Customers</p>
+              <p class="text-3xl font-bold mt-2">{{ totalCustomers }}</p>
+            </div>
+            <span class="text-4xl">👥</span>
+          </div>
+          <p class="text-xs text-gray-400 mt-2">Registered customers</p>
+        </div>
+
+        <div v-if="canView('view_suppliers')" class="metric-card">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Suppliers</p>
+              <p class="text-3xl font-bold mt-2">{{ totalSuppliers }}</p>
+            </div>
+            <span class="text-4xl">🏪</span>
+          </div>
+          <p class="text-xs text-gray-400 mt-2">Active suppliers</p>
+        </div>
+
+        <div v-if="canView('view_sales')" class="metric-card">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Total Sales</p>
+              <p class="text-3xl font-bold mt-2 text-green-600">UGX {{ formatNumber(totalSales) }}</p>
+            </div>
+            <span class="text-4xl">💰</span>
+          </div>
+          <p class="text-xs text-gray-400 mt-2">Total revenue</p>
+        </div>
+
+        <div v-if="canView('view_invoices')" class="metric-card">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Outstanding Sales</p>
+              <p class="text-3xl font-bold mt-2 text-red-600">UGX {{ formatNumber(outstandingSales) }}</p>
+            </div>
+            <span class="text-4xl">⏳</span>
+          </div>
+          <p class="text-xs text-gray-400 mt-2">Pending receivables</p>
+        </div>
+
+        <div v-if="canView('view_purchases')" class="metric-card">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Purchase Orders</p>
+              <p class="text-3xl font-bold mt-2">{{ totalPurchaseOrders }}</p>
+            </div>
+            <span class="text-4xl">📋</span>
+          </div>
+          <p class="text-xs text-gray-400 mt-2">All active POs</p>
         </div>
       </div>
 
       <!-- Charts -->
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div class="bg-white dark:bg-gray-800 rounded-xl shadow border border-gray-200 dark:border-gray-700 p-6">
-          <h2 class="text-xl font-bold  mb-4 flex items-center gap-2">
-            <span>📈</span> Sales Last 7 Days
-          </h2>
+        <div v-if="canView('view_sales')" class="bg-white dark:bg-gray-800 rounded-xl shadow border border-gray-200 dark:border-gray-700 p-6">
+          <h2 class="text-xl font-bold mb-4 flex items-center gap-2">📈 Sales Last 7 Days</h2>
           <LineChart :chartData="salesChartData" />
         </div>
 
-        <div class="bg-white dark:bg-gray-800 rounded-xl shadow border border-gray-200 dark:border-gray-700 p-6">
-          <h2 class="text-xl font-bold  mb-4 flex items-center gap-2">
-            <span>📉</span> Expenses Last 7 Days
-          </h2>
+        <div v-if="canView('view_expenses')" class="bg-white dark:bg-gray-800 rounded-xl shadow border border-gray-200 dark:border-gray-700 p-6">
+          <h2 class="text-xl font-bold mb-4 flex items-center gap-2">📉 Expenses Last 7 Days</h2>
           <LineChart :chartData="expensesChartData" />
         </div>
       </div>
 
-      <!-- Best / Least Products -->
+      <!-- Best / Least Products (Inline - No external component) -->
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div class="bg-white dark:bg-gray-800 rounded-xl shadow border border-gray-200 dark:border-gray-700 p-6">
-          <h2 class="text-xl font-bold  mb-4">Top 5 Best Performing Products</h2>
-          <ProductList :products="bestProducts" type="best" />
+        <!-- Best Products -->
+        <div v-if="canView('view_reports')" class="bg-white dark:bg-gray-800 rounded-xl shadow border border-gray-200 dark:border-gray-700 p-6">
+          <h2 class="text-xl font-bold mb-4">Top 5 Best Performing Products</h2>
+          <div class="space-y-3">
+            <div v-for="(product, i) in bestProducts" :key="i"
+                 class="flex justify-between items-center bg-gray-50 dark:bg-gray-700 p-3 rounded-lg">
+              <div>
+                <span class="font-medium">{{ product.name }}</span>
+                <span class="text-xs text-gray-500 ml-2">({{ product.category }})</span>
+              </div>
+              <div class="text-right">
+                <span class="font-bold text-green-600">UGX {{ formatNumber(product.profit) }}</span>
+              </div>
+            </div>
+          </div>
         </div>
 
-        <div class="bg-white dark:bg-gray-800 rounded-xl shadow border border-gray-200 dark:border-gray-700 p-6">
-          <h2 class="text-xl font-bold  mb-4">Top 5 Least Performing Products</h2>
-          <ProductList :products="leastProducts" type="least" />
+        <!-- Least Products -->
+        <div v-if="canView('view_reports')" class="bg-white dark:bg-gray-800 rounded-xl shadow border border-gray-200 dark:border-gray-700 p-6">
+          <h2 class="text-xl font-bold mb-4">Top 5 Least Performing Products</h2>
+          <div class="space-y-3">
+            <div v-for="(product, i) in leastProducts" :key="i"
+                 class="flex justify-between items-center bg-gray-50 dark:bg-gray-700 p-3 rounded-lg">
+              <div>
+                <span class="font-medium">{{ product.name }}</span>
+                <span class="text-xs text-gray-500 ml-2">({{ product.category }})</span>
+              </div>
+              <div class="text-right">
+                <span class="font-bold text-red-600">UGX {{ formatNumber(product.profit) }}</span>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
       <!-- Liabilities / Payables -->
       <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div class="bg-white dark:bg-gray-800 rounded-xl shadow border border-gray-200 dark:border-gray-700 p-6">
-          <h3 class="text-lg font-semibold  mb-2">Outstanding Sales</h3>
-          <p class="text-3xl font-bold text-red-600 dark:text-red-400">
-            UGX {{ formatNumber(outstandingSales) }}
-          </p>
-          <p class="text-sm  mt-1">Pending receivables</p>
+        <div v-if="canView('view_invoices')" class="bg-white dark:bg-gray-800 rounded-xl shadow border border-gray-200 dark:border-gray-700 p-6">
+          <h3 class="text-lg font-semibold mb-2">Outstanding Sales</h3>
+          <p class="text-3xl font-bold text-red-600 dark:text-red-400">UGX {{ formatNumber(outstandingSales) }}</p>
+          <p class="text-sm text-gray-500 mt-1">Pending receivables</p>
         </div>
 
-        <div class="bg-white dark:bg-gray-800 rounded-xl shadow border border-gray-200 dark:border-gray-700 p-6">
-          <h3 class="text-lg font-semibold  mb-2">Outstanding POs</h3>
-          <p class="text-3xl font-bold text-amber-600 dark:text-amber-400">
-            UGX {{ formatNumber(outstandingPO) }}
-          </p>
-          <p class="text-sm  mt-1">Pending supplier payments</p>
+        <div v-if="canView('view_purchases')" class="bg-white dark:bg-gray-800 rounded-xl shadow border border-gray-200 dark:border-gray-700 p-6">
+          <h3 class="text-lg font-semibold mb-2">Outstanding POs</h3>
+          <p class="text-3xl font-bold text-amber-600 dark:text-amber-400">UGX {{ formatNumber(outstandingPO) }}</p>
+          <p class="text-sm text-gray-500 mt-1">Pending supplier payments</p>
         </div>
 
-        <div class="bg-white dark:bg-gray-800 rounded-xl shadow border border-gray-200 dark:border-gray-700 p-6">
-          <h3 class="text-lg font-semibold  mb-2">Total Purchase Orders</h3>
-          <p class="text-3xl font-bold text-indigo-600 dark:text-indigo-400">
-            {{ totalPurchaseOrders }}
-          </p>
-          <p class="text-sm  mt-1">All active POs</p>
+        <div v-if="canView('view_purchases')" class="bg-white dark:bg-gray-800 rounded-xl shadow border border-gray-200 dark:border-gray-700 p-6">
+          <h3 class="text-lg font-semibold mb-2">Total Purchase Orders</h3>
+          <p class="text-3xl font-bold text-indigo-600 dark:text-indigo-400">{{ totalPurchaseOrders }}</p>
+          <p class="text-sm text-gray-500 mt-1">All active POs</p>
         </div>
       </div>
     </div>
@@ -121,13 +181,16 @@ import { ref, computed, onMounted } from 'vue'
 import LineChart from '../components/LineChart.vue'
 import api from '../api'
 
-// Data
+// ============== PERMISSION SYSTEM ==============
+const user = computed(() => JSON.parse(localStorage.getItem('user')) || { permissions: [] })
+const canView = (perm) => user.value.permissions.includes(perm)
+
+// ============== DATA ==============
 const loading = ref(false)
 const error = ref(null)
 
 const totalProducts = ref(0)
 const totalSales = ref(0)
-const totalExpenses = ref(0)
 const totalCustomers = ref(0)
 const totalSuppliers = ref(0)
 const totalPurchaseOrders = ref(0)
@@ -140,25 +203,9 @@ const expensesChartData = ref({ labels: [], datasets: [] })
 const bestProducts = ref([])
 const leastProducts = ref([])
 
-// Computed Metrics Cards
-const primaryMetrics = computed(() => [
-  { title: 'Products', value: totalProducts.value, subtitle: 'Active in inventory', icon: '📦', iconClass: 'text-indigo-500' },
-  { title: 'Customers', value: totalCustomers.value, subtitle: 'Registered customers', icon: '👥', iconClass: 'text-cyan-500' },
-  { title: 'Suppliers', value: totalSuppliers.value, subtitle: 'Active suppliers', icon: '🏪', iconClass: 'text-teal-500' },
-  { title: 'Sales', value: `UGX ${formatNumber(totalSales.value)}`, subtitle: 'Total revenue', icon: '💰', iconClass: 'text-green-500' },
-  { title: 'Expenses', value: `UGX ${formatNumber(totalExpenses.value)}`, subtitle: 'Total costs', icon: '📉', iconClass: 'text-red-500' },
-  { title: 'Purchase Orders', value: totalPurchaseOrders.value, subtitle: 'All active POs', icon: '📋', iconClass: 'text-purple-500' },
-  { title: 'Outstanding Sales', value: `UGX ${formatNumber(outstandingSales.value)}`, subtitle: 'Receivables', icon: '⏳', iconClass: 'text-amber-500' },
-  { title: 'Outstanding POs', value: `UGX ${formatNumber(outstandingPO.value)}`, subtitle: 'Payables', icon: '⚠️', iconClass: 'text-orange-500' },
-])
-
 // Formatter
-const formatNumber = (num) => Number(num || 0).toLocaleString('en-UG', {
-  minimumFractionDigits: 0,
-  maximumFractionDigits: 0
-})
+const formatNumber = (num) => Number(num || 0).toLocaleString('en-UG')
 
-// Fetch
 async function fetchDashboard() {
   loading.value = true
   error.value = null
@@ -169,7 +216,6 @@ async function fetchDashboard() {
 
     totalProducts.value = data.totalProducts || 0
     totalSales.value = data.totalSales || 0
-    totalExpenses.value = data.totalExpenses || 0
     totalCustomers.value = data.totalCustomers || 0
     totalSuppliers.value = data.totalSuppliers || 0
     totalPurchaseOrders.value = data.totalPurchaseOrders || 0
@@ -215,8 +261,7 @@ onMounted(fetchDashboard)
 </script>
 
 <style scoped>
-/* Card hover */
-.hover\:shadow-xl:hover {
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+.metric-card {
+  @apply bg-white dark:bg-gray-800 rounded-xl shadow border border-gray-200 dark:border-gray-700 p-6 hover:shadow-xl transition-all duration-300;
 }
 </style>

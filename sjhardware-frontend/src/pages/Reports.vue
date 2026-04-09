@@ -46,14 +46,14 @@ const salesReports = computed(() =>
 
 const accountingReports = computed(() =>
   [
-    { title: "General Ledger", link: "/reports/general-ledger", permission: "view_accounts" },
+    { title: "General Ledger", link: "/reports/general-ledger", permission: "view_general_ledger" },
     { title: "Chart of Accounts", link: "/reports/chart-of-accounts", permission: "view_accounts" },
-    { title: "Profit & Loss", link: "/reports/profit-loss", permission: "view_accounts" },
-    { title: "Trial Balance", link: "/reports/trial-balance", permission: "view_accounts" },
-    { title: "Cash Flow Statement", link: "/reports/cash-flow", permission: "view_accounts" },
-    { title: "Debtors Report", link: "/reports/debtors-report", permission: "view_accounts" },
-    { title: "Creditors Report", link: "/reports/creditors-report", permission: "view_accounts" },
-    { title: "Balance Sheet", link: "/reports/balance-sheet", permission: "view_accounts" },
+    { title: "Profit & Loss", link: "/reports/profit-loss", permission: "view_income_statement" },
+    { title: "Trial Balance", link: "/reports/trial-balance", permission: "view_trial_balance" },
+    { title: "Cash Flow Statement", link: "/reports/cash-flow", permission: "view_cash_flow" },
+    { title: "Debtors Report", link: "/reports/debtors-report", permission: "view_debtors_aging" },
+    { title: "Creditors Report", link: "/reports/creditors-report", permission: "view_creditors_aging" },
+    { title: "Balance Sheet", link: "/reports/balance-sheet", permission: "view_balance_sheet" },
   ].filter(r => canView(r.permission))
 );
 </script>

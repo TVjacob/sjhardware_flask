@@ -42,36 +42,7 @@ def login():
             "permissions": [p.name for p in user.permissions]
         }
     })
-# @users_bp.route("/login", methods=["POST"])
-# def login():
-#     data = request.json
-#     username = data.get("username")
-#     password = data.get("password")
 
-#     if not username or not password:
-#         return jsonify({"error": "Username and password required"}), 400
-
-#     user = User.query.filter_by(username=username).first()
-#     if not user or not check_password_hash(user.password_hash, password):
-#         return jsonify({"error": "Invalid credentials"}), 401
-
-#     payload = {
-#         "user_id": user.id,
-#         "username": user.username,
-#         "role": user.role,
-#         "exp": datetime.utcnow() + timedelta(hours=4)  # token expires in 4 hours
-#     }
-#     token = jwt.encode(payload, current_app.config["SECRET_KEY"], algorithm="HS256")
-
-#     return jsonify({
-#         "message": "Login successful",
-#         "token": token,
-#         "user": {
-#             "id": user.id,
-#             "username": user.username,
-#             "role": user.role
-#         }
-#     })
 
 # ---------------- User Management ---------------- #
 
